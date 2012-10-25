@@ -1,0 +1,20 @@
+CC = /usr/bin/gcc
+
+TARGETDIR = $(basename $(notdir $(TARGET)))
+SRCDIR = src
+INCDIR = include
+BUILDDIR = ../../build
+OBJDIR = $(BUILDDIR)/obj/$(TARGETDIR)
+
+EXEC_CFLAGS = 
+EXEC_LDFLAGS = 
+
+SHARED_CFLAGS = -fPIC
+SHARED_LDFLAGS = -shared
+
+CFLAGS = -m64 -Wall -I$(INCDIR) $($(TYPE)_CFLAGS)
+LDFLAGS = -L$(BUILDDIR)/lib $($(TYPE)_LDFLAGS)
+
+TARGSRC = $(addprefix $(SRCDIR)/,$(SRC))
+TARGOBJ = $(addprefix $(OBJDIR)/,$(OBJ))
+	

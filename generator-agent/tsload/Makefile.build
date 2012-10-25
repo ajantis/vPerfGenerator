@@ -1,0 +1,14 @@
+all: $(TARGSRC)  $(OBJDIR) $(TARGET)
+
+$(OBJDIR):
+	mkdir $(OBJDIR)
+
+$(TARGET): $(TARGOBJ) 
+	$(CC) -o $(BUILDDIR)/$@ $(TARGOBJ) $(LDFLAGS) 
+
+$(OBJDIR)/%.o: $(SRCDIR)/%.c  
+	$(CC) $(CFLAGS) -c $< -o $@
+
+clean:
+	rm $(TARGOBJ)
+	rmdir $(OBJDIR)

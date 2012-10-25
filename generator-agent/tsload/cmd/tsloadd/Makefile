@@ -1,0 +1,13 @@
+TYPE = EXEC
+TARGET = tsloadd
+
+include ../../Makefile.master
+
+SRC = main.c \
+	  modules.c
+OBJ = $(SRC:.c=.o)
+
+CFLAGS += -I../../lib/libtsload/include
+LDFLAGS += -ltsload -lc
+	
+include ../../Makefile.build
