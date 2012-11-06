@@ -3,9 +3,11 @@ TARGET = lib/libtsload.so
 
 include ../../Makefile.master
 
-SRC = log.c
+SRC = log.c \
+	  modules.c
+	  
 OBJ = $(SRC:.c=.o)
 
-LDFLAGS += -lc 
+LDFLAGS += -lc -ldl
 	
 include ../../Makefile.build

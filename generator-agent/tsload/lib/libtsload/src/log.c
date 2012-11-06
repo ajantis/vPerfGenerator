@@ -38,9 +38,7 @@ int log_rotate() {
 	struct stat log_stat;
 
 	if(stat(log_filename, &log_stat) == -1) {
-		char msg[128];
-		perror(msg);
-		fprintf(stderr, "log_rotate -> stat error: %s\n", msg);
+		fprintf(stderr, "log_rotate -> stat error: %s\n", strerror(errno));
 
 		return errno;
 	}
@@ -98,7 +96,7 @@ void log_gettime(char* buf, int sz) {
  *
  * @return number of written symbols or -1 if message was discarded due to severity
  */
-int logmsg(int severity, char* source, char* format, ...) {
+int logmsg_src(int severity, char* source, char* format, ...) {
 	char time[64];
 	va_list args;
 	int ret = 0;
@@ -120,4 +118,10 @@ int logmsg(int severity, char* source, char* format, ...) {
 	fflush(log_file);
 
 	return ret + 1;	/*+1 for \n*/
+}
+
+/* Log error provided by errno
+ * */
+int logerror() {
+	return logmsg_src(LOG_CRIT, "error", "Error: %s", strerror(errno));
 }

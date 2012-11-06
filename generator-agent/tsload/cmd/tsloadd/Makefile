@@ -3,8 +3,7 @@ TARGET = tsloadd
 
 include ../../Makefile.master
 
-SRC = main.c \
-	  modules.c
+SRC = main.c 
 OBJ = $(SRC:.c=.o)
 
 CFLAGS += -I../../lib/libtsload/include
