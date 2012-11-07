@@ -1,0 +1,3 @@
+# Properties in this file will be read when running in dev mode
+mongodb.host=127.0.0.1
+mongodb.name=generator-db
