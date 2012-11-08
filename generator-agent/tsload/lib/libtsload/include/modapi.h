@@ -20,4 +20,5 @@ typedef int (* mod_config_func)(struct module* mod);
 #define DECLARE_MOD_NAME(name)	\
 	char mod_name[MODNAMELEN] = name
 
+
 #endif /* MODAPI_H_ */
