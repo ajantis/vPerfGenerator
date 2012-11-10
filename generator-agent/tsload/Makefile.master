@@ -18,6 +18,9 @@ MODULE_LDFLAGS = $(SHARED_LDFLAGS) -ltsload
 CFLAGS = -m64 -Wall -I$(INCDIR) $($(TYPE)_CFLAGS)
 LDFLAGS = -L$(BUILDDIR)/lib $($(TYPE)_LDFLAGS)
 
+# For debugging
+CFLAGS += -g
+
 TARGSRC = $(addprefix $(SRCDIR)/,$(SRC))
 TARGOBJ = $(addprefix $(OBJDIR)/,$(OBJ))
 	

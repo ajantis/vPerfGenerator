@@ -65,7 +65,7 @@ void parse_options(int argc, char* argv[]) {
 			break;
 	}
 
-	if(!ok || !lflag) {
+	if(!ok || !lflag || !mflag) {
 		usage();
 		exit(1);
 	}
@@ -83,6 +83,10 @@ int main(int argc, char* argv[]) {
 
 	if((err = load_modules()) != 0)
 		return err;
+
+	create_default_tp();
+
+	sleep(5);
 
 	log_fini();
 

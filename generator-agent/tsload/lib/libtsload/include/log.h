@@ -27,7 +27,8 @@ int log_init();
 void log_fini();
 
 int logerror();
-int logmsg_src(int severity, char* source, char* format, ...);
+int logmsg_src(int severity, const char* source, const char* format, ...)
+	__attribute__ ((format (printf, 3, 4)))		/*For GCC printf warnings*/;
 
 #define logmsg(severity, ...) \
 	logmsg_src(severity, LOG_SOURCE, __VA_ARGS__)

@@ -16,6 +16,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <pthread.h>
 
 char log_filename[LOGFNMAXLEN];
 
@@ -25,6 +26,8 @@ int log_debug 	= 0;
 int log_trace	= 0;
 
 FILE* log_file;
+
+pthread_mutex_t	log_mutex;
 
 const char* log_severity[] =
 	{"CRIT", "WARN", "INFO", "_DBG", "_TRC" };
@@ -59,6 +62,8 @@ int log_rotate() {
 
 int log_init() {
 	int ret;
+
+	pthread_mutex_init(&log_mutex, NULL);
 
 	if(strcmp(log_filename, "-") == 0) {
 		log_file = stdout;
@@ -96,7 +101,8 @@ void log_gettime(char* buf, int sz) {
  *
  * @return number of written symbols or -1 if message was discarded due to severity
  */
-int logmsg_src(int severity, char* source, char* format, ...) {
+int logmsg_src(int severity, const char* source, const char* format, ...)
+	{
 	char time[64];
 	va_list args;
 	int ret = 0;
@@ -108,6 +114,9 @@ int logmsg_src(int severity, char* source, char* format, ...) {
 
 
 	log_gettime(time, 64);
+
+	pthread_mutex_lock(&log_mutex);
+
 	ret = fprintf(log_file, "%s [%s:%s] ", time, source, log_severity[severity]);
 
 	va_start(args, format);
@@ -116,6 +125,8 @@ int logmsg_src(int severity, char* source, char* format, ...) {
 
 	fputc('\n', log_file);
 	fflush(log_file);
+
+	pthread_mutex_unlock(&log_mutex);
 
 	return ret + 1;	/*+1 for \n*/
 }
