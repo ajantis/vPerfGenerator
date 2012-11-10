@@ -11,4 +11,4 @@ $(OBJDIR)/%.o: $(SRCDIR)/%.c
 
 clean:
 	rm $(TARGOBJ)
-	rmdir $(OBJDIR)
+	rm -rf $(OBJDIR)
