@@ -5,7 +5,7 @@
     only reason JSON_LIBRARY should be defined is when compiling libjson
     as a library
 */
-#include "../../libjson.h"
+#include "libjson.h"
 #ifdef JSON_LIBRARY
 
     #include "JSONNode.h"

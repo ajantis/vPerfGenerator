@@ -9,24 +9,27 @@ else
 	ACTION = Building
 endif
 
-all: libtsload tsloadd modules 
-
-clean: modules tsloadd libtsload 
+all: tsloadd
+clean: tsloadd
 	
+libjson: 
+	@echo
+	@echo $(ACTION) libjson...
+	make -C lib/libjson $(TARGET)
 
-libtsload:
+libtsload: libjson
 	@echo
 	@echo $(ACTION) libtsload...
 	make -C lib/libtsload $(TARGET)
-
-tsloadd:
-	@echo
-	@echo $(ACTION) tsload daemon...
-	make -C cmd/tsloadd $(TARGET)
 	
 modules: $(MODULES)
 	@echo
 	@echo $(ACTION) modules...
+
+tsloadd: libtsload modules
+	@echo
+	@echo $(ACTION) tsload daemon...
+	make -C cmd/tsloadd $(TARGET)
 
 $(MODULES):
 	@echo

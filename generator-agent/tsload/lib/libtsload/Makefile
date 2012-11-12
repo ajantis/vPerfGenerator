@@ -6,10 +6,14 @@ include ../../Makefile.master
 SRC = log.c \
 	  modules.c \
 	  threadpool.c \
-	  threads.c
+	  threads.c \
+	  wlparam.c
 	  
 OBJ = $(SRC:.c=.o)
 
-LDFLAGS += -lc -ldl -lpthread
+JSON_DEBUG = -DNDEBUG
+
+CFLAGS += -I../libjson/include/ $(JSON_DEBUG)
+LDFLAGS += -lc -ldl -lpthread -ljson
 	
 include ../../Makefile.build

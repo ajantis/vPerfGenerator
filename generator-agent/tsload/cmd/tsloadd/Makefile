@@ -7,6 +7,6 @@ SRC = main.c
 OBJ = $(SRC:.c=.o)
 
 CFLAGS += -I../../lib/libtsload/include
-LDFLAGS += -ltsload -lc
+LDFLAGS += -ltsload -lc -ljson
 	
 include ../../Makefile.build

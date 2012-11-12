@@ -7,7 +7,7 @@
     the library instead of linking.
 */
 
-#include "../../JSONOptions.h"
+#include "JSONOptions.h"
 #include "JSONDefs/Unknown_C.h"
 #include "JSONDefs/GNU_C.h"
 #include "JSONDefs/Visual_C.h"

@@ -9,6 +9,9 @@ $(TARGET): $(TARGOBJ)
 $(OBJDIR)/%.o: $(SRCDIR)/%.c  
 	$(CC) $(CFLAGS) -c $< -o $@
 
+$(OBJDIR)/%.o: $(SRCDIR)/%.cpp
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
 clean:
 	rm $(TARGOBJ)
 	rm -rf $(OBJDIR)
