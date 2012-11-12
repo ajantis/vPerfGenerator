@@ -42,5 +42,6 @@ wlp_descr_t mod_params[] = {
 int mod_config(module_t* mod) {
 	logmsg(LOG_INFO, "Dummy module is loaded");
 
+
 	return 0;
 }

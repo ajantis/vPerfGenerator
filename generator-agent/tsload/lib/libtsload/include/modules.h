@@ -8,6 +8,7 @@
 #ifndef MODULES_H_
 #define MODULES_H_
 
+#include <wlparam.h>
 #include <modapi.h>
 
 #define MODPATHLEN	256
@@ -38,6 +39,8 @@ typedef struct module {
 
 	mod_status_t mod_status;
 	char* mod_status_msg;
+
+	wlp_descr_t* mod_params;
 
 	/*Methods*/
 	mod_config_func mod_config;

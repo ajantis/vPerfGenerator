@@ -97,7 +97,6 @@ void mod_destroy(module_t* mod) {
 module_t* mod_load(char* path_name) {
 	module_t* mod = mod_create();
 	int* api_version;
-	char* mod_name;
 
 	mod->mod_library = dlopen(path_name, RTLD_NOW | RTLD_LOCAL);
 
@@ -111,10 +110,11 @@ module_t* mod_load(char* path_name) {
 	/*Load module api version and name*/
 
 	api_version = (int*) dlsym(mod->mod_library, "mod_api_version");
-	mod_name = (char*) dlsym(mod->mod_library, "mod_name");
+	mod->mod_name = (char*) dlsym(mod->mod_library, "mod_name");
+	mod->mod_params = (wlp_descr_t*) dlsym(mod->mod_library, "mod_params");
 
-	if(!api_version || !mod_name) {
-		logmsg(LOG_WARN, "Failed to load module %s. mod_api_version and mod_name are not found", path_name);
+	if(!api_version || !mod->mod_name || !mod->mod_params) {
+		logmsg(LOG_WARN, "Failed to load module %s. API version, name or params are undefined.", path_name);
 
 		goto fail;
 	}
@@ -125,10 +125,10 @@ module_t* mod_load(char* path_name) {
 		goto fail;
 	}
 
-	mod->mod_name = mod_name;
-
 	/*Load methods*/
 	mod->mod_config = dlsym(mod->mod_library, "mod_config");
+
+	logmsg(LOG_DEBUG, "Module json: %s", json_gen_wlp(mod->mod_params));
 
 	if(!mod->mod_config) {
 		logmsg(LOG_WARN, "Failed to load module %s. One of method was not found", mod->mod_name);
