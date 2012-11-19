@@ -9,8 +9,8 @@ else
 	ACTION = Building
 endif
 
-all: tsloadd
-clean: tsloadd
+all: tsloadd run-tsload
+clean: tsloadd run-tsload
 	
 libjson: 
 	@echo
@@ -30,6 +30,12 @@ tsloadd: libtsload modules
 	@echo
 	@echo $(ACTION) tsload daemon...
 	make -C cmd/tsloadd $(TARGET)
+	cp cmd/tsloadd/tsload.cfg build/
+	
+run-tsload: libtsload modules
+	@echo
+	@echo $(ACTION) run-tsload daemon...
+	make -C cmd/run-tsload $(TARGET)
 
 $(MODULES):
 	@echo

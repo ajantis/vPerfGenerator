@@ -50,6 +50,8 @@ typedef struct module {
 	struct module* mod_next;
 } module_t;
 
+char* mod_get_info(int formatted);
+
 int load_modules();
 
 #endif /* MODULES_H_ */

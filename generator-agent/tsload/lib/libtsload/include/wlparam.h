@@ -89,6 +89,6 @@ typedef struct {
 	size_t off;
 } wlp_descr_t;
 
-char* json_gen_wlp(wlp_descr_t* wlp);
+char* json_gen_wlp(wlp_descr_t* wlp, int formatted);
 
 #endif /* WLPARAM_H_ */

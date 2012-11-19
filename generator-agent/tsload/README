@@ -1,0 +1,8 @@
+TSLoad (TimeSeries Loader) - low-level part of vPerfLoader, that is running workloads directly on target host.
+
+It constists of:
+* cmd/tsloadd - agent that receives workloads from vPerfLoader server and executes them
+* cmd/run-tsload - standalone application that runs workloads from file
+* lib/libjson - JSON library: http://sourceforge.net/projects/libjson/
+* lib/libtsload - helper functions for tsloadd adn run-tsload
+* mod/ - workload modules

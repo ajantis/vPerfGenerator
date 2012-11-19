@@ -9,6 +9,7 @@
 #include <log.h>
 
 #include <modules.h>
+#include <libjson.h>
 
 #include <stdlib.h>
 #include <string.h>
@@ -16,6 +17,8 @@
 #include <dirent.h>
 
 #include <dlfcn.h>
+
+#define INFOCHUNKLEN	2048
 
 char mod_search_path[MODPATHLEN];
 
@@ -128,8 +131,6 @@ module_t* mod_load(char* path_name) {
 	/*Load methods*/
 	mod->mod_config = dlsym(mod->mod_library, "mod_config");
 
-	logmsg(LOG_DEBUG, "Module json: %s", json_gen_wlp(mod->mod_params));
-
 	if(!mod->mod_config) {
 		logmsg(LOG_WARN, "Failed to load module %s. One of method was not found", mod->mod_name);
 
@@ -153,4 +154,36 @@ fail:
 	mod_destroy(mod);
 
 	return NULL;
+}
+
+char* mod_get_info(int formatted) {
+	size_t len = INFOCHUNKLEN, mi_len = 0, index = 0;
+	char* info = (char*) malloc(len);
+	char* mod_info;
+
+	module_t* mod = first_module;
+
+	info[0] = 0;
+
+	while(mod != NULL) {
+		mod_info = json_gen_wlp(mod->mod_params, formatted);
+		mi_len = strlen(mod_info);
+
+		/*Reserve bytes for NULL-terminator and reallocate info*/
+		if(mi_len > (len - index - 1)) {
+			while(mi_len > len)
+				len += INFOCHUNKLEN;
+
+			info = realloc(info, len);
+		}
+
+		strcat(info, mod_info);
+		index += mi_len;
+
+		json_free(mod_info);
+
+		mod = mod->mod_next;
+	}
+
+	return info;
 }

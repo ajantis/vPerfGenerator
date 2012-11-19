@@ -1,10 +1,9 @@
 TYPE = EXEC
-TARGET = tsloadd
+TARGET = run-tsload
 
 include ../../Makefile.master
 
-SRC = main.c \
-	  cfgfile.c
+SRC = main.c 
 OBJ = $(SRC:.c=.o)
 
 CFLAGS += -I../../lib/libtsload/include

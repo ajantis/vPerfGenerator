@@ -69,7 +69,7 @@ JSONNODE* json_gen_wlp_descr(wlp_descr_t* wlp) {
 	return wlp_node;
 }
 
-json_char* json_gen_wlp(wlp_descr_t* wlp) {
+json_char* json_gen_wlp(wlp_descr_t* wlp, int formatted) {
 	JSONNODE* node = json_new(JSON_NODE);
 	JSONNODE* wlp_node = NULL;
 	json_char* json;
@@ -81,7 +81,10 @@ json_char* json_gen_wlp(wlp_descr_t* wlp) {
 		wlp++;
 	}
 
-	json = json_write(node);
+	if(formatted)
+		json = json_write_formatted(node);
+	else
+		json = json_write(node);
 	json_delete(node);
 
 	return json;
