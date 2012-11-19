@@ -73,7 +73,7 @@ workload_t* json_workload_proc(JSONNODE* node) {
 		return NULL;
 	}
 
-	logmsg(LOG_INFO, "Parsing workload %s", wl_name);
+	logmsg(LOG_DEBUG, "Parsing workload %s", wl_name);
 
 	if(!i_mod || !i_params) {
 		logmsg(LOG_WARN, "Failed to parse workload, missing parameter %s",

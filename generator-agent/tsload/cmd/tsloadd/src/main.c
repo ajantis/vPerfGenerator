@@ -10,6 +10,7 @@
 
 #include <modules.h>
 #include <cfgfile.h>
+#include <client.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -86,7 +87,10 @@ int main(int argc, char* argv[]) {
 
 	create_default_tp();
 
+	clnt_init();
+
 	log_fini();
+	clnt_fini();
 
 	return 0;
 }

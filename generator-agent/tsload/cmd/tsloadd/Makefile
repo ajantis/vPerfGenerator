@@ -4,7 +4,8 @@ TARGET = tsloadd
 include ../../Makefile.master
 
 SRC = main.c \
-	  cfgfile.c
+	  cfgfile.c \
+	  client.c
 OBJ = $(SRC:.c=.o)
 
 CFLAGS += $(INCTSLOAD) $(INCJSON)
