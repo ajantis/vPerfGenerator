@@ -4,9 +4,9 @@
 		"params": {
 			"filesize": 16777216,
 			"blocksize": 4096,
-			"path": "/testfile",
+			"path": "/tmp/testfile",
 			"test": "read",
-			"sparse": true
+			"sparse": false
 		}
 	}
 }

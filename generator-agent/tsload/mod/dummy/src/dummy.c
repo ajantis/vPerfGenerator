@@ -89,7 +89,7 @@ int mod_workload_config(workload_t* wl) {
 
 	logmsg(LOG_INFO, "Creating file %s with size %ld", dummy->path, dummy->file_size);
 
-	fd = open(dummy->path, O_WRONLY);
+	fd = open(dummy->path, O_WRONLY | O_CREAT, 0660);
 
 	if(fd < 0) {
 		mod_error(self, "Couldn't open file %s for writing", dummy->path);

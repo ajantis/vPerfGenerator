@@ -78,7 +78,6 @@ JSONNODE* json_wlparam_descr_format(wlp_descr_t* wlp) {
 JSONNODE* json_wlparam_format(wlp_descr_t* wlp) {
 	JSONNODE* node = json_new(JSON_NODE);
 	JSONNODE* wlp_node = NULL;
-	json_char* json;
 
 	json_set_name(node, "params");
 
@@ -92,55 +91,39 @@ JSONNODE* json_wlparam_format(wlp_descr_t* wlp) {
 	return node;
 }
 
+#define WLPARAM_RANGE_CHECK(min, max) 							\
+		if(*p < wlp->range.min || *p > wlp->range.max)			\
+					return WLPARAM_JSON_OUTSIDE_RANGE;
+
+#define WLPARAM_NO_RANGE_CHECK
+
+#define WLPARAM_PROC_SIMPLE(type, json_node_type, 	\
+		json_as_func, range_check) 					\
+	{												\
+		type* p = (type*) param;					\
+		if(json_type(node) != json_node_type)		\
+			return WLPARAM_JSON_WRONG_TYPE;			\
+		*p = json_as_func(node);					\
+		range_check;								\
+	}
+
 int json_wlparam_proc(JSONNODE* node, wlp_descr_t* wlp, void* param) {
 	switch(wlp->type) {
 	case WLP_BOOL:
-	{
-		wlp_bool_t* b = (wlp_bool_t*) param;
-
-		if(json_type(node) != JSON_BOOL)
-			return WLPARAM_JSON_WRONG_TYPE;
-
-		*b = json_as_bool(node);
-	}
+		WLPARAM_PROC_SIMPLE(wlp_bool_t, JSON_BOOL,
+				json_as_bool, WLPARAM_NO_RANGE_CHECK);
+	break;
 	case WLP_INTEGER:
-	{
-		wlp_integer_t* l = (wlp_integer_t*) param;
-
-		if(json_type(node) != JSON_NUMBER)
-			return WLPARAM_JSON_WRONG_TYPE;
-
-		*l = json_as_int(node);
-
-		if(*l < wlp->range.i_min || *l > wlp->range.i_max)
-			return WLPARAM_JSON_OUTSIDE_RANGE;
-	}
+		WLPARAM_PROC_SIMPLE(wlp_integer_t, JSON_NUMBER,
+				json_as_int, WLPARAM_RANGE_CHECK(i_min, i_max));
 		break;
 	case WLP_FLOAT:
-	{
-		wlp_float_t* f = (wlp_float_t*) param;
-
-		if(json_type(node) != JSON_NUMBER)
-			return WLPARAM_JSON_WRONG_TYPE;
-
-		*f = json_as_float(node);
-
-		if(*f < wlp->range.d_min || *f > wlp->range.d_max)
-			return WLPARAM_JSON_OUTSIDE_RANGE;
-	}
+		WLPARAM_PROC_SIMPLE(wlp_float_t, JSON_NUMBER,
+				json_as_float, WLPARAM_RANGE_CHECK(d_min, d_max));
 		break;
 	case WLP_SIZE:
-	{
-		wlp_size_t* sz = (wlp_size_t*) param;
-
-		if(json_type(node) != JSON_NUMBER)
-			return WLPARAM_JSON_WRONG_TYPE;
-
-		*sz = json_as_int(node);
-
-		if(*sz < wlp->range.sz_min || *sz > wlp->range.sz_max)
-			return WLPARAM_JSON_OUTSIDE_RANGE;
-	}
+		WLPARAM_PROC_SIMPLE(wlp_size_t, JSON_NUMBER,
+				json_as_int, WLPARAM_RANGE_CHECK(sz_min, sz_max));
 		break;
 	case WLP_RAW_STRING:
 	{
