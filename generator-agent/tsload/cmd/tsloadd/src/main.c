@@ -86,8 +86,6 @@ int main(int argc, char* argv[]) {
 
 	create_default_tp();
 
-	sleep(5);
-
 	log_fini();
 
 	return 0;

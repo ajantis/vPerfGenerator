@@ -75,6 +75,8 @@ typedef struct {
 #define WLP_FLOAT_RANGE(min, max)  { .range = TRUE, .d_min = min, .d_max = max }
 #define WLP_SIZE_RANGE(min, max)  { .range = TRUE, .sz_min = min, .sz_max = max }
 
+#define WLP_STRING_SET_RANGE(set) { .range = TRUE, .ss_num = sizeof((set)) / sizeof(char*), .ss_strings = (set) }
+
 /*Description of param*/
 typedef struct {
 	wlp_type_t type;

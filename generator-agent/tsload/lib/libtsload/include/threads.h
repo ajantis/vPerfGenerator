@@ -1,51 +1,59 @@
 /*
- * threadpool.h
+ * threads.h
  *
  *  Created on: 10.11.2012
  *      Author: myaut
  */
 
-#ifndef THREADPOOL_H_
-#define THREADPOOL_H_
-
-#define TPNAMELEN		64
-#define TPMAXTHREADS 	128
-
-#define CONTROL_TID		-1
-#define WORKER_TID		0
+#ifndef THREADS_H_
+#define THREADS_H_
 
 #include <stdint.h>
 #include <pthread.h>
 
-struct thread_pool;
+#define THREAD_ENTRY(arg, arg_type, arg_name) 		\
+	thread_t* thread = (thread_t*) arg;				\
+	arg_type* arg_name = (arg_type*) thread->t_arg;	\
+
+#define THREAD_EXIT(arg)			\
+	t_notify(thread);				\
+	return arg;
 
 typedef struct {
-	int					t_id;	   /*ID of thread: -1 for dispatcher, 0..N for worker*/
-
-	struct thread_pool* t_pool;
+	int					t_id;
 
 	pthread_attr_t 		t_attr;
 	pthread_t		    t_thread;
+
+	/* When thread finishes, it notifies parent thread thru t_cv*/
+	pthread_mutex_t*	t_mutex;
+	pthread_cond_t*  	t_cv;
+
+	void*				t_arg;
 } thread_t;
 
-typedef struct thread_pool {
-	unsigned tp_num_threads;
-	char tp_name[TPNAMELEN];
+void pt_init(pthread_mutex_t* mtx, pthread_cond_t* cv);
+void pt_wait(pthread_mutex_t* mtx, pthread_cond_t* cv);
+void pt_notify_one(pthread_mutex_t* mtx, pthread_cond_t* cv);
+void pt_notify_all(pthread_mutex_t* mtx, pthread_cond_t* cv);
 
-	uint64_t tp_quantum;			/**< Dispatcher's quantum duration (in ns)*/
-	uint64_t tp_time;				/**< Last time dispatcher had woken up (in ns)*/
+void t_init(thread_t* thread, void* arg, int tid, void* (*start)(void*));
 
-	thread_t  tp_ctl_thread;		/**< Dispatcher thread*/
-	thread_t* tp_work_threads;		/**< Worker threads*/
+static void t_attach(thread_t* thread, pthread_mutex_t* mtx, pthread_cond_t* cv) {
+	thread->t_mutex = mtx;
+	thread->t_cv = cv;
+}
 
-	pthread_mutex_t	tp_mutex;
-	pthread_cond_t  tp_cv;			/**< Mutex and cond. var used to wake up
-										 worker threads when next quantum starts */
-} thread_pool_t;
+static void t_join(thread_t* thread) {
+	if(thread->t_mutex && thread->t_cv)
+		pt_wait(thread->t_mutex, thread->t_cv);
+}
 
-thread_pool_t* tp_create(unsigned num_threads, const char* name, uint64_t quantum);
+static void t_notify(thread_t* thread) {
+	if(thread->t_mutex && thread->t_cv)
+		pt_notify_all(thread->t_mutex, thread->t_cv);
+}
 
-void create_default_tp();
-void destroy_default_tp();
+int t_create_id();
 
 #endif /* THREADPOOL_H_ */

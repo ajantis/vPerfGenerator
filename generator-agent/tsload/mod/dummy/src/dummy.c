@@ -18,6 +18,7 @@
 int mod_api_version = MODAPI_VERSION;
 
 char mod_name[MODNAMELEN] = "dummy";
+static char* tests[] =  {"read", "write"};
 
 wlp_descr_t mod_params[] = {
 	{ WLP_SIZE,
@@ -35,6 +36,12 @@ wlp_descr_t mod_params[] = {
 		"path",
 		"Path to file",
 		offsetof(struct dummy_workload, path)
+	},
+	{ WLP_STRING_SET,
+		WLP_STRING_SET_RANGE(tests),
+		"test",
+		"Benchmark name (read, write)",
+		offsetof(struct dummy_workload, test)
 	},
 	{ WLP_NULL }
 };

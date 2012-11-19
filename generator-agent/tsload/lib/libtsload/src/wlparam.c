@@ -8,43 +8,32 @@
 #include <wlparam.h>
 
 #include <libjson.h>
+#include <stdlib.h>
 
 #define STRSETCHUNK		256
 
-char* json_gen_wlp_strset(wlp_descr_t* wlp) {
-	size_t len = STRSETCHUNK, alen = 0;
-	char* str = (char*) malloc(len);
-	char* temp, *astr;	/*for realloc*/
+JSONNODE* json_gen_wlp_strset(wlp_descr_t* wlp) {
+	JSONNODE* node = json_new(JSON_ARRAY);
+	JSONNODE* el;
 	int i;
+	char* str;
 
-	str[0] = 0;
+	json_set_name(node, "strset");
 
 	for(i = 0; i < wlp->range.ss_num; ++i) {
-		astr = wlp->range.ss_strings[i];
-		alen = strlen(astr);
+		str = wlp->range.ss_strings[i];
 
-		/*Reserve bytes for delim and NULL-terminator*/
-		if(alen > (len - 2)) {
-			/*reallocate str*/
-			while(alen > len)
-				len += STRSETCHUNK;
+		el = json_new(JSON_STRING);
+		json_set_a(el, str);
 
-			temp = (char*) malloc(len);
-			strcpy(temp, str);
-			free(str);
-			str = temp;
-		}
-
-		strcat(str, astr);
+		json_push_back(node, el);
 	}
 
-	return str;
+	return node;
 }
 
 JSONNODE* json_gen_wlp_descr(wlp_descr_t* wlp) {
 	JSONNODE* wlp_node = json_new(JSON_NODE);
-	char* string_set;
-	int i;
 
 	json_set_name(wlp_node, wlp->name);
 
@@ -70,10 +59,7 @@ JSONNODE* json_gen_wlp_descr(wlp_descr_t* wlp) {
 		break;
 	case WLP_STRING_SET:
 		json_push_back(wlp_node, json_new_a("type", "strset"));
-
-		string_set = json_gen_wlp_strset(wlp);
-		json_push_back(wlp_node, json_new_a("strset", string_set));
-		free(string_set);
+		json_push_back(wlp_node, json_gen_wlp_strset(wlp));
 
 		break;
 	}

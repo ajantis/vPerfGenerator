@@ -13,6 +13,7 @@ struct dummy_workload {
 	size_t block_size;
 
 	char path[512];
+	char test[32];
 };
 
 #endif /* DUMMY_H_ */

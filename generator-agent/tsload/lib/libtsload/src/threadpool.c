@@ -10,6 +10,7 @@
 #include <log.h>
 
 #include <threads.h>
+#include <threadpool.h>
 #include <defs.h>
 
 #include <string.h>
@@ -19,20 +20,21 @@
 
 thread_pool_t* default_pool = NULL;
 
-/*From threads.c*/
-void* control_thread(void*);
-void* worker_thread(void*);
+/*Thread code*/
+void* control_thread(void* arg) {
+	THREAD_ENTRY(arg, thread_pool_t, tp);
 
-void t_init(thread_t* thread, thread_pool_t* tp, int tid, void* (*start)()) {
-	thread->t_id = tid;
-	thread->t_pool = tp;
+	logmsg(LOG_DEBUG, "Started control thread (tpool: %s)", tp->tp_name);
 
-	pthread_attr_init(&thread->t_attr);
-	pthread_attr_setdetachstate(&thread->t_attr, PTHREAD_CREATE_JOINABLE);
+	THREAD_EXIT(arg);
+}
 
-	pthread_create(&thread->t_thread,
-			       &thread->t_attr,
-			       start, (void*) thread);
+void* worker_thread(void* arg) {
+	THREAD_ENTRY(arg, thread_pool_t, tp);
+
+	logmsg(LOG_DEBUG, "Started worker thread #%d (tpool: %s)", thread->t_id, tp->tp_name);
+
+	THREAD_EXIT(arg);
 }
 
 thread_pool_t* tp_create(unsigned num_threads, const char* name, uint64_t quantum) {
@@ -56,14 +58,13 @@ thread_pool_t* tp_create(unsigned num_threads, const char* name, uint64_t quantu
 	tp->tp_time	   = 0ll;	   /*Time is set by control thread*/
 	tp->tp_quantum = quantum;
 
-	pthread_mutex_init(&tp->tp_mutex, NULL);
-	pthread_cond_init (&tp->tp_cv, NULL);
+	pt_init(&tp->tp_mutex, &tp->tp_cv);
 
 	/*Create threads*/
-	t_init(&tp->tp_ctl_thread, tp, CONTROL_TID, control_thread);
+	t_init(&tp->tp_ctl_thread, (void*) tp, CONTROL_TID, control_thread);
 
 	for(tid = 0; tid < num_threads; ++tid)
-		t_init(tp->tp_work_threads + tid, tp, tid + WORKER_TID, worker_thread);
+		t_init(tp->tp_work_threads + tid, (void*) tp, tid + WORKER_TID, worker_thread);
 
 	logmsg(LOG_INFO, "Created thread pool %s with %d threads", name, num_threads);
 
