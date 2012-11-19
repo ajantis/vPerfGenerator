@@ -69,11 +69,19 @@ int wl_init() {
 
 int do_load() {
 	int err = LOAD_OK;
+	workload_t* wl = NULL;
 
 	if((err = wl_init()) != LOAD_OK)
 		return err;
 
-	json_workload_proc_all(wl_node);
+	wl = json_workload_proc_all(wl_node);
+
+	if(wl == NULL)
+		return LOAD_ERR_JSON_PROC;
+
+	wl_config(wl);
+
+	wl_unconfig(wl);
 
 	return LOAD_OK;
 }

@@ -12,8 +12,10 @@
 #define MODAPI_VERSION		0x0001
 
 struct module;
+struct workload;
 
 typedef int (* mod_config_func)(struct module* mod);
+typedef int (* mod_workload_config_func)(struct workload* wl);
 
 #define DECLARE_MODAPI_VERSION() \
 		int mod_api_version = MOD_API_VERSION

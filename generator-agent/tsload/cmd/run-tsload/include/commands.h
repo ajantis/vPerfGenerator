@@ -12,6 +12,7 @@
 #define LOAD_ERR_OPEN_FAIL	-1
 #define LOAD_ERR_MMAP_FAIL	-2
 #define LOAD_ERR_BAD_JSON	-3
+#define LOAD_ERR_JSON_PROC	-4
 
 #define MAXFNLEN	512
 

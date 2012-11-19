@@ -12,6 +12,7 @@
 #include <modapi.h>
 
 #define MODPATHLEN	256
+#define MODSTATUSMSG 512
 
 /*
  * Module states
@@ -45,6 +46,10 @@ typedef struct module {
 
 	/*Methods*/
 	mod_config_func mod_config;
+	mod_config_func mod_unconfig;
+
+	mod_workload_config_func mod_wl_config;
+	mod_workload_config_func mod_wl_unconfig;
 
 	void* mod_private;		/**< Allocated when module is configured*/
 
@@ -54,6 +59,7 @@ typedef struct module {
 int load_modules();
 
 module_t* mod_search(const char* name);
+int mod_error(module_t* mod, char* fmtstr, ...);
 
 #ifndef NO_JSON
 #include <libjson.h>

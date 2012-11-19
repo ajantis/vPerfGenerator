@@ -29,10 +29,12 @@ typedef long	wlp_integer_t;
 typedef double	wlp_float_t;
 typedef char	wlp_string_t;
 typedef size_t	wlp_size_t;
+typedef int  	wlp_bool_t;
 
 typedef enum {
 	/*NULL-term*/	WLP_NULL,		/*Used to mark end of param list*/
 
+	/*int*/			WLP_BOOL,
 	/*long*/		WLP_INTEGER,
 	/*double*/		WLP_FLOAT,
 	/*char[]*/ 		WLP_RAW_STRING, /*Any string*/

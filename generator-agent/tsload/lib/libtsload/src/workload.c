@@ -23,6 +23,8 @@ workload_t* wl_create(const char* name, module_t* mod) {
 	wl->wl_mod = mod;
 
 	wl->wl_tp = NULL;
+	wl->wl_next = NULL;
+
 	wl->wl_params = malloc(mod->mod_params_size);
 
 	return wl;
@@ -37,14 +39,23 @@ void wl_free(workload_t* wl) {
 workload_t* json_workload_proc_all(JSONNODE* node) {
 	JSONNODE_ITERATOR iter = json_begin(node),
 			          end = json_end(node);
+	workload_t* wl, *wl_head = NULL, *wl_last = NULL;
 
 	while(iter != end) {
-		json_workload_proc(*iter);
+		wl = json_workload_proc(*iter);
+
+		if(wl_head == NULL) {
+			wl_last = wl_head = wl;
+		}
+		else {
+			wl_last->wl_next = wl;
+			wl_last = wl;
+		}
 
 		++iter;
 	}
 
-	return NULL;
+	return wl_head;
 }
 
 workload_t* json_workload_proc(JSONNODE* node) {
@@ -95,4 +106,3 @@ workload_t* json_workload_proc(JSONNODE* node) {
 
 	return wl;
 }
-

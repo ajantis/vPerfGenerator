@@ -42,6 +42,8 @@ JSONNODE* json_wlparam_descr_format(wlp_descr_t* wlp) {
 	json_set_name(wlp_node, wlp->name);
 
 	switch(wlp->type) {
+	case WLP_BOOL:
+		json_push_back(wlp_node, json_new_a("type", "bool"));
 	case WLP_INTEGER:
 		json_push_back(wlp_node, json_new_a("type", "integer"));
 		json_push_back(wlp_node, json_new_i("min", wlp->range.i_min));
@@ -92,6 +94,15 @@ JSONNODE* json_wlparam_format(wlp_descr_t* wlp) {
 
 int json_wlparam_proc(JSONNODE* node, wlp_descr_t* wlp, void* param) {
 	switch(wlp->type) {
+	case WLP_BOOL:
+	{
+		wlp_bool_t* b = (wlp_bool_t*) param;
+
+		if(json_type(node) != JSON_BOOL)
+			return WLPARAM_JSON_WRONG_TYPE;
+
+		*b = json_as_bool(node);
+	}
 	case WLP_INTEGER:
 	{
 		wlp_integer_t* l = (wlp_integer_t*) param;

@@ -16,6 +16,11 @@ struct dummy_workload {
 
 	wlp_string_t path[512];
 	wlp_string_t test[32];
+
+	wlp_bool_t	 sparse;
+
+	int	fd;
+	void* block;
 };
 
 #endif /* DUMMY_H_ */

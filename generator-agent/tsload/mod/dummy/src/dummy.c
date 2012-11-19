@@ -9,11 +9,16 @@
 #include <log.h>
 
 #include <defs.h>
-#include <wlparam.h>
+#include <workload.h>
 #include <modules.h>
 #include <modapi.h>
 
 #include <dummy.h>
+
+#include <stdlib.h>
+
+#include <fcntl.h>
+#include <unistd.h>
 
 int mod_api_version = MODAPI_VERSION;
 
@@ -43,14 +48,69 @@ wlp_descr_t mod_params[] = {
 		"Benchmark name (read, write)",
 		offsetof(struct dummy_workload, test)
 	},
+	{ WLP_BOOL,
+		WLP_NO_RANGE(),
+		"sparse",
+		"Allow sparse creation of data",
+		offsetof(struct dummy_workload, sparse)
+	},
 	{ WLP_NULL }
 };
 
 size_t mod_params_size = sizeof(struct dummy_workload);
 
+module_t* self = NULL;
+
+int dummy_create_file(int fd, struct dummy_workload* dummy) {
+	long i = 0, last = dummy->file_size / dummy->block_size;
+
+	for(i = 0; i < last; ++i) {
+		write(fd, dummy->block, dummy->block_size);
+	}
+
+	return 0;
+}
+
 int mod_config(module_t* mod) {
 	logmsg(LOG_INFO, "Dummy module is loaded");
 
+	self = mod;
+
+	return 0;
+}
+
+int mod_unconfig(module_t* mod) {
+	return 0;
+}
+
+int mod_workload_config(workload_t* wl) {
+	struct dummy_workload* dummy = (struct dummy_workload*) wl->wl_params;
+	int fd = 0;
+
+	logmsg(LOG_INFO, "Creating file %s with size %ld", dummy->path, dummy->file_size);
+
+	fd = open(dummy->path, O_WRONLY);
+
+	if(fd < 0) {
+		mod_error(self, "Couldn't open file %s for writing", dummy->path);
+		return -1;
+	}
+
+	dummy->block = malloc(dummy->block_size);
+	if(dummy->sparse) {
+		lseek(fd, dummy->file_size, SEEK_SET);
+	}
+	else {
+		dummy_create_file(fd, dummy);
+	}
+
+	return 0;
+}
+
+int mod_workload_unconfig(workload_t* wl) {
+	struct dummy_workload* dummy = (struct dummy_workload*) wl->wl_params;
+
+	close(dummy->fd);
 
 	return 0;
 }

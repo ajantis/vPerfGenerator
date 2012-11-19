@@ -11,6 +11,7 @@
 #include <modules.h>
 #include <libjson.h>
 
+#include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
@@ -157,9 +158,15 @@ module_t* mod_load(const char* path_name) {
 
 	/*Load methods*/
 	mod->mod_config = dlsym(mod->mod_library, "mod_config");
+	mod->mod_unconfig = dlsym(mod->mod_library, "mod_unconfig");
+	mod->mod_wl_config = dlsym(mod->mod_library, "mod_workload_config");
+	mod->mod_wl_unconfig = dlsym(mod->mod_library, "mod_workload_unconfig");
 
-	if(!mod->mod_config) {
-		logmsg(LOG_WARN, "One of required methods was not found");
+	if(!mod->mod_config || !mod->mod_wl_config || !mod->mod_wl_unconfig) {
+		logmsg(LOG_WARN, "Method(s) %s %s %s was not found",
+				(!mod->mod_config)? "mod_config" : "",
+				(!mod->mod_wl_config)? "mod_workload_config" : "",
+				(!mod->mod_wl_unconfig)? "mod_workload_unconfig" : "");
 
 		goto fail;
 	}
@@ -183,6 +190,23 @@ fail:
 	mod_destroy(mod);
 
 	return NULL;
+}
+
+int mod_error(module_t* mod, char* fmtstr, ...) {
+	char status[512];
+	va_list args;
+
+	mod->mod_status = MOD_CONFIG_ERROR;
+
+	va_start(args, fmtstr);
+	vsnprintf(status, 512, fmtstr, args);
+	va_end(args);
+
+	logmsg(LOG_WARN, "Error in module %s: %s", mod->mod_name, status);
+
+	mod->mod_status_msg = strdup(status);
+
+	return 0;
 }
 
 JSONNODE* json_mod_params(const char* name) {
