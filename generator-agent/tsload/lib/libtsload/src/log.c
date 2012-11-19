@@ -7,6 +7,8 @@
 
 #include <log.h>
 
+#include <libjson.h>
+
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
@@ -31,6 +33,11 @@ pthread_mutex_t	log_mutex;
 
 const char* log_severity[] =
 	{"CRIT", "WARN", "INFO", "_DBG", "_TRC" };
+
+/*Used by libjson*/
+static void json_error_callback(const char* msg) {
+	logmsg_src(LOG_DEBUG, "JSON", msg);
+}
 
 /* Rotate tsload logs
  *
@@ -73,6 +80,8 @@ int log_init() {
 	if((ret = log_rotate()) != 0)
 		return ret;
 	log_file = fopen(log_filename, "a");
+
+	json_register_debug_callback(json_error_callback);
 
 	return 0;
 }

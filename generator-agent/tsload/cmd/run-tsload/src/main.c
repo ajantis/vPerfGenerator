@@ -10,22 +10,22 @@
 
 #include <modules.h>
 
+#include <commands.h>
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 
 #include <unistd.h>
 
-#define MAXFNLEN	512
+extern char wl_filename[];
+extern char step_filename[];
 
 extern char log_filename[];
 extern int log_debug;
 extern int log_trace;
 
 extern char mod_search_path[];
-
-char wl_filename[MAXFNLEN];
-char step_filename[MAXFNLEN];
 
 enum {
 	CMD_NONE,
@@ -117,16 +117,6 @@ void parse_options(int argc, char* argv[]) {
 		usage();
 }
 
-int do_info() {
-	char* info = mod_get_info(TRUE);
-	fputs(info, stdout);
-	fputc('\n', stdout);
-
-	free(info);
-
-	return 0;
-}
-
 int main(int argc, char* argv[]) {
 	int err = 0;
 
@@ -150,6 +140,13 @@ int main(int argc, char* argv[]) {
 
 	if(command == CMD_INFO) {
 		err = do_info();
+	}
+	else if(command == CMD_LOAD) {
+		err = do_load();
+	}
+
+	if(err != 0) {
+		fprintf(stderr, "Command execution was not OK, see log for details\n");
 	}
 
 	log_fini();

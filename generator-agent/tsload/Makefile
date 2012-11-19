@@ -36,6 +36,7 @@ run-tsload: libtsload modules
 	@echo
 	@echo $(ACTION) run-tsload daemon...
 	make -C cmd/run-tsload $(TARGET)
+	cp cmd/run-tsload/test.tss cmd/run-tsload/test.tsw build/
 
 $(MODULES):
 	@echo

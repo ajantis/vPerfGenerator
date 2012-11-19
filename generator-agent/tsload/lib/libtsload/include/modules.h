@@ -41,6 +41,7 @@ typedef struct module {
 	char* mod_status_msg;
 
 	wlp_descr_t* mod_params;
+	size_t mod_params_size;	/**< sizeof structure where parameter values are stored*/
 
 	/*Methods*/
 	mod_config_func mod_config;
@@ -50,8 +51,15 @@ typedef struct module {
 	struct module* mod_next;
 } module_t;
 
-char* mod_get_info(int formatted);
-
 int load_modules();
+
+module_t* mod_search(const char* name);
+
+#ifndef NO_JSON
+#include <libjson.h>
+
+JSONNODE* json_mod_params(const char* name);
+JSONNODE* json_modules_info();
+#endif
 
 #endif /* MODULES_H_ */

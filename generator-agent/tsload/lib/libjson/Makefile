@@ -9,9 +9,7 @@ SRC        =     internalJSONNode.cpp JSONAllocator.cpp JSONChildren.cpp \
                  JSONWorker.cpp JSONWriter.cpp libjson.cpp 
 OBJ = $(SRC:.cpp=.o)
 
-JSON_DEBUG = -DNDEBUG
-
-CXXFLAGS += -Os -ffast-math -DJSON_LESS_MEMORY -DNDEBUG
+CXXFLAGS += -Os -ffast-math -DJSON_LESS_MEMORY
 LDFLAGS += -lstdc++
 	
 include ../../Makefile.build

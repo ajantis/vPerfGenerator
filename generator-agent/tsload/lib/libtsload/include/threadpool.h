@@ -8,6 +8,9 @@
 #ifndef THREADPOOL_H_
 #define THREADPOOL_H_
 
+#include <threads.h>
+#include <pthread.h>
+
 #define TPNAMELEN		64
 #define TPMAXTHREADS 	128
 

@@ -46,6 +46,8 @@ wlp_descr_t mod_params[] = {
 	{ WLP_NULL }
 };
 
+size_t mod_params_size = sizeof(struct dummy_workload);
+
 int mod_config(module_t* mod) {
 	logmsg(LOG_INFO, "Dummy module is loaded");
 

@@ -25,6 +25,11 @@
  * Parameter declaration are saved as array of wlp_descr_t structures with "NULL-terminator" with type WLP_NULL.
  * */
 
+typedef long	wlp_integer_t;
+typedef double	wlp_float_t;
+typedef char	wlp_string_t;
+typedef size_t	wlp_size_t;
+
 typedef enum {
 	/*NULL-term*/	WLP_NULL,		/*Used to mark end of param list*/
 
@@ -89,6 +94,15 @@ typedef struct {
 	size_t off;
 } wlp_descr_t;
 
-char* json_gen_wlp(wlp_descr_t* wlp, int formatted);
+#ifndef NO_JSON
+#include <libjson.h>
+
+#define WLPARAM_JSON_OK				0
+#define WLPARAM_JSON_WRONG_TYPE		-1
+#define WLPARAM_JSON_OUTSIDE_RANGE	-2
+
+JSONNODE* json_wlparam_format(wlp_descr_t* wlp);
+int json_wlparam_proc_all(JSONNODE* node, wlp_descr_t* wlp, void* params);
+#endif
 
 #endif /* WLPARAM_H_ */

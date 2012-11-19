@@ -8,12 +8,14 @@
 #ifndef DUMMY_H_
 #define DUMMY_H_
 
-struct dummy_workload {
-	size_t file_size;
-	size_t block_size;
+#include <wlparam.h>
 
-	char path[512];
-	char test[32];
+struct dummy_workload {
+	wlp_size_t file_size;
+	wlp_size_t block_size;
+
+	wlp_string_t path[512];
+	wlp_string_t test[32];
 };
 
 #endif /* DUMMY_H_ */

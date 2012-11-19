@@ -7,13 +7,14 @@ SRC = log.c \
 	  modules.c \
 	  threadpool.c \
 	  threads.c \
-	  wlparam.c
+	  wlparam.c \
+	  workload.c
 	  
 OBJ = $(SRC:.c=.o)
 
 JSON_DEBUG = -DNDEBUG
 
-CFLAGS += -I../libjson/include/ $(JSON_DEBUG)
-LDFLAGS += -lc -ldl -lpthread -ljson
+CFLAGS += $(INCJSON) $(JSON_DEBUG)
+LDFLAGS += -lc -ldl -lpthread $(LINKJSON)
 	
 include ../../Makefile.build

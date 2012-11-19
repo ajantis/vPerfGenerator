@@ -7,7 +7,7 @@ SRC = main.c \
 	  cfgfile.c
 OBJ = $(SRC:.c=.o)
 
-CFLAGS += -I../../lib/libtsload/include
-LDFLAGS += -ltsload -lc -ljson
+CFLAGS += $(INCTSLOAD) $(INCJSON)
+LDFLAGS += -lc $(LINKTSLOAD) $(LINKJSON)
 	
 include ../../Makefile.build

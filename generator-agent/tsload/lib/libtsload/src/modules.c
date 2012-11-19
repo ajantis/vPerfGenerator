@@ -25,7 +25,7 @@ char mod_search_path[MODPATHLEN];
 /*First module in modules linked list*/
 static module_t* first_module = NULL;
 
-module_t* mod_load(char* path_name);
+module_t* mod_load(const char* path_name);
 
 int load_modules() {
 	DIR* dir = opendir(mod_search_path);
@@ -97,14 +97,30 @@ void mod_destroy(module_t* mod) {
 	free(mod);
 }
 
-module_t* mod_load(char* path_name) {
+module_t* mod_search(const char* name) {
+	module_t* mod = first_module;
+
+	while(mod != NULL) {
+		if(strcmp(mod->mod_name, name) == 0)
+			break;
+
+		mod = mod->mod_next;
+	}
+
+	return mod;
+}
+
+module_t* mod_load(const char* path_name) {
 	module_t* mod = mod_create();
 	int* api_version;
+	size_t* params_size;
 
 	mod->mod_library = dlopen(path_name, RTLD_NOW | RTLD_LOCAL);
 
+	logmsg(LOG_INFO, "Loading module %s ...", path_name);
+
 	if(!mod->mod_library) {
-		logmsg(LOG_WARN, "Failed to load module %s. Reason: %s", path_name, dlerror());
+		logmsg(LOG_WARN, "DL reason: %s", dlerror());
 		logerror();
 
 		goto fail;
@@ -115,24 +131,35 @@ module_t* mod_load(char* path_name) {
 	api_version = (int*) dlsym(mod->mod_library, "mod_api_version");
 	mod->mod_name = (char*) dlsym(mod->mod_library, "mod_name");
 	mod->mod_params = (wlp_descr_t*) dlsym(mod->mod_library, "mod_params");
+	params_size = (size_t*) dlsym(mod->mod_library, "mod_params_size");
 
-	if(!api_version || !mod->mod_name || !mod->mod_params) {
-		logmsg(LOG_WARN, "Failed to load module %s. API version, name or params are undefined.", path_name);
+	if(!api_version || !mod->mod_name || !mod->mod_params || !params_size) {
+		logmsg(LOG_WARN, "Required parameter(s) %s %s %s %s is undefined",
+				(!api_version)? "mod_api_version" : "",
+				(!mod->mod_name)? "mod_name" : "",
+				(!mod->mod_params)? "mod_params" : "",
+				(!params_size)? "mod_params_size" : "" );
 
 		goto fail;
 	}
 
 	if(*api_version != MODAPI_VERSION) {
-		logmsg(LOG_WARN, "Failed to load module %s. Wrong api version %d", path_name, *api_version);
+		logmsg(LOG_WARN, "Wrong api version %d", *api_version);
 
 		goto fail;
 	}
+
+	if(mod_search(mod->mod_name) != NULL) {
+		logmsg(LOG_WARN, "Module %s already exists", mod->mod_name);
+	}
+
+	mod->mod_params_size = *params_size;
 
 	/*Load methods*/
 	mod->mod_config = dlsym(mod->mod_library, "mod_config");
 
 	if(!mod->mod_config) {
-		logmsg(LOG_WARN, "Failed to load module %s. One of method was not found", mod->mod_name);
+		logmsg(LOG_WARN, "One of required methods was not found");
 
 		goto fail;
 	}
@@ -151,39 +178,38 @@ fail:
 	if(mod->mod_library)
 		dlclose(mod->mod_library);
 
+	logmsg(LOG_WARN, "Failed to load module %s !", path_name);
+
 	mod_destroy(mod);
 
 	return NULL;
 }
 
-char* mod_get_info(int formatted) {
-	size_t len = INFOCHUNKLEN, mi_len = 0, index = 0;
-	char* info = (char*) malloc(len);
-	char* mod_info;
+JSONNODE* json_mod_params(const char* name) {
+	module_t* mod = mod_search(name);
 
+	if(!mod)
+		return NULL;
+
+	return json_wlparam_format(mod->mod_params);
+}
+
+JSONNODE* json_modules_info() {
+	JSONNODE* node = json_new(JSON_NODE);
+	JSONNODE* mod_node = NULL;
 	module_t* mod = first_module;
 
-	info[0] = 0;
-
 	while(mod != NULL) {
-		mod_info = json_gen_wlp(mod->mod_params, formatted);
-		mi_len = strlen(mod_info);
+		mod_node = json_new(JSON_NODE);
+		json_set_name(mod_node, mod->mod_name);
 
-		/*Reserve bytes for NULL-terminator and reallocate info*/
-		if(mi_len > (len - index - 1)) {
-			while(mi_len > len)
-				len += INFOCHUNKLEN;
+		json_push_back(mod_node, json_new_a("path", mod->mod_path));
+		json_push_back(mod_node, json_wlparam_format(mod->mod_params));
 
-			info = realloc(info, len);
-		}
-
-		strcat(info, mod_info);
-		index += mi_len;
-
-		json_free(mod_info);
+		json_push_back(node, mod_node);
 
 		mod = mod->mod_next;
 	}
 
-	return info;
+	return node;
 }
