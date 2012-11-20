@@ -13,6 +13,11 @@
 
 #include <libjson.h>
 
+/**
+ * wl_create - create new workload: allocate memory and initialize fields
+ *
+ * @return NULL if malloc had failed or new workload object
+ */
 workload_t* wl_create(const char* name, module_t* mod) {
 	workload_t* wl = (workload_t*) malloc(sizeof(workload_t));
 
@@ -30,10 +35,27 @@ workload_t* wl_create(const char* name, module_t* mod) {
 	return wl;
 }
 
+/**
+ * wl_free - free memory for single workload_t object
+ * */
 void wl_free(workload_t* wl) {
 	free(wl->wl_params);
 
 	free(wl);
+}
+
+/**
+ * wl_free - free memory for chain of workload objects
+ * */
+void wl_free_all(workload_t* wl_head) {
+	workload_t* wl = wl_head;
+
+	while(wl) {
+		wl_head = wl;
+		wl = wl->wl_next;
+
+		wl_free(wl_head);
+	}
 }
 
 workload_t* json_workload_proc_all(JSONNODE* node) {
@@ -43,7 +65,18 @@ workload_t* json_workload_proc_all(JSONNODE* node) {
 
 	while(iter != end) {
 		wl = json_workload_proc(*iter);
+		++iter;
 
+		/* json_workload_proc failed to process workload,
+		 * free all workloads that are already parsed and return NULL*/
+		if(wl == NULL) {
+			logmsg(LOG_WARN, "Failed to process workloads from JSON, discarding all of them");
+			wl_free_all(wl_head);
+
+			return NULL;
+		}
+
+		/* Insert workload into workload chain */
 		if(wl_head == NULL) {
 			wl_last = wl_head = wl;
 		}
@@ -51,8 +84,6 @@ workload_t* json_workload_proc_all(JSONNODE* node) {
 			wl_last->wl_next = wl;
 			wl_last = wl;
 		}
-
-		++iter;
 	}
 
 	return wl_head;

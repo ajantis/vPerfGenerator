@@ -16,7 +16,7 @@
 
 #define STRSETCHUNK		256
 
-JSONNODE* json_gen_wlp_strset(wlp_descr_t* wlp) {
+static JSONNODE* json_wlparam_strset_format(wlp_descr_t* wlp) {
 	JSONNODE* node = json_new(JSON_ARRAY);
 	JSONNODE* el;
 	int i;
@@ -36,7 +36,7 @@ JSONNODE* json_gen_wlp_strset(wlp_descr_t* wlp) {
 	return node;
 }
 
-JSONNODE* json_wlparam_descr_format(wlp_descr_t* wlp) {
+JSONNODE* json_wlparam_format(wlp_descr_t* wlp) {
 	JSONNODE* wlp_node = json_new(JSON_NODE);
 
 	json_set_name(wlp_node, wlp->name);
@@ -44,6 +44,7 @@ JSONNODE* json_wlparam_descr_format(wlp_descr_t* wlp) {
 	switch(wlp->type) {
 	case WLP_BOOL:
 		json_push_back(wlp_node, json_new_a("type", "bool"));
+		break;
 	case WLP_INTEGER:
 		json_push_back(wlp_node, json_new_a("type", "integer"));
 		json_push_back(wlp_node, json_new_i("min", wlp->range.i_min));
@@ -65,7 +66,7 @@ JSONNODE* json_wlparam_descr_format(wlp_descr_t* wlp) {
 		break;
 	case WLP_STRING_SET:
 		json_push_back(wlp_node, json_new_a("type", "strset"));
-		json_push_back(wlp_node, json_gen_wlp_strset(wlp));
+		json_push_back(wlp_node, json_wlparam_strset_format(wlp));
 
 		break;
 	}
@@ -75,14 +76,14 @@ JSONNODE* json_wlparam_descr_format(wlp_descr_t* wlp) {
 	return wlp_node;
 }
 
-JSONNODE* json_wlparam_format(wlp_descr_t* wlp) {
+JSONNODE* json_wlparam_format_all(wlp_descr_t* wlp) {
 	JSONNODE* node = json_new(JSON_NODE);
 	JSONNODE* wlp_node = NULL;
 
 	json_set_name(node, "params");
 
 	while(wlp->type != WLP_NULL) {
-		wlp_node = json_wlparam_descr_format(wlp);
+		wlp_node = json_wlparam_format(wlp);
 
 		json_push_back(node, wlp_node);
 		wlp++;
@@ -112,7 +113,7 @@ int json_wlparam_proc(JSONNODE* node, wlp_descr_t* wlp, void* param) {
 	case WLP_BOOL:
 		WLPARAM_PROC_SIMPLE(wlp_bool_t, JSON_BOOL,
 				json_as_bool, WLPARAM_NO_RANGE_CHECK);
-	break;
+		break;
 	case WLP_INTEGER:
 		WLPARAM_PROC_SIMPLE(wlp_integer_t, JSON_NUMBER,
 				json_as_int, WLPARAM_RANGE_CHECK(i_min, i_max));

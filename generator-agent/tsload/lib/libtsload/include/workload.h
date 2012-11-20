@@ -14,6 +14,10 @@
 
 #define WLNAMELEN	64
 
+/**
+ * workloads
+ * */
+
 typedef struct workload {
 	char 			wl_name[WLNAMELEN];
 	module_t*		wl_mod;

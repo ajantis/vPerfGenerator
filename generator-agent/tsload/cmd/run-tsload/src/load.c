@@ -26,6 +26,17 @@ char step_filename[MAXFNLEN];
 
 JSONNODE* wl_node = NULL;
 
+/**
+ * Read JSON representation of workloads from file
+ *
+ * @note: Uses mmap because it is easier than reading entire file into
+ * large memory buffer
+ *
+ * @param fd: file descriptor
+ * @param length: length of file
+ *
+ * @return LOAD_OK if everything was OK or LOAD_ERR_ constant
+ */
 int wl_read(int fd, size_t length) {
 	int ret = 0;
 	char* wl_map = (char*) mmap(
@@ -48,6 +59,9 @@ int wl_read(int fd, size_t length) {
 	return ret;
 }
 
+/**
+ * Open file wl_filename and read workloads from that
+ */
 int wl_init() {
 	int ret = LOAD_OK;
 	int fd = open(wl_filename, O_RDONLY);
@@ -67,6 +81,9 @@ int wl_init() {
 	return ret;
 }
 
+/**
+ * Load system with requests
+ */
 int do_load() {
 	int err = LOAD_OK;
 	workload_t* wl = NULL;
@@ -80,6 +97,8 @@ int do_load() {
 		return LOAD_ERR_JSON_PROC;
 
 	wl_config(wl);
+
+	/*TODO: load code goes here*/
 
 	wl_unconfig(wl);
 

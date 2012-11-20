@@ -17,6 +17,27 @@
 extern char log_filename[];
 extern char mod_search_path[];
 
+/**
+ * config.c
+ *
+ * @brief Reads tsload parameters from configuration file
+ *
+ * File format: NAME=value - configuration variables
+ * Empty lines or comments (starting with #) are ignored
+ *
+ * Variables:
+ * MODPATH - path to modules
+ * LOGFILE - log file destination (may be - for stdout)
+ *
+ * NOTE: because config file is read before logging is configured
+ * it writes all error messages directly to stderr
+ */
+
+/**
+ * Process single config file's option:
+ *
+ * @return CFG_OK or CFG_ERR_INVALID_OPTION if option is unknown
+ * */
 int cfg_option(char* name, char* value) {
 	if(strcmp(name, "MODPATH") == 0) {
 		strncpy(mod_search_path, value, MODPATHLEN);
@@ -31,6 +52,9 @@ int cfg_option(char* name, char* value) {
 	return CFG_OK;
 }
 
+/**
+ * Read and parse config file
+ */
 int cfg_read(FILE* cfg_file) {
 	char line[CONFLINELEN];
 	char* eq_pos = NULL;		/*Position of '=' sign*/
@@ -41,7 +65,7 @@ int cfg_read(FILE* cfg_file) {
 		fgets(line, CONFLINELEN, cfg_file);
 		len = strlen(line);
 
-		/*Strip line*/
+		/*Remove whitespaces from end of the line*/
 		while(isspace(line[--len]) && len != 0);
 		line[len + 1] = 0;
 
@@ -50,8 +74,8 @@ int cfg_read(FILE* cfg_file) {
 
 		eq_pos = strchr(line, '=');
 
-		/*Ignore line without =*/
-		if(!eq_pos) {
+		/*Line does not contain =*/
+		if(eq_pos == NULL) {
 			fprintf(stderr, "Not found '=' on line", line_num);
 			return CFG_ERR_MISSING_EQ;
 		}
