@@ -72,7 +72,7 @@ int clnt_fini() {
 }
 
 JSONNODE* json_clnt_hello_msg() {
-	return json_new(JSON_NULL);
+	return json_new(JSON_NODE);
 }
 
 JSONNODE* json_clnt_msg_format(const char* command, JSONNODE* msg_node) {
