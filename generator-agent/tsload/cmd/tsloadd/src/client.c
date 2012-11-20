@@ -1,6 +1,9 @@
 #define LOG_SOURCE "client"
 #include <log.h>
 
+#include <defs.h>
+#include <threads.h>
+
 #include <client.h>
 
 #include <libjson.h>
@@ -20,8 +23,65 @@ int clnt_sockfd = -1;
 int clnt_port = 9090;
 char clnt_host[CLNTHOSTLEN] = "localhost";
 
-int clnt_send_command(const char* command, JSONNODE* msg_node) {
-	JSONNODE* node =  json_clnt_msg_format(command, msg_node);
+/* Message unique identifier */
+static unsigned clnt_msg_id = 0;
+
+/* Finish flag for clnt_recv_thread*/
+int clnt_finished = FALSE;
+
+thread_t t_client_receive;
+
+void* clnt_recv_thread(void* arg) {
+	THREAD_ENTRY(arg, void, unused);
+
+	struct timeval tv;
+	struct timeval tv_zero;
+	fd_set read_fd;
+
+	void *buffer, *bufptr;
+	size_t buflen;
+	size_t recvlen;
+
+	FD_ZERO(&read_fd);
+	FD_SET(clnt_sockfd, &read_fd);
+
+	tv.tv_sec = 0;
+	tv.tv_usec = CLNT_RECV_TIMEOUT;
+
+	tv_zero.tv_sec = 0;
+	tv_zero.tv_usec = 0;
+
+	while(!clnt_finished) {
+		if(select(1, &read_fd, NULL, NULL, &tv) == -1)
+			continue;
+
+		recvlen = 0;
+		buflen = CLNT_CHUNK_SIZE;
+		bufptr = buffer = malloc(buflen);
+
+		while(1) {\
+			/*Receive chunk of data*/
+			recvlen += recv(clnt_sockfd, bufptr, CLNT_CHUNK_SIZE, MSG_NOSIGNAL);
+
+			/*No more data left in socket, break*/
+			if(select(1, &read_fd, NULL, NULL, &tv_zero) == -1)
+				break;
+
+			buflen += CLNT_CHUNK_SIZE;
+			bufptr += CLNT_CHUNK_SIZE;
+			buffer = realloc(buffer, buflen);
+		}
+
+		/*Process data in buffer*/
+		logmsg(LOG_TRACE, "Received %lu bytes from socket", recvlen);
+
+		free(buffer);
+	}
+
+	THREAD_EXIT(arg);
+}
+
+int clnt_send(JSONNODE* node) {
 	int ret = 0;
 	char* json_msg = json_write(node);
 	size_t len = strlen(json_msg);
@@ -30,6 +90,15 @@ int clnt_send_command(const char* command, JSONNODE* msg_node) {
 
 	json_free(json_msg);
 	json_delete(node);
+
+	return ret;
+}
+
+int clnt_invoke(const char* command, JSONNODE* msg_node) {
+	JSONNODE* node = json_clnt_msg_format(command, msg_node);
+	int ret = 0;
+
+	ret = clnt_send(node);
 
 	return ret;
 }
@@ -62,10 +131,14 @@ int clnt_init() {
 		return CLNT_ERR_CONNECT;
 	}
 
-	return clnt_send_command("hello", json_clnt_hello_msg());
+	t_init(&t_client_receive, NULL, 0, clnt_recv_thread);
+
+	return clnt_invoke("hello", json_clnt_hello_msg());
 }
 
 int clnt_fini() {
+	clnt_finished = TRUE;
+
 	shutdown(clnt_sockfd, 2);
 
 	return CLNT_OK;

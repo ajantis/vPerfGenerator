@@ -8,6 +8,11 @@
 #ifndef CLIENT_H_
 #define CLIENT_H_
 
+/*Receive timeout (in us)*/
+#define CLNT_RECV_TIMEOUT	100
+
+#define CLNT_CHUNK_SIZE		2048
+
 #define CLNTHOSTLEN	32
 
 #define CLNT_OK				0

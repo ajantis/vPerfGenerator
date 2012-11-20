@@ -89,6 +89,8 @@ int main(int argc, char* argv[]) {
 
 	clnt_init();
 
+	sleep(10);
+
 	log_fini();
 	clnt_fini();
 
