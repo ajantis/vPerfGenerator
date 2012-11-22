@@ -26,7 +26,7 @@ void* control_thread(void* arg) {
 
 	logmsg(LOG_DEBUG, "Started control thread (tpool: %s)", tp->tp_name);
 
-	THREAD_EXIT(arg);
+	THREAD_FINISH(arg);
 }
 
 void* worker_thread(void* arg) {
@@ -34,7 +34,7 @@ void* worker_thread(void* arg) {
 
 	logmsg(LOG_DEBUG, "Started worker thread #%d (tpool: %s)", thread->t_id, tp->tp_name);
 
-	THREAD_EXIT(arg);
+	THREAD_FINISH(arg);
 }
 
 thread_pool_t* tp_create(unsigned num_threads, const char* name, uint64_t quantum) {

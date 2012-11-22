@@ -13,11 +13,15 @@
 
 #define THREAD_ENTRY(arg, arg_type, arg_name) 		\
 	thread_t* thread = (thread_t*) arg;				\
-	arg_type* arg_name = (arg_type*) thread->t_arg;	\
+	arg_type* arg_name = (arg_type*) thread->t_arg;
 
-#define THREAD_EXIT(arg)			\
+#define THREAD_FINISH(arg)			\
+_l_thread_exit:						\
 	t_notify(thread);				\
 	return arg;
+
+#define THREAD_EXIT()				\
+	goto _l_thread_exit
 
 typedef struct {
 	int					t_id;

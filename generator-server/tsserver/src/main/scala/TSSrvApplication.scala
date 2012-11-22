@@ -1,5 +1,9 @@
+import com.vperflab.tsserver.TSServer
+
 object TSSrvApplication extends App {
-	System.out.println("Starting tsserver...")
+    var tsServer = new TSServer(9090)
   
-	TSServer.start()
+	System.out.println("Starting tsserver...")
+	
+	tsServer.start()
 }
