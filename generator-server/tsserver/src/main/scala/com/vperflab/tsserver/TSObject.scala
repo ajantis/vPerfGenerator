@@ -1,5 +1,11 @@
+package com.vperflab.tsserver
+
 abstract class TSObject
 
-class TSHostInfo {
-  val hostName: String = null
+class TSHostInfo extends TSObject {
+  var hostName: String = _
+  
+  def getHostName() : String = {
+    return hostName;
+  }
 }

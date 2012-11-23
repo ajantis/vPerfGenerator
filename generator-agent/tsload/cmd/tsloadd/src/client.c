@@ -411,7 +411,16 @@ int clnt_fini() {
 }
 
 JSONNODE* json_clnt_hello_msg() {
-	return json_new(JSON_NODE);
+	JSONNODE* node = json_new(JSON_NODE);
+
+	JSONNODE* info_node = json_new(JSON_NODE);
+	json_set_name(info_node, "info");
+
+	json_push_back(info_node, json_new_a("hostName", "localhost"));
+
+	json_push_back(node, info_node);
+
+	return node;
 }
 
 JSONNODE* json_clnt_command_format(const char* command, JSONNODE* msg_node, unsigned msg_id) {

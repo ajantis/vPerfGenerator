@@ -11,6 +11,9 @@ import java.nio.channels.ServerSocketChannel
 import scala.collection.immutable._
 import scala.collection.mutable.{Map => MutableMap}
 
+import java.util.{LinkedHashMap}
+import scala.collection.JavaConversions._
+
 case class TSCommandNotFound(msg: String)
 	extends Exception(msg) {}
 
@@ -64,18 +67,26 @@ class TSServer(portNumber: Int) {
 	  for(field <- klass.getDeclaredFields) {
 	    val name = field.getName
 	    
+	    field.setAccessible(true)
 	    field.set(arg, argMap(name))
 	  }
 	  
 	  return arg.asInstanceOf[AnyRef]
 	}
 	
+	def convertArgMap(anyArgMap: Any) : Map[String, Any] = {
+	  var argHashMap = anyArgMap.asInstanceOf[LinkedHashMap[String, Any]]
+	  var argMap : Map[String, Any] = mapAsScalaMap(argHashMap).toMap
+	  
+      return argMap
+	}
+	
 	def convertArguments(agent: TSAgent, msg: Map[String, Any], argList: List[String], classList: List[Class[_]]) : Array[AnyRef] = {
 	  var args: List[AnyRef] = List(agent)
 	  var argClassMap = (argList zip classList).toMap
 	   
-	  for((argName, klass) <- argClassMap) {	    
-	    val argMap = msg(argName).asInstanceOf[Map[String, Any]]
+	  for((argName, klass) <- argClassMap) {	
+	    val argMap = convertArgMap(msg(argName))
 	    val arg = convertSingleArgument(argMap, klass)
 	    
 	    args = args ::: List(arg)
@@ -119,8 +130,8 @@ class TSServer(portNumber: Int) {
 	  }
 	}
 	
-	@TSServerMethod(name = "hello", noReturn = true)
-	def hello(agent: TSAgent) = {
-	  System.out.println("Say hello!")
+	@TSServerMethod(name = "hello", argArray = Array("info"), noReturn = true)
+	def hello(agent: TSAgent, info: TSHostInfo) = {
+	  System.out.println("Say hello from %s!".format(info.getHostName()))
 	}
 }
