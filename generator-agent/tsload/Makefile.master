@@ -31,6 +31,9 @@ LDFLAGS = -L$(BUILDDIR)/lib $($(TYPE)_LDFLAGS)
 # For debugging
 CFLAGS += -g
 
+# Supress "unused" warnings
+CFLAGS += -Wno-unused-label -Wno-unused-variable
+
 TARGSRC = $(addprefix $(SRCDIR)/,$(SRC))
 TARGOBJ = $(addprefix $(OBJDIR)/,$(OBJ))
 	

@@ -10,6 +10,7 @@
 
 #include <stdlib.h>
 
+#include <unistd.h>
 #include <pthread.h>
 #include <netdb.h>
 #include <sys/socket.h>
@@ -17,7 +18,7 @@
 #define CLNT_CHUNK	1024
 
 JSONNODE* json_clnt_hello_msg();
-JSONNODE* json_clnt_command_format(const char* command, JSONNODE* msg);
+JSONNODE* json_clnt_command_format(const char* command, JSONNODE* msg_node, unsigned msg_id);
 
 int clnt_sockfd = -1;
 
@@ -310,28 +311,23 @@ void* clnt_connect_thread(void* arg) {
 	THREAD_FINISH(arg);
 }
 
-clnt_msg_handler_t* clnt_send(JSONNODE* node) {
-	clnt_msg_handler_t* hdl = clnt_create_msg();
-
+int clnt_send(JSONNODE* node) {
 	char* json_msg = NULL;
 	size_t len = 0;
 
-	if(hdl == NULL)
-		return NULL;
-
-	json_push_back(node, json_new_i("id", hdl->mh_msg_id));
+	int ret;
 
 	json_msg = json_write(node);
 	len = strlen(json_msg);
 
 	pthread_mutex_lock(&send_mutex);
-	send(clnt_sockfd, json_msg, len, MSG_NOSIGNAL);
+	ret = send(clnt_sockfd, json_msg, len, MSG_NOSIGNAL);
 	pthread_mutex_unlock(&send_mutex);
 
 	json_free(json_msg);
 	json_delete(node);
 
-	return hdl;
+	return ret;
 }
 
 /*
@@ -340,15 +336,19 @@ clnt_msg_handler_t* clnt_send(JSONNODE* node) {
  * @param command - command name
  * @param msg_node - JSON representation of command'params
  * @param p_response - pointer where response is written
+ *
+ * NOTE: deletes msg_node in any case
  * */
 int clnt_invoke(const char* command, JSONNODE* msg_node, JSONNODE** p_response) {
-	JSONNODE* node = json_clnt_command_format(command, msg_node);
-	clnt_msg_handler_t* hdl = NULL;
+	clnt_msg_handler_t* hdl = clnt_create_msg();
+	JSONNODE* node = json_clnt_command_format(command, msg_node, hdl->mh_msg_id);
 
-	hdl = clnt_send(node);
-
-	if(hdl == NULL)
+	if(hdl == NULL) {
+		json_delete(msg_node);
 		return -1;
+	}
+
+	clnt_send(node);
 
 	/*Wait until response will arrive*/
 	pt_wait(&hdl->mh_mutex, &hdl->mh_cv);
@@ -414,14 +414,14 @@ JSONNODE* json_clnt_hello_msg() {
 	return json_new(JSON_NODE);
 }
 
-JSONNODE* json_clnt_command_format(const char* command, JSONNODE* msg_node) {
+JSONNODE* json_clnt_command_format(const char* command, JSONNODE* msg_node, unsigned msg_id) {
 	JSONNODE* node = json_new(JSON_NODE);
 	JSONNODE* cmd_node = json_new_a(node, command);
 
-	json_set_name(cmd_node, "cmd");
-	json_set_name(msg_node, "msg");
+	json_push_back(node, json_new_i("id", msg_id));
+	json_push_back(node, json_new_a("cmd", command));
 
-	json_push_back(node, cmd_node);
+	json_set_name(msg_node, "msg");
 	json_push_back(node, msg_node);
 
 	return node;
