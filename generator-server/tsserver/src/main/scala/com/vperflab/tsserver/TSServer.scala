@@ -11,9 +11,6 @@ import java.nio.channels.ServerSocketChannel
 import scala.collection.immutable._
 import scala.collection.mutable.{Map => MutableMap}
 
-import java.util.{LinkedHashMap}
-import scala.collection.JavaConversions._
-
 case class TSCommandNotFound(msg: String)
 	extends Exception(msg) {}
 
@@ -61,52 +58,20 @@ class TSServer(portNumber: Int) {
 	  throw new TSCommandNotFound("Not found command %s".format(cmd))
 	}
 	
-	def convertSingleArgument(argMap: Map[String, Any], klass: Class[_]) : AnyRef = {
-	  var arg = klass.newInstance()
-	  
-	  for(field <- klass.getDeclaredFields) {
-	    val name = field.getName
-	    
-	    field.setAccessible(true)
-	    field.set(arg, argMap(name))
-	  }
-	  
-	  return arg.asInstanceOf[AnyRef]
-	}
-	
-	def convertArgMap(anyArgMap: Any) : Map[String, Any] = {
-	  var argHashMap = anyArgMap.asInstanceOf[LinkedHashMap[String, Any]]
-	  var argMap : Map[String, Any] = mapAsScalaMap(argHashMap).toMap
-	  
-      return argMap
-	}
-	
 	def convertArguments(agent: TSAgent, msg: Map[String, Any], argList: List[String], classList: List[Class[_]]) : Array[AnyRef] = {
 	  var args: List[AnyRef] = List(agent)
 	  var argClassMap = (argList zip classList).toMap
 	   
 	  for((argName, klass) <- argClassMap) {	
-	    val argMap = convertArgMap(msg(argName))
-	    val arg = convertSingleArgument(argMap, klass)
+	    val argMap = TSObjectSerializer.jsonMapToMap(msg(argName))
+	    val arg = TSObjectDeserializer.doDeserialize(argMap, klass)
 	    
-	    args = args ::: List(arg)
+	    args = args ::: List(arg.asInstanceOf[AnyRef])
 	  }
 	  
 	  System.out.println(args)
 	  
 	  return args.toArray
-	}
-	
-	def convertReturnValue(ret: Any) : Map[String, Any] = {
-	  var retMap = MutableMap[String, Any]()
-	  
-	  for(field <- ret.getClass.getDeclaredFields) {
-	    val name = field.getName
-	    
-	    retMap += name -> field.get()
-	  }
-	  
-	  return retMap.toMap
 	}
 	
 	def processCommand(agent: TSAgent, cmd: String, msg: Map[String, Any]) : Map[String, Any] = {
@@ -126,12 +91,12 @@ class TSServer(portNumber: Int) {
 		return Map.empty
 	  }
 	  else {
-	    return convertReturnValue(ret)
+	    return TSObjectSerializer.doSerialize(ret.asInstanceOf[TSObject])
 	  }
 	}
 	
 	@TSServerMethod(name = "hello", argArray = Array("info"), noReturn = true)
 	def hello(agent: TSAgent, info: TSHostInfo) = {
-	  System.out.println("Say hello from %s!".format(info.getHostName()))
+	  System.out.println("Say hello from %s!".format(info.hostName))
 	}
 }

@@ -215,7 +215,7 @@ JSONNODE* json_mod_params(const char* name) {
 	if(!mod)
 		return NULL;
 
-	return json_wlparam_format(mod->mod_params);
+	return json_wlparam_format_all(mod->mod_params);
 }
 
 JSONNODE* json_modules_info() {
@@ -228,7 +228,7 @@ JSONNODE* json_modules_info() {
 		json_set_name(mod_node, mod->mod_name);
 
 		json_push_back(mod_node, json_new_a("path", mod->mod_path));
-		json_push_back(mod_node, json_wlparam_format(mod->mod_params));
+		json_push_back(mod_node, json_wlparam_format_all(mod->mod_params));
 
 		json_push_back(node, mod_node);
 
