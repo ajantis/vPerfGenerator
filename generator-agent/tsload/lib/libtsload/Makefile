@@ -3,12 +3,14 @@ TARGET = lib/libtsload.so
 
 include ../../Makefile.master
 
-SRC = log.c \
+SRC = hashmap.c \
+	  log.c \
 	  modules.c \
 	  threadpool.c \
 	  threads.c \
+	  tutil.c	\
 	  wlparam.c \
-	  workload.c
+	  workload.c 
 	  
 OBJ = $(SRC:.c=.o)
 

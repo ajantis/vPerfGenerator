@@ -33,18 +33,10 @@ class TSObjectDeserializerTest extends Assert {
         "test" -> "read",
         "sparse" -> false)
     
-    try {
-      val wlJsonMap = TSObjectSerializer.doSerialize(workload)
-		val wlJsonStr = generate(wlJsonMap)
+   
+   val wlJsonMap = TSObjectSerializer.doSerialize(workload)
+   val wlJsonStr = generate(wlJsonMap)
 		
-		System.out.println(wlJsonStr)
-    }
-    catch {
-    case e: Exception => { 
-    	  e.printStackTrace()
-    	  throw e 
-      }
-    }
-    
+   assertEqual(wlJsonStr, """{"module":"dummy","params":{"test":"read","filesize":16777216,"sparse":false,"path":"/tmp/testfile","blocksize":4096}}""")
   }
 }

@@ -268,16 +268,16 @@ object TSObjectSerializer extends TSObjectSerdes {
   def serdesInstantiableClass(obj: Any, klass: Class[_]) : Any = {
     doTraceClass("class", klass)
     
-	  var objMap = MutableMap[String, Any]()
-	  
-	  for(field <- klass.getDeclaredFields) {
-	    val name = field.getName
+	var objMap = MutableMap[String, Any]()
+	
+	for(field <- klass.getDeclaredFields) {
+	  val name = field.getName
 	    
-	    field.setAccessible(true)
-	    objMap += name -> serdesField(field.get(obj), field)
-	  }
+	  field.setAccessible(true)
+	  objMap += name -> serdesField(field.get(obj), field)
+	}
 	  
-	  return objMap.toMap
+	return objMap.toMap
   }
   
   def serdesAbstractClass(obj: Any, klass: Class[_]) : Any = {

@@ -9,7 +9,6 @@
 #define THREADPOOL_H_
 
 #include <threads.h>
-#include <pthread.h>
 
 #define TPNAMELEN		64
 #define TPMAXTHREADS 	128
@@ -27,9 +26,7 @@ typedef struct thread_pool {
 	thread_t  tp_ctl_thread;		/**< Dispatcher thread*/
 	thread_t* tp_work_threads;		/**< Worker threads*/
 
-	pthread_mutex_t	tp_mutex;
-	pthread_cond_t  tp_cv;			/**< Mutex and cond. var used to wake up
-										 worker threads when next quantum starts */
+	thread_event_t* tp_event;		/**< Used to wake up worker threads when next quantum starts */
 } thread_pool_t;
 
 thread_pool_t* tp_create(unsigned num_threads, const char* name, uint64_t quantum);

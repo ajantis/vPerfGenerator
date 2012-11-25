@@ -125,6 +125,9 @@ int main(int argc, char* argv[]) {
 	read_environ();
 	parse_options(argc, argv);
 
+	if((err = threads_init()) != 0)
+		return err;
+
 	if((err = log_init()) != 0) {
 		return err;
 	}

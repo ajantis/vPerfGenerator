@@ -3,6 +3,7 @@
 
 #include <defs.h>
 #include <threads.h>
+#include <hashmap.h>
 
 #include <client.h>
 
@@ -38,95 +39,74 @@ int clnt_finished = FALSE;
 thread_t t_client_receive;
 thread_t t_client_connect;
 
-/* Hash table of invoke handlers */
-static pthread_mutex_t hdl_mutex;
-static clnt_msg_handler_t* handlers[CLNTMHTABLESIZE];
-
 /* Protects sending from multiple threads simultaneously*/
-static pthread_mutex_t send_mutex;
+static thread_mutex_t send_mutex;
 
-static pthread_mutex_t conn_mutex;
-static pthread_cond_t conn_cv;
+static thread_event_t conn_event;
 
 /*
- * Insert message handler into table
+ * Hash table helpers
  * */
-static void clnt_insert_handler(clnt_msg_handler_t* hdl) {
-	clnt_msg_handler_t** head = handlers + (hdl->mh_msg_id & CLNTMHTABLESIZE);
-	clnt_msg_handler_t* iter;
+static clnt_msg_handler_t* handlers[CLNTMHTABLESIZE];
 
-	pthread_mutex_lock(&hdl_mutex);
-	if(*head == NULL) {
-		*head = hdl;
-	}
-	else {
-		iter = *head;
-
-		while(iter->mh_next != NULL) {
-			iter = iter->mh_next;
-		}
-
-		iter->mh_next = hdl;
-	}
-	pthread_mutex_unlock(&hdl_mutex);
+static unsigned cmh_hash_handler(void* object) {
+	clnt_msg_handler_t* hdl = (clnt_msg_handler_t*) object;
+	return hdl->mh_msg_id & CLNTMHTABLEMASK;
 }
 
-static void clnt_remove_handler(clnt_msg_handler_t* hdl) {
-	clnt_msg_handler_t** head = handlers + (hdl->mh_msg_id & CLNTMHTABLESIZE);
-	clnt_msg_handler_t* iter;
-
-	pthread_mutex_lock(&hdl_mutex);
-
-	if((*head)->mh_msg_id == hdl->mh_msg_id) {
-			*head = NULL;
-	}
-	else {
-		iter = *head;
-
-		while(iter->mh_next != NULL) {
-			iter = iter->mh_next;
-		}
-
-		iter->mh_next = hdl->mh_next;
-	}
-
-	pthread_mutex_unlock(&hdl_mutex);
+static unsigned cmh_hash_key(void* key) {
+	unsigned* msg_id = (unsigned*) key;
+	return *msg_id & CLNTMHTABLESIZE;
 }
 
-static clnt_msg_handler_t* clnt_find_handler(unsigned msg_id) {
-	clnt_msg_handler_t* hdl = handlers[msg_id & CLNTMHTABLESIZE];
+static void* cmh_next(void* obj) {
+	clnt_msg_handler_t* hdl = (clnt_msg_handler_t*) obj;
 
-	pthread_mutex_lock(&hdl_mutex);
-
-	while(hdl != NULL) {
-		if(hdl->mh_msg_id == msg_id)
-			break;
-
-		hdl = hdl->mh_next;
-	}
-
-	pthread_mutex_unlock(&hdl_mutex);
-
-	return hdl;
+	return hdl->mh_next;
 }
+
+static void cmh_set_next(void* obj, void* next) {
+	clnt_msg_handler_t* hdl = (clnt_msg_handler_t*) obj;
+	clnt_msg_handler_t* h_hext = (clnt_msg_handler_t*) next;
+
+	hdl->mh_next = h_hext;
+}
+
+static int cmh_compare(void* obj, void* key) {
+	clnt_msg_handler_t* hdl = (clnt_msg_handler_t*) obj;
+	unsigned* msg_id = (unsigned*) key;
+
+	return ((int) *msg_id) - hdl->mh_msg_id;
+}
+
+static hashmap_t hdl_hashmap = {
+	.hm_size = CLNTMHTABLESIZE,
+	.hm_heads = (void**) handlers,
+
+	.hm_hash_object = cmh_hash_handler,
+	.hm_hash_key = cmh_hash_key,
+	.hm_next = cmh_next,
+	.hm_set_next = cmh_set_next,
+	.hm_compare = cmh_compare
+};
 
 static clnt_msg_handler_t* clnt_create_msg() {
 	unsigned msg_id = __sync_fetch_and_add(&clnt_msg_id, 1);
 	clnt_msg_handler_t* hdl = malloc(sizeof(clnt_msg_handler_t));
 
-	pt_init(&hdl->mh_mutex, &hdl->mh_cv);
+	event_init(&hdl->mh_event, "clnt_msg_handler");
 
 	hdl->mh_next = NULL;
 	hdl->mh_msg_id = msg_id;
 	hdl->mh_response = NULL;
 
-	clnt_insert_handler(hdl);
+	hash_map_insert(&hdl_hashmap, hdl);
 
 	return hdl;
 }
 
 static void clnt_delete_handler(clnt_msg_handler_t* hdl) {
-	clnt_remove_handler(hdl);
+	hash_map_remove(&hdl_hashmap, hdl);
 
 	free(hdl);
 }
@@ -134,7 +114,7 @@ static void clnt_delete_handler(clnt_msg_handler_t* hdl) {
 int clnt_process_response(unsigned msg_id, JSONNODE* response, clnt_response_type_t rt) {
 	clnt_msg_handler_t* hdl = NULL;
 
-	hdl = clnt_find_handler(msg_id);
+	hdl = (clnt_msg_handler_t*) hash_map_find(&hdl_hashmap, &msg_id);
 
 	if(hdl == NULL) {
 		logmsg(LOG_WARN, "Failed to process incoming message: unknown message id %u", msg_id);
@@ -144,7 +124,8 @@ int clnt_process_response(unsigned msg_id, JSONNODE* response, clnt_response_typ
 	/*Notify sender thread that we got a response*/
 	hdl->mh_response_type = rt;
 	hdl->mh_response = response;
-	pt_notify_one(&hdl->mh_mutex, &hdl->mh_cv);
+
+	event_notify_one(&hdl->mh_event);
 
 	return 0;
 }
@@ -216,7 +197,7 @@ void clnt_on_disconnect() {
 	/*TODO: cleanup all client resources*/
 
 	/*Notify connect thread*/
-	pt_notify_one(&conn_mutex, &conn_cv);
+	event_notify_one(&conn_event);
 }
 
 void* clnt_recv_thread(void* arg) {
@@ -282,6 +263,7 @@ void* clnt_recv_thread(void* arg) {
 		free(buffer);
 	}
 
+THREAD_END:
 	THREAD_FINISH(arg);
 }
 
@@ -299,15 +281,16 @@ void* clnt_connect_thread(void* arg) {
 			}
 
 			/*Restart receive thread*/
-			t_init(&t_client_receive, NULL, 0, clnt_recv_thread);
+			t_init(&t_client_receive, NULL, "clnt_recv_thread", clnt_recv_thread);
 
 			clnt_connected = TRUE;
 		}
 
 		/*Wait until socket will be disconnected*/
-		pt_wait(&conn_mutex, &conn_cv);
+		event_wait(&conn_event);
 	}
 
+THREAD_END:
 	THREAD_FINISH(arg);
 }
 
@@ -320,9 +303,9 @@ int clnt_send(JSONNODE* node) {
 	json_msg = json_write(node);
 	len = strlen(json_msg);
 
-	pthread_mutex_lock(&send_mutex);
+	mutex_lock(&send_mutex);
 	ret = send(clnt_sockfd, json_msg, len, MSG_NOSIGNAL);
-	pthread_mutex_unlock(&send_mutex);
+	mutex_unlock(&send_mutex);
 
 	json_free(json_msg);
 	json_delete(node);
@@ -351,7 +334,8 @@ int clnt_invoke(const char* command, JSONNODE* msg_node, JSONNODE** p_response) 
 	clnt_send(node);
 
 	/*Wait until response will arrive*/
-	pt_wait(&hdl->mh_mutex, &hdl->mh_cv);
+	event_wait(&hdl->mh_event);
+
 	*p_response = hdl->mh_response;
 
 	/*Delete handler because it is not needed anymore*/
@@ -392,12 +376,11 @@ int clnt_init() {
 
 	memset(clnt_sa.sin_zero, 0, sizeof(clnt_sa.sin_zero));
 
-	pthread_mutex_init(&hdl_mutex, NULL);
-	pthread_mutex_init(&send_mutex, NULL);
+	hash_map_init(&hdl_hashmap, "hdl_hashmap");
+	mutex_init(&send_mutex, "send_mutex");
+	event_init(&conn_event, "conn_event");
 
-	pt_init(&conn_mutex, &conn_cv);
-
-	t_init(&t_client_connect, NULL, 0, clnt_connect_thread);
+	t_init(&t_client_connect, NULL, "clnt_conn_thread", clnt_connect_thread);
 
 	return clnt_hello();
 }

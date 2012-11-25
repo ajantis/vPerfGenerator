@@ -10,7 +10,7 @@
 
 #include <libjson.h>
 
-#include <pthread.h>
+#include <threads.h>
 
 /*Receive timeout (in us)*/
 #define CLNT_RECV_TIMEOUT	10000
@@ -32,8 +32,7 @@ typedef enum {
 } clnt_response_type_t;
 
 typedef struct clnt_msg_handler {
-	pthread_mutex_t mh_mutex;
-	pthread_cond_t mh_cv;
+	thread_event_t mh_event;
 
 	unsigned mh_msg_id;
 
@@ -44,6 +43,7 @@ typedef struct clnt_msg_handler {
 } clnt_msg_handler_t;
 
 #define CLNTMHTABLESIZE 16
+#define CLNTMHTABLEMASK (CLNTMHTABLESIZE - 1)
 
 #define CLNT_RETRY_TIMEOUT 3
 

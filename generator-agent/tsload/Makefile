@@ -1,7 +1,7 @@
 BUILD = build/
 MODULES = dummy
 
-ifeq ($(MAKECMDGOALS),clean)
+ifeq (clean, $(findstring clean,$(MAKECMDGOALS)))
 	TARGET = clean
 	ACTION = Cleaning
 else 
@@ -11,13 +11,16 @@ endif
 
 all: tsloadd run-tsload
 clean: tsloadd run-tsload
+
+build-json: libjson
+clean-json: libjson
 	
 libjson: 
 	@echo
 	@echo $(ACTION) libjson...
 	make -C lib/libjson $(TARGET)
 
-libtsload: libjson
+libtsload:
 	@echo
 	@echo $(ACTION) libtsload...
 	make -C lib/libtsload $(TARGET)

@@ -15,8 +15,7 @@
 
 #include <string.h>
 #include <stdlib.h>
-
-#include <pthread.h>
+#include <stdio.h>
 
 thread_pool_t* default_pool = NULL;
 
@@ -26,6 +25,7 @@ void* control_thread(void* arg) {
 
 	logmsg(LOG_DEBUG, "Started control thread (tpool: %s)", tp->tp_name);
 
+THREAD_END:
 	THREAD_FINISH(arg);
 }
 
@@ -34,12 +34,17 @@ void* worker_thread(void* arg) {
 
 	logmsg(LOG_DEBUG, "Started worker thread #%d (tpool: %s)", thread->t_id, tp->tp_name);
 
+THREAD_END:
 	THREAD_FINISH(arg);
 }
 
 thread_pool_t* tp_create(unsigned num_threads, const char* name, uint64_t quantum) {
 	thread_pool_t* tp = NULL;
 	int tid;
+
+	char control_name[TNAMELEN];
+	char worker_name[TNAMELEN];
+	char event_name[TEVENTNAMELEN];
 
 	if(num_threads > TPMAXTHREADS) {
 		logmsg(LOG_WARN, "Failed to create thread_pool %s: no more %d threads allowed (%d requested)",
@@ -58,13 +63,19 @@ thread_pool_t* tp_create(unsigned num_threads, const char* name, uint64_t quantu
 	tp->tp_time	   = 0ll;	   /*Time is set by control thread*/
 	tp->tp_quantum = quantum;
 
-	pt_init(&tp->tp_mutex, &tp->tp_cv);
+	snprintf(event_name, TEVENTNAMELEN, "tp-%s-event", name);
+    event_init(&tp->tp_event, event_name);
 
 	/*Create threads*/
-	t_init(&tp->tp_ctl_thread, (void*) tp, CONTROL_TID, control_thread);
+    snprintf(control_name, TNAMELEN, "tp-%s-%s", name, "ctl");
+	t_init(&tp->tp_ctl_thread, (void*) tp, control_name, control_thread);
+	tp->tp_ctl_thread.t_local_id = CONTROL_TID;
 
-	for(tid = 0; tid < num_threads; ++tid)
-		t_init(tp->tp_work_threads + tid, (void*) tp, tid + WORKER_TID, worker_thread);
+	for(tid = 0; tid < num_threads; ++tid) {
+		snprintf(worker_name, TNAMELEN, "tp-%s-%d", name, tid);
+		t_init(tp->tp_work_threads + tid, (void*) tp, worker_name, worker_thread);
+		tp->tp_ctl_thread.t_local_id = WORKER_TID + tid;
+	}
 
 	logmsg(LOG_INFO, "Created thread pool %s with %d threads", name, num_threads);
 

@@ -11,11 +11,14 @@
 #include <modules.h>
 #include <cfgfile.h>
 #include <client.h>
+#include <threads.h>
+#include <threadpool.h>
 
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 
+#include <signal.h>
 #include <unistd.h>
 
 char config_file_name[CONFPATHLEN];
@@ -68,10 +71,18 @@ void parse_options(int argc, char* argv[]) {
 	}
 }
 
+void sigusr1_handler(int sig) {
+	t_dump_threads();
+}
+
 int main(int argc, char* argv[]) {
 	int err = 0;
 
 	parse_options(argc, argv);
+
+	if((err = threads_init()) != 0)
+		return err;
+	sigset(SIGUSR1, sigusr1_handler);
 
 	if((err = cfg_init(config_file_name)) != CFG_OK) {
 		return 1;

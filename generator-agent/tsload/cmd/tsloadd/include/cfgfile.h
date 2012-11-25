@@ -16,4 +16,6 @@
 #define CFG_ERR_MISSING_EQ		-2
 #define CFG_ERR_INVALID_OPTION	-3
 
+int cfg_init(const char* cfg_file_name);
+
 #endif /* CONFIG_H_ */

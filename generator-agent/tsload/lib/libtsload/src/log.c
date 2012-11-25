@@ -13,12 +13,12 @@
 #include <string.h>
 #include <stdarg.h>
 #include <time.h>
+#include <threads.h>
 
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <pthread.h>
 
 char log_filename[LOGFNMAXLEN];
 
@@ -29,7 +29,7 @@ int log_trace	= 0;
 
 FILE* log_file;
 
-pthread_mutex_t	log_mutex;
+thread_mutex_t	log_mutex;
 
 const char* log_severity[] =
 	{"CRIT", "WARN", "INFO", "_DBG", "_TRC" };
@@ -124,7 +124,7 @@ int logmsg_src(int severity, const char* source, const char* format, ...)
 
 	log_gettime(time, 64);
 
-	pthread_mutex_lock(&log_mutex);
+	mutex_lock(&log_mutex);
 
 	ret = fprintf(log_file, "%s [%s:%s] ", time, source, log_severity[severity]);
 
@@ -135,7 +135,7 @@ int logmsg_src(int severity, const char* source, const char* format, ...)
 	fputc('\n', log_file);
 	fflush(log_file);
 
-	pthread_mutex_unlock(&log_mutex);
+	mutex_unlock(&log_mutex);
 
 	return ret + 1;	/*+1 for \n*/
 }
