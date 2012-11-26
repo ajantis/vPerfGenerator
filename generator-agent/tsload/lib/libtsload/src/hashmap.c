@@ -13,7 +13,7 @@
 void hash_map_init(hashmap_t* hm, const char* name) {
 	int i = 0;
 
-	for(i = 0; i < hm->hm_size; ++hm) {
+	for(i = 0; i < hm->hm_size; ++i) {
 		hm->hm_heads[i] = NULL;
 	}
 

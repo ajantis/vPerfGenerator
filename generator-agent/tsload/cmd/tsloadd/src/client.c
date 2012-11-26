@@ -131,6 +131,11 @@ int clnt_process_response(unsigned msg_id, JSONNODE* response, clnt_response_typ
 }
 
 int clnt_process_command(unsigned msg_id, JSONNODE* command, JSONNODE* msg) {
+	if(json_type(command) != JSON_STRING)
+		return -1;
+
+	logmsg(LOG_TRACE, "Invoked command %s", json_as_string(command));
+
 	return 0;
 }
 

@@ -4,7 +4,7 @@ import java.lang.annotation.*;
 
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ElementType.METHOD})
-public @interface TSServerMethod
+public @interface TSClientMethod
 {
     String name();
     String[] argNames() default {};

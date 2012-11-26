@@ -1,6 +1,6 @@
 package com.vperflab.tsserver
 
-import java.net._
+import java.net.{Proxy => NetworkProxy, _}
 import java.io._
 
 import java.lang.reflect.{Array => _, _}
@@ -11,40 +11,155 @@ import java.nio.channels.ServerSocketChannel
 import scala.collection.immutable._
 import scala.collection.mutable.{Map => MutableMap}
 
+import scala.reflect.Manifest
+
+/**
+ * TSCommandNotFound - thrown if command invoked by Agent
+ * is not found in TSServer methods
+ */
 case class TSCommandNotFound(msg: String)
 	extends Exception(msg) {}
 
+/**
+ * TSMissingArgument - thrown if one of required arguments
+ * was not provided in command message
+ */
 case class TSMissingArgument(msg: String) 
 	extends Exception(msg) {}
 
-case class TSMissingField(msg: String) 
+/**
+ * TSNotClientMethod - you try to invoke method that is not client method
+ */
+case class TSNotClientMethod(msg: String) 
 	extends Exception(msg) {}
 
-class TSServer(portNumber: Int) {
+/**
+ * TSClientInvocationHandler - proxies requests to client 
+ * 
+ * Requests defined in trait derived from TSClientInterface and passed as 
+ * type argument
+ */
+class TSClientInvocationHandler[CI <: TSClientInterface](client: TSClient[CI]) 
+	extends InvocationHandler {
+  
+  /**
+   * @return  TSClientMethod annotation for method
+   * */
+  def getMethodInfo(method: Method) : TSClientMethod = {
+    val annotation = method.getAnnotation(classOf[TSClientMethod])
+    
+    if(annotation == null) {
+      throw new TSNotClientMethod("Method " + method + " has no TSClientMethod annotation")
+    }
+    
+    return annotation
+  }
+  
+  /**
+   * Invoke client's method
+   * 
+   * 1. Serialize arguments
+   * 2. Call client.invoke
+   * 3. Deserialize and return response
+   * 
+   * @return response
+   */
+  def invoke(proxy: Any, method: Method, args: Array[Object]) : Object = {
+    val retClass = method.getReturnType()
+    val methodInfo = getMethodInfo(method)
+    
+    val argNamesList = methodInfo.argNames.toList
+    val argList = args match {
+      case null => Nil
+      case args => args.toList
+    }
+    
+    var argMap = (argNamesList zip argList).toMap
+    
+    var msg = MutableMap[String, Any]() 
+    
+    for((argName, argValue) <- argMap) { 
+        val tsObject = argValue.asInstanceOf[TSObject]
+    	msg += argName -> TSObjectSerializer.doSerialize(tsObject)
+    }
+    
+    val ret = client.invoke(methodInfo.name, msg.toMap)
+    
+    if(methodInfo.noReturn) {
+    	return Map.empty
+    }
+    else {
+    	return TSObjectDeserializer.doDeserialize(ret, retClass).asInstanceOf[AnyRef]
+    }
+  }
+}
+
+/**
+ * TSServer - multiplexes connections on socket from clients
+ * 
+ * Uses reflection to find appropriate method for incoming commands
+ * 
+ * There are two possible clients: 
+ * - tsloadd - TS Loader daemon (handled by TSLoadServer) 
+ * - tsmond - TS Monitor daemon (handled by TSMonitorServer)
+ */
+abstract class TSServer[CI <: TSClientInterface](portNumber: Int) 
+	(implicit ciManifest: Manifest[CI])
+	extends Runnable {
+  
+	var finished = false;
+  
 	var tsServerSocket = ServerSocketChannel.open()
 	
-	val agentsList = List[TSAgent]()
+	val clientsList = List[TSClient[CI]]()
 	
-	var agentId = 0
+	var clientId = 0
 	
-	def start() = {
+	def doTrace(msg: String) {
+	  System.out.println(msg)
+	}
+	
+	/**
+	 * Main thread method
+	 * 
+	 * Creates listen socket on port portNumber
+	 * Accepts connections from it and routes it to TSClient
+	 */
+	def run() = {
 	  tsServerSocket.socket().bind(new InetSocketAddress(portNumber))
 	  
-	  while(true) {
+	  while(!finished) {
 	    val clientSocket = tsServerSocket.accept()
-	    val tsAgent = new TSAgent(clientSocket, this)
+	    val tsClient = new TSClient[CI](clientSocket, this)
 	    
-	    tsAgent.setId(agentId)
-	    tsAgent.start()
+	    createClientInterface(tsClient)
+	    
+	    tsClient.setId(clientId)
+	    tsClient.start()
 	    	    
-	    agentId += 1
+	    clientId += 1
 	  }
 	}
 	
-	def findCommand(cmd: String) : (Method, TSServerMethod) = {
-	  val methods = classOf[TSServer].getMethods()
+	def createClientInterface(client: TSClient[CI]) {
+	  val handler = new TSClientInvocationHandler[CI](client)
+	  var interface = Proxy.newProxyInstance(ciManifest.erasure.getClassLoader(),
+			  			Array(ciManifest.erasure), handler).asInstanceOf[TSClientInterface]
 	  
-	  for(method <- classOf[TSServer].getMethods()) {
+	  client.setInterface(interface)
+	}
+	
+	/**
+	 * Searches over methods annotated with TSServerMethod
+	 * Select appropriate method or throws TSCommandNotFound exception
+	 * 
+	 * @param cmd - command name
+	 * @return pair (java.reflect.Method, TSServerMethod annotation)
+	 * */
+	def findCommand(cmd: String) : (Method, TSServerMethod) = {
+	  val methods = this.getClass().getMethods()
+	  
+	  for(method <- methods) {
 	    val annotation = method.getAnnotation(classOf[TSServerMethod])
 	    
 	    if(annotation != null) {
@@ -58,9 +173,23 @@ class TSServer(portNumber: Int) {
 	  throw new TSCommandNotFound("Not found command %s".format(cmd))
 	}
 	
-	def convertArguments(agent: TSAgent, msg: Map[String, Any], argList: List[String], classList: List[Class[_]]) : Array[AnyRef] = {
-	  var args: List[AnyRef] = List(agent)
-	  var argClassMap = (argList zip classList).toMap
+	/**
+	 * Coverts arguments for method from incoming message according 
+	 * to method's arguments and TSServerMethod specification
+	 * 
+	 * @param client - client that invoked command (always passed as first argument of server method)
+	 * @param msg - CommandMessage arguments
+	 * @param argList - list of argument's names according to JSON protocol
+	 * @param classList - list of argument's types (from reflection)
+	 * 
+	 * @return array of arguments 
+	 */
+	def convertArguments(client: TSClient[CI], 
+						 msg: Map[String, Any], 
+						 argNamesList: List[String], 
+						 classList: List[Class[_]]) : Array[AnyRef] = {
+	  var args: List[AnyRef] = List(client)
+	  var argClassMap = (argNamesList zip classList).toMap
 	   
 	  for((argName, klass) <- argClassMap) {	
 	    val argMap = TSObjectSerializer.jsonMapToMap(msg(argName))
@@ -74,16 +203,31 @@ class TSServer(portNumber: Int) {
 	  return args.toArray
 	}
 	
-	def processCommand(agent: TSAgent, cmd: String, msg: Map[String, Any]) : Map[String, Any] = {
-	  System.out.println("Processing %s(%s)".format(cmd, msg))	  
+	/**
+	 * Processes incoming command from client:
+	 * 
+	 * 1. Select appropriate TSServer method
+	 * 2. Convert arguments from JSON according to their classes
+	 * 3. Invoke method using reflection
+	 * 
+	 * @param client invoking client
+	 * @param cmd command name
+	 * @param msg command message (contains arguments)
+	 * 
+	 * @return Map.empty in case of error or serialized response
+	 */
+	def processCommand(client: TSClient[CI], cmd: String, msg: Map[String, Any]) : Map[String, Any] = {
+	  doTrace("Processing %s(%s)".format(cmd, msg))	  
+	  
 	  val (method, tsAnnotation) = findCommand(cmd)
 	  
-	  val argList = tsAnnotation.argArray.toList
+	  val argNamesList = tsAnnotation.argNames.toList
+	  /* Remove first argument for arguments list because it is always TSClient */
 	  val classList = method.getParameterTypes().toList.drop(1)
 	  
-	  var args = convertArguments(agent, msg, argList, classList)
+	  var args = convertArguments(client, msg, argNamesList, classList)
 	  
-	  System.out.println("Got method %s and args %s".format(method, args))
+	  doTrace("Got method %s and args %s".format(method, args))
 	  
 	  val ret = method.invoke(this, args:_*)
 	  
@@ -93,10 +237,5 @@ class TSServer(portNumber: Int) {
 	  else {
 	    return TSObjectSerializer.doSerialize(ret.asInstanceOf[TSObject])
 	  }
-	}
-	
-	@TSServerMethod(name = "hello", argArray = Array("info"), noReturn = true)
-	def hello(agent: TSAgent, info: TSHostInfo) = {
-	  System.out.println("Say hello from %s!".format(info.hostName))
 	}
 }

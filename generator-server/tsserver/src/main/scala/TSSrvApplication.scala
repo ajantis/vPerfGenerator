@@ -1,9 +1,10 @@
-import com.vperflab.tsserver.TSServer
+import com.vperflab.tsserver.TSLoadServer
 
 object TSSrvApplication extends App {
-    var tsServer = new TSServer(9090)
+    var tsLoadServer = new TSLoadServer(9090)
   
 	System.out.println("Starting tsserver...")
 	
-	tsServer.start()
+	var tsLoadSrvThread = new Thread(tsLoadServer)
+	tsLoadSrvThread.start()
 }
