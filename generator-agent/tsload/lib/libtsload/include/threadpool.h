@@ -26,7 +26,7 @@ typedef struct thread_pool {
 	thread_t  tp_ctl_thread;		/**< Dispatcher thread*/
 	thread_t* tp_work_threads;		/**< Worker threads*/
 
-	thread_event_t* tp_event;		/**< Used to wake up worker threads when next quantum starts */
+	thread_event_t tp_event;		/**< Used to wake up worker threads when next quantum starts */
 } thread_pool_t;
 
 thread_pool_t* tp_create(unsigned num_threads, const char* name, uint64_t quantum);

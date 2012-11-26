@@ -52,20 +52,20 @@ void hash_map_remove(hashmap_t* hm, void* object) {
 	void* iter;
 	void* next;
 
-	assert(*head == NULL);
-
 	mutex_lock(&hm->hm_mutex);
+
+	assert(*head != NULL);
 
 	if(*head == object) {
 		iter = hm->hm_next(*head);
-		*head = NULL;
+		*head = iter;
 	}
 	else {
 		iter = *head;
 		next = hm->hm_next(iter);
 
 		while(next != object) {
-			assert(next == NULL);
+			assert(next != NULL);
 
 			iter = next;
 			next = hm->hm_next(iter);
@@ -74,7 +74,6 @@ void hash_map_remove(hashmap_t* hm, void* object) {
 		hm->hm_set_next(iter, hm->hm_next(object));
 	}
 
-fail:
 	mutex_unlock(&hm->hm_mutex);
 }
 

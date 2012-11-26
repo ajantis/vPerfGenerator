@@ -38,6 +38,7 @@ LDFLAGS = -L$(BUILDDIR)/lib $($(TYPE)_LDFLAGS)
 
 # For debugging
 CFLAGS += -g
+CFLAGS += -DTS_LOCK_DEBUG
 
 # Supress "unused" warnings
 CFLAGS += -Wno-unused-label -Wno-unused-variable

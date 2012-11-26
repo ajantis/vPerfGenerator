@@ -19,6 +19,8 @@
 #include <sys/syscall.h>
 #include <sys/time.h>
 
+#include <assert.h>
+
 /* Thread hash map. Maps pthread to our thread */
 static thread_t* t_hash_heads[THASHSIZE];
 
@@ -45,6 +47,8 @@ static unsigned th_hash_key(void* key) {
 
 static void* th_next(void* obj) {
 	thread_t* t = (thread_t*) obj;
+
+	assert(sizeof(thread_t) == 176);
 
 	return t->t_next;
 }
@@ -130,6 +134,11 @@ void t_init(thread_t* thread, void* arg, const char* name, void* (*start)(void*)
 	thread->t_arg = arg;
 
 	thread->t_state = TS_INITIALIZED;
+
+	thread->t_next = NULL;
+	thread->t_pool_next = NULL;
+
+	thread->t_system_id = 0;
 
 	pthread_create(&thread->t_thread,
 			       &thread->t_attr,

@@ -20,7 +20,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 
-int mod_api_version = MODAPI_VERSION;
+int mod_api_version = MOD_API_VERSION;
 
 char mod_name[MODNAMELEN] = "dummy";
 static char* tests[] =  {"read", "write"};

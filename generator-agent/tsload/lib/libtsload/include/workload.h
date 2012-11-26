@@ -11,6 +11,7 @@
 #include <threadpool.h>
 #include <wlparam.h>
 #include <modules.h>
+#include <modtsload.h>
 
 #define WLNAMELEN	64
 
@@ -21,18 +22,14 @@
 typedef struct workload {
 	char 			wl_name[WLNAMELEN];
 	module_t*		wl_mod;
+	tsload_module_t* wl_ts_mod;
 	thread_pool_t*	wl_tp;
 	void*			wl_params;
 	struct workload* wl_next;
 } workload_t;
 
-static void wl_config(workload_t* wl) {
-	wl->wl_mod->mod_wl_config(wl);
-}
-
-static void wl_unconfig(workload_t* wl) {
-	wl->wl_mod->mod_wl_unconfig(wl);
-}
+void wl_config(workload_t* wl);
+void wl_unconfig(workload_t* wl);
 
 #ifndef NO_JSON
 #include <libjson.h>

@@ -76,7 +76,7 @@ int cfg_read(FILE* cfg_file) {
 
 		/*Line does not contain =*/
 		if(eq_pos == NULL) {
-			fprintf(stderr, "Not found '=' on line", line_num);
+			fprintf(stderr, "Not found '=' on line %d", line_num);
 			return CFG_ERR_MISSING_EQ;
 		}
 

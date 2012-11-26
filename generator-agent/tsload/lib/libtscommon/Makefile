@@ -8,7 +8,8 @@ SRC = hashmap.c \
 	  threads.c \
 	  tutil.c	\
 	  client.c	\
-	  modules.c
+	  modules.c \
+	  syncqueue.c 
 	  
 OBJ = $(SRC:.c=.o)
 

@@ -64,11 +64,11 @@
  * Thread states:
  *
  *       |
- *     t_init              +--------------------------------------+
- *       |                 |                                      |
- * TS_INITIALIZED --> TS_RUNNABLE --+--event_wait--> TS_WAITING --+
- *                         |        \                             |
- *                       t_exit      \--mutex_lock--> TS_LOCKED --+
+ *     t_init              +----------------------------------------------+
+ *       |                 |                                              |
+ * TS_INITIALIZED --> TS_RUNNABLE --+--event_wait--> TS_WAITING ----------+
+ *                         |        \                                     |
+ *                       t_exit      \--mutex_lock--> TS_LOCKED ----------+
  *                         |
  *                         v
  *                      TS_DEAD
@@ -94,8 +94,10 @@ typedef struct {
 
 	pthread_mutex_t	tm_mutex;
 
+#ifdef TS_LOCK_DEBUG
 	/*See t_self() comment*/
 	int 			tm_is_locked;
+#endif
 } thread_mutex_t;
 
 typedef struct thread {
@@ -117,9 +119,12 @@ typedef struct thread {
 
 	void*			t_arg;
 
+#ifdef TS_LOCK_DEBUG
 	struct timeval	t_block_time;
 	thread_event_t*	t_block_event;
 	thread_mutex_t* t_block_mutex;
+#endif
+
 	struct thread*	t_next;			/*< Next thread in global thread list*/
 	struct thread*	t_pool_next;	/*< Next thread in pool*/
 } thread_t;
@@ -129,6 +134,8 @@ void mutex_lock(thread_mutex_t* mutex);
 void mutex_unlock(thread_mutex_t* mutex);
 
 void event_init(thread_event_t* event, const char* name);
+
+void event_wait_unlock(thread_event_t* event, thread_mutex_t* mutex);
 void event_wait(thread_event_t* event);
 
 void event_notify_thread(thread_t* t);

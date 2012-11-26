@@ -67,7 +67,7 @@ thread_pool_t* tp_create(unsigned num_threads, const char* name, uint64_t quantu
     event_init(&tp->tp_event, event_name);
 
 	/*Create threads*/
-    snprintf(control_name, TNAMELEN, "tp-%s-%s", name, "ctl");
+    snprintf(control_name, TNAMELEN, "tp-%s-ctl", name);
 	t_init(&tp->tp_ctl_thread, (void*) tp, control_name, control_thread);
 	tp->tp_ctl_thread.t_local_id = CONTROL_TID;
 

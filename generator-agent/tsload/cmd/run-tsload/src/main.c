@@ -10,6 +10,7 @@
 
 #include <modules.h>
 #include <modtsload.h>
+#include <threads.h>
 
 #include <commands.h>
 

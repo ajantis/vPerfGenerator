@@ -10,8 +10,12 @@
 
 #include <modules.h>
 #include <workload.h>
+#include <modtsload.h>
 
 #include <libjson.h>
+
+#include <assert.h>
+#include <stdlib.h>
 
 /**
  * wl_create - create new workload: allocate memory and initialize fields
@@ -20,17 +24,23 @@
  */
 workload_t* wl_create(const char* name, module_t* mod) {
 	workload_t* wl = (workload_t*) malloc(sizeof(workload_t));
+	tsload_module_t* tmod = NULL;
+
+	assert(mod->mod_helper != NULL);
+
+	tmod = (tsload_module_t*) mod->mod_helper;
 
 	if(wl == NULL)
 		return NULL;
 
 	strncpy(wl->wl_name, name, WLNAMELEN);
 	wl->wl_mod = mod;
+	wl->wl_ts_mod = tmod;
 
 	wl->wl_tp = NULL;
 	wl->wl_next = NULL;
 
-	wl->wl_params = malloc(mod->mod_params_size);
+	wl->wl_params = malloc(tmod->mod_params_size);
 
 	return wl;
 }
@@ -56,6 +66,14 @@ void wl_free_all(workload_t* wl_head) {
 
 		wl_free(wl_head);
 	}
+}
+
+void wl_config(workload_t* wl) {
+	wl->wl_ts_mod->mod_wl_config(wl);
+}
+
+void wl_unconfig(workload_t* wl) {
+	wl->wl_ts_mod->mod_wl_unconfig(wl);
 }
 
 workload_t* json_workload_proc_all(JSONNODE* node) {
@@ -95,6 +113,9 @@ workload_t* json_workload_proc(JSONNODE* node) {
 
 	workload_t* wl = NULL;
 	module_t* mod = NULL;
+
+	tsload_module_t* tmod = NULL;
+
 	char* wl_name = json_name(node);
 	char* mod_name = NULL;
 
@@ -131,9 +152,12 @@ workload_t* json_workload_proc(JSONNODE* node) {
 		return NULL;
 	}
 
+	assert(mod->mod_helper != NULL);
+	tmod = (tsload_module_t*) mod->mod_helper;
+
 	wl = wl_create(wl_name, mod);
 
-	json_wlparam_proc_all(*i_params, mod->mod_params, wl->wl_params);
+	json_wlparam_proc_all(*i_params, tmod->mod_params, wl->wl_params);
 
 	return wl;
 }

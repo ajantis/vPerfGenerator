@@ -4,7 +4,7 @@
 #include <defs.h>
 #include <threads.h>
 #include <hashmap.h>
-
+#include <syncqueue.h>
 #include <client.h>
 
 #include <libjson.h>
@@ -38,11 +38,14 @@ int clnt_finished = FALSE;
 
 thread_t t_client_receive;
 thread_t t_client_connect;
+thread_t t_client_process;
 
 /* Protects sending from multiple threads simultaneously*/
 static thread_mutex_t send_mutex;
 
 static thread_event_t conn_event;
+
+squeue_t proc_queue;
 
 /*
  * Hash table helpers
@@ -149,8 +152,7 @@ int clnt_process_command(unsigned msg_id, JSONNODE* command, JSONNODE* msg) {
  * - Unblocks sender, and sets response JSON
  *
  * @return 0 if processing successful and -1 otherwise*/
-int clnt_process_msg(void* buffer) {
-	JSONNODE* msg = json_parse((char*) buffer);
+int clnt_process_msg(JSONNODE* msg) {
 	JSONNODE_ITERATOR i_id, i_response, i_command, i_msg, i_error;
 	unsigned msg_id;
 	int ret;
@@ -197,6 +199,20 @@ fail:
 	return -1;
 }
 
+void* clnt_proc_thread(void* arg) {
+	THREAD_ENTRY(arg, void, unused);
+	JSONNODE* msg;
+
+	while(!clnt_finished) {
+		msg = (JSONNODE*) squeue_pop(&proc_queue);
+
+		clnt_process_msg(msg);
+	}
+
+	THREAD_END:
+		THREAD_FINISH(arg);
+}
+
 void clnt_on_disconnect() {
 	clnt_connected = FALSE;
 	/*TODO: cleanup all client resources*/
@@ -207,6 +223,8 @@ void clnt_on_disconnect() {
 
 void* clnt_recv_thread(void* arg) {
 	THREAD_ENTRY(arg, void, unused);
+
+	JSONNODE* msg;
 
 	struct timeval tv;
 	struct timeval tv_zero;
@@ -261,9 +279,15 @@ void* clnt_recv_thread(void* arg) {
 		}
 
 		/*Process data in buffer*/
-		clnt_process_msg(buffer);
+		msg = json_parse((char*) buffer);
 
-		logmsg(LOG_TRACE, "Received %lu bytes from socket", recvlen);
+		if(msg) {
+			squeue_push(&proc_queue, msg);
+			logmsg(LOG_TRACE, "Received %lu bytes from socket", recvlen);
+		}
+		else {
+			logmsg(LOG_CRIT, "Failure during receive: not a valid JSON");
+		}
 
 		free(buffer);
 	}
@@ -360,7 +384,7 @@ int clnt_hello() {
 	return ret;
 }
 
-int clnt_init() {
+int clnt_init_socket() {
 	struct hostent*	he;
 
 	if((he = gethostbyname(clnt_host)) == NULL) {
@@ -381,11 +405,23 @@ int clnt_init() {
 
 	memset(clnt_sa.sin_zero, 0, sizeof(clnt_sa.sin_zero));
 
+	return CLNT_OK;
+}
+
+int clnt_init() {
+	int ret;
+
+	if((ret = clnt_init_socket()) != CLNT_OK)
+		return ret;
+
 	hash_map_init(&hdl_hashmap, "hdl_hashmap");
 	mutex_init(&send_mutex, "send_mutex");
 	event_init(&conn_event, "conn_event");
 
+	squeue_init(&proc_queue, "proc_queue");
+
 	t_init(&t_client_connect, NULL, "clnt_conn_thread", clnt_connect_thread);
+	t_init(&t_client_process, NULL, "clnt_proc_thread", clnt_proc_thread);
 
 	return clnt_hello();
 }
