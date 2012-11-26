@@ -1,5 +1,5 @@
 TYPE = SHARED
-TARGET = lib/libjson.so
+TARGET = libjson.so
 
 include ../../Makefile.master
 

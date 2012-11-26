@@ -9,7 +9,6 @@
 #include <log.h>
 
 #include <threads.h>
-#include <workload.h>
 #include <hashmap.h>
 #include <defs.h>
 

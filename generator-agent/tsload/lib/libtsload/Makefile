@@ -1,22 +1,18 @@
 TYPE = SHARED
-TARGET = lib/libtsload.so
+TARGET = libtsload.so
 
 include ../../Makefile.master
 
-SRC = hashmap.c \
-	  log.c \
-	  modules.c \
-	  threadpool.c \
-	  threads.c \
-	  tutil.c	\
+SRC = threadpool.c \
 	  wlparam.c \
-	  workload.c 
+	  workload.c \
+	  modtsload.c
 	  
 OBJ = $(SRC:.c=.o)
 
 JSON_DEBUG = -DNDEBUG
 
-CFLAGS += $(INCJSON) $(JSON_DEBUG)
-LDFLAGS += -lc -ldl -lpthread $(LINKJSON)
+CFLAGS += $(INCJSON) $(INCTSCOMMON) $(JSON_DEBUG)
+LDFLAGS += -lc -ldl $(LINKJSON) $(LINKTSCOMMON)
 	
 include ../../Makefile.build

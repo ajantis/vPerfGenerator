@@ -19,8 +19,13 @@ libjson:
 	@echo
 	@echo $(ACTION) libjson...
 	make -C lib/libjson $(TARGET)
+	
+libtscommon: 
+	@echo
+	@echo $(ACTION) libtscommon...
+	make -C lib/libtscommon $(TARGET)
 
-libtsload:
+libtsload: libtscommon
 	@echo
 	@echo $(ACTION) libtsload...
 	make -C lib/libtsload $(TARGET)
@@ -33,13 +38,11 @@ tsloadd: libtsload modules
 	@echo
 	@echo $(ACTION) tsload daemon...
 	make -C cmd/tsloadd $(TARGET)
-	cp cmd/tsloadd/tsload.cfg build/
 	
 run-tsload: libtsload modules
 	@echo
 	@echo $(ACTION) run-tsload daemon...
 	make -C cmd/run-tsload $(TARGET)
-	cp cmd/run-tsload/test.tss cmd/run-tsload/test.tsw build/
 
 $(MODULES):
 	@echo

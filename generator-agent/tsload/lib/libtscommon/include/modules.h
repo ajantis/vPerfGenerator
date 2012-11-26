@@ -8,7 +8,6 @@
 #ifndef MODULES_H_
 #define MODULES_H_
 
-#include <wlparam.h>
 #include <modapi.h>
 
 #define MODPATHLEN	256
@@ -41,15 +40,10 @@ typedef struct module {
 	mod_status_t mod_status;
 	char* mod_status_msg;
 
-	wlp_descr_t* mod_params;
-	size_t mod_params_size;	/**< sizeof structure where parameter values are stored*/
-
-	/*Methods*/
 	mod_config_func mod_config;
 	mod_config_func mod_unconfig;
 
-	mod_workload_config_func mod_wl_config;
-	mod_workload_config_func mod_wl_unconfig;
+	void* mod_helper;
 
 	void* mod_private;		/**< Allocated when module is configured*/
 
@@ -61,11 +55,16 @@ int load_modules();
 module_t* mod_search(const char* name);
 int mod_error(module_t* mod, char* fmtstr, ...);
 
-#ifndef NO_JSON
-#include <libjson.h>
+void* mod_load_symbol(module_t* mod, const char* name);
 
-JSONNODE* json_mod_params(const char* name);
-JSONNODE* json_modules_info();
-#endif
+#define MOD_LOAD_SYMBOL(type, mod, name, flag) 				\
+		(type) ({ void* ret = mod_load_symbol(mod, name); 	\
+			if(ret == NULL)	{			 					\
+				logmsg(LOG_WARN, "Required parameter(s) %s is undefined", name); \
+				flag = TRUE;			 					\
+			}							 					\
+			ret; })
+
+void set_mod_helper(int type, int (*helper)(module_t* mod));
 
 #endif /* MODULES_H_ */

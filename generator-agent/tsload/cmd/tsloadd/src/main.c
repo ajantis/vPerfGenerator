@@ -8,6 +8,7 @@
 #define LOG_SOURCE "tsloadd"
 #include <log.h>
 
+#include <modtsload.h>
 #include <modules.h>
 #include <cfgfile.h>
 #include <client.h>
@@ -78,6 +79,7 @@ void sigusr1_handler(int sig) {
 int main(int argc, char* argv[]) {
 	int err = 0;
 
+	set_mod_helper(MOD_TSLOAD, tsload_mod_helper);
 	parse_options(argc, argv);
 
 	if((err = threads_init()) != 0)

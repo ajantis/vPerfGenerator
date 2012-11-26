@@ -1,5 +1,5 @@
 TYPE = MODULE
-TARGET = mod/dummy.so
+TARGET = dummy.so
 
 include ../../Makefile.master
 

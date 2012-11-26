@@ -5,24 +5,32 @@ SRCDIR = src
 INCDIR = include
 BUILDDIR = ../../build
 OBJDIR = $(BUILDDIR)/obj/$(TARGETDIR)
+EXTRAS_DIR = $(BUILDDIR)/etc
 
-INCTSLOAD = -I../../lib/libtsload/include
+INCTSCOMMON = -I../../lib/libtscommon/include
+INCTSLOAD = -I../../lib/libtsload/include $(INCTSCOMMON)
 INCJSON	= -I../../lib/libjson/include
 
-LINKTSLOAD = -ltsload
+LINKTSCOMMON = -ltscommon
+LINKTSLOAD = -ltsload $(LINKTSCOMMON)
 LINKJSON = -ljson
 
 EXEC_CFLAGS = 
 EXEC_CXXFLAGS = 
 EXEC_LDFLAGS = 
+EXEC_DIR = bin
 
 SHARED_CFLAGS = -fPIC
 SHARED_CXXFLAGS = -fPIC
 SHARED_LDFLAGS = -shared
+SHARED_DIR = lib
 
 MODULE_CFLAGS = $(SHARED_CFLAGS) $(INCTSLOAD) -DNO_JSON
 MODULE_CXXFLAGS = 
 MODULE_LDFLAGS = $(SHARED_LDFLAGS) $(LINKTSLOAD)
+MODULE_DIR = mod
+
+EXTRAS = 
 
 CFLAGS = -m64 -Wall -I$(INCDIR) $($(TYPE)_CFLAGS) -DJSON_DEBUG
 CXXFLAGS = $(CFLAGS) $($(TYPE)_CXXFLAGS)
@@ -36,4 +44,7 @@ CFLAGS += -Wno-unused-label -Wno-unused-variable
 
 TARGSRC = $(addprefix $(SRCDIR)/,$(SRC))
 TARGOBJ = $(addprefix $(OBJDIR)/,$(OBJ))
+TARGEXTRAS = $(addprefix $(EXTRAS_DIR)/,$(EXTRAS))
+
+TARGETFILE = $(addprefix $($(TYPE)_DIR)/,$(TARGET))
 	

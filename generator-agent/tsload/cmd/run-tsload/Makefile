@@ -11,5 +11,6 @@ OBJ = $(SRC:.c=.o)
 
 CFLAGS += $(INCTSLOAD) $(INCJSON)
 LDFLAGS += -lc $(LINKTSLOAD) $(LINKJSON)
+EXTRAS = test.tss test.tsw profile.sh
 	
 include ../../Makefile.build

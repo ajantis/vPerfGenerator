@@ -3,8 +3,11 @@ all: $(TARGSRC)  $(OBJDIR) $(TARGET)
 $(OBJDIR):
 	mkdir $(OBJDIR)
 
-$(TARGET): $(TARGOBJ) 
-	$(CC) -o $(BUILDDIR)/$@ $(TARGOBJ) $(LDFLAGS) 
+$(TARGET): $(TARGOBJ) $(TARGEXTRAS)
+	$(CC) -o $(BUILDDIR)/$(TARGETFILE) $(TARGOBJ) $(LDFLAGS)
+
+$(EXTRAS_DIR)/%: % 
+	cp $< $@
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.c  
 	$(CC) $(CFLAGS) -c $< -o $@

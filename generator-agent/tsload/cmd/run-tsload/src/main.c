@@ -9,6 +9,7 @@
 #include <log.h>
 
 #include <modules.h>
+#include <modtsload.h>
 
 #include <commands.h>
 
@@ -124,6 +125,8 @@ int main(int argc, char* argv[]) {
 
 	read_environ();
 	parse_options(argc, argv);
+
+	set_mod_helper(MOD_TSLOAD, tsload_mod_helper);
 
 	if((err = threads_init()) != 0)
 		return err;

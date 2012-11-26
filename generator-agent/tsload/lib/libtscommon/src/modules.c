@@ -8,15 +8,17 @@
 #define LOG_SOURCE "modules"
 #include <log.h>
 
+#include <defs.h>
 #include <modules.h>
 #include <libjson.h>
 
+#include <assert.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
+
 #include <sys/types.h>
 #include <dirent.h>
-
 #include <dlfcn.h>
 
 #define INFOCHUNKLEN	2048
@@ -24,7 +26,10 @@
 char mod_search_path[MODPATHLEN];
 
 /*First module in modules linked list*/
-static module_t* first_module = NULL;
+module_t* first_module = NULL;
+
+int mod_type = -1;
+int (*mod_load_helper)(module_t* mod) = NULL;
 
 module_t* mod_load(const char* path_name);
 
@@ -60,6 +65,7 @@ module_t* mod_create() {
 	module_t* mod = (module_t*) malloc(sizeof(module_t));
 
 	mod->mod_library = NULL;
+	mod->mod_helper = NULL;
 	mod->mod_status = MOD_UNITIALIZED;
 
 	mod->mod_next = NULL;
@@ -92,6 +98,9 @@ void mod_destroy(module_t* mod) {
 			logmsg(LOG_WARN, "Failed to free dl-handle of module %s. Reason: %s", mod->mod_name, dlerror());
 		}
 
+		if(mod->mod_helper)
+			free(mod->mod_helper);
+
 		logmsg(LOG_INFO, "Destroying module %s", mod->mod_name);
 	}
 
@@ -111,10 +120,19 @@ module_t* mod_search(const char* name) {
 	return mod;
 }
 
+void* mod_load_symbol(module_t* mod, const char* name) {
+	return dlsym(mod->mod_library, name);
+}
+
 module_t* mod_load(const char* path_name) {
 	module_t* mod = mod_create();
 	int* api_version;
-	size_t* params_size;
+	int* type;
+
+	int flag = FALSE;
+
+	assert(mod_load_helper != NULL);
+	assert(mod != NULL);
 
 	mod->mod_library = dlopen(path_name, RTLD_NOW | RTLD_LOCAL);
 
@@ -129,22 +147,20 @@ module_t* mod_load(const char* path_name) {
 
 	/*Load module api version and name*/
 
-	api_version = (int*) dlsym(mod->mod_library, "mod_api_version");
-	mod->mod_name = (char*) dlsym(mod->mod_library, "mod_name");
-	mod->mod_params = (wlp_descr_t*) dlsym(mod->mod_library, "mod_params");
-	params_size = (size_t*) dlsym(mod->mod_library, "mod_params_size");
+	api_version = MOD_LOAD_SYMBOL(int*, mod, "mod_api_version", flag);
+	type = MOD_LOAD_SYMBOL(int*, mod, "mod_type", flag);
+	mod->mod_name = MOD_LOAD_SYMBOL(char*, mod, "mod_name", flag);
 
-	if(!api_version || !mod->mod_name || !mod->mod_params || !params_size) {
-		logmsg(LOG_WARN, "Required parameter(s) %s %s %s %s is undefined",
-				(!api_version)? "mod_api_version" : "",
-				(!mod->mod_name)? "mod_name" : "",
-				(!mod->mod_params)? "mod_params" : "",
-				(!params_size)? "mod_params_size" : "" );
+	if(flag)
+		goto fail;
+
+	if(*type != mod_type) {
+		logmsg(LOG_INFO, "Ignoring module - wrong type %d", *type);
 
 		goto fail;
 	}
 
-	if(*api_version != MODAPI_VERSION) {
+	if(*api_version != MOD_API_VERSION) {
 		logmsg(LOG_WARN, "Wrong api version %d", *api_version);
 
 		goto fail;
@@ -152,31 +168,22 @@ module_t* mod_load(const char* path_name) {
 
 	if(mod_search(mod->mod_name) != NULL) {
 		logmsg(LOG_WARN, "Module %s already exists", mod->mod_name);
-	}
-
-	mod->mod_params_size = *params_size;
-
-	/*Load methods*/
-	mod->mod_config = dlsym(mod->mod_library, "mod_config");
-	mod->mod_unconfig = dlsym(mod->mod_library, "mod_unconfig");
-	mod->mod_wl_config = dlsym(mod->mod_library, "mod_workload_config");
-	mod->mod_wl_unconfig = dlsym(mod->mod_library, "mod_workload_unconfig");
-
-	if(!mod->mod_config || !mod->mod_wl_config || !mod->mod_wl_unconfig) {
-		logmsg(LOG_WARN, "Method(s) %s %s %s was not found",
-				(!mod->mod_config)? "mod_config" : "",
-				(!mod->mod_wl_config)? "mod_workload_config" : "",
-				(!mod->mod_wl_unconfig)? "mod_workload_unconfig" : "");
 
 		goto fail;
 	}
 
-	/*Finish loading*/
-	mod->mod_config(mod);
+	mod->mod_config = MOD_LOAD_SYMBOL(mod_config_func*, mod, "mod_config", flag);
+	mod->mod_unconfig = MOD_LOAD_SYMBOL(mod_config_func*, mod, "mod_unconfig", flag);
+
+	/*Call helper*/
+	mod->mod_status = MOD_UNCONFIGURED;
+
+	if(mod_load_helper(mod) == 1)
+		goto fail;
 
 	logmsg(LOG_INFO, "Loaded module %s (path: %s)", mod->mod_name, path_name);
 
-	mod->mod_status = MOD_UNCONFIGURED;
+	mod->mod_status = MOD_READY;
 	mod_add(mod);
 
 	return mod;
@@ -185,7 +192,7 @@ fail:
 	if(mod->mod_library)
 		dlclose(mod->mod_library);
 
-	logmsg(LOG_WARN, "Failed to load module %s !", path_name);
+	logmsg(LOG_WARN, "Failed to load module %s!", path_name);
 
 	mod_destroy(mod);
 
@@ -209,31 +216,7 @@ int mod_error(module_t* mod, char* fmtstr, ...) {
 	return 0;
 }
 
-JSONNODE* json_mod_params(const char* name) {
-	module_t* mod = mod_search(name);
-
-	if(!mod)
-		return NULL;
-
-	return json_wlparam_format_all(mod->mod_params);
-}
-
-JSONNODE* json_modules_info() {
-	JSONNODE* node = json_new(JSON_NODE);
-	JSONNODE* mod_node = NULL;
-	module_t* mod = first_module;
-
-	while(mod != NULL) {
-		mod_node = json_new(JSON_NODE);
-		json_set_name(mod_node, mod->mod_name);
-
-		json_push_back(mod_node, json_new_a("path", mod->mod_path));
-		json_push_back(mod_node, json_wlparam_format_all(mod->mod_params));
-
-		json_push_back(node, mod_node);
-
-		mod = mod->mod_next;
-	}
-
-	return node;
+void set_mod_helper(int type, int (*helper)(module_t* mod)) {
+	mod_type = type;
+	mod_load_helper = helper;
 }
