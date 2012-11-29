@@ -1,6 +1,7 @@
 #define LOG_SOURCE "client"
 #include <log.h>
 
+#include <agent.h>
 #include <mempool.h>
 #include <defs.h>
 #include <threads.h>
@@ -32,7 +33,6 @@ struct sockaddr_in clnt_sa;
 
 /* Message unique identifier */
 static unsigned clnt_msg_id = 0;
-
 
 /* Threads and it's flags */
 int clnt_connected = FALSE;
@@ -95,6 +95,8 @@ static hashmap_t hdl_hashmap = {
 	.hm_compare = cmh_compare
 };
 
+int clnt_send(JSONNODE* node);
+
 static clnt_msg_handler_t* clnt_create_msg() {
 	unsigned msg_id = __sync_fetch_and_add(&clnt_msg_id, 1);
 	clnt_msg_handler_t* hdl = mp_malloc(sizeof(clnt_msg_handler_t));
@@ -136,17 +138,32 @@ int clnt_process_response(unsigned msg_id, JSONNODE* response, clnt_response_typ
 }
 
 int clnt_process_command(unsigned msg_id, JSONNODE* command, JSONNODE* msg) {
+	char* cmd;
+	JSONNODE* ret;
+
 	if(json_type(command) != JSON_STRING)
 		return -1;
 
-	logmsg(LOG_TRACE, "Invoked command %s", json_as_string(command));
+	cmd = json_as_string(command);
+
+	logmsg(LOG_TRACE, "Invoked command %s", cmd);
+
+	ret = agent_process_command(cmd, msg);
+
+	if(ret == NULL) {
+		logmsg(LOG_WARN, "Processed command %s returned NULL!", cmd);
+		return -1;
+	}
+
+	json_push_back(ret, json_new_i("id", msg_id));
+
+	clnt_send(ret);
+	json_delete(ret);
 
 	return 0;
 }
 
 /* Process incoming message from buffer
- *
- * XXX: What if we'll receive two JSONs in one buffer???
  *
  * - Parses buffer into JSON
  * - Finds 'id' field in JSON
@@ -229,7 +246,7 @@ void clnt_on_disconnect() {
 	event_notify_all(&conn_event);
 }
 
-void* clnt_recv_parse(void* buffer, size_t recvlen) {
+void clnt_recv_parse(void* buffer, size_t recvlen) {
 	JSONNODE* node;
 	char* msg = (char*) buffer;
 
@@ -256,6 +273,10 @@ void* clnt_recv_parse(void* buffer, size_t recvlen) {
 	}
 }
 
+/**
+ * clnt_recv_thread - thread that receives data from socket,
+ * parses it and sends to clnt_process_thread
+ */
 void* clnt_recv_thread(void* arg) {
 	THREAD_ENTRY(arg, void, unused);
 
@@ -276,6 +297,7 @@ void* clnt_recv_thread(void* arg) {
 	while(!clnt_finished && clnt_connected) {
 		poll(&sock_poll, 1, CLNT_RECV_TIMEOUT);
 
+		/*XXX: poll return events on disconnect are platform-specific*/
 		if(!(sock_poll.revents & POLLIN))
 			continue;
 
@@ -294,6 +316,7 @@ void* clnt_recv_thread(void* arg) {
 		bufptr = buffer = mp_malloc(buflen);
 		memset(buffer, 0, buflen);
 
+		/*Receive data from socket by chunks of data*/
 		while(1) {
 			/*Receive chunk of data*/
 			ret = recv(clnt_sockfd, bufptr, remaining, MSG_NOSIGNAL);
@@ -313,6 +336,7 @@ void* clnt_recv_thread(void* arg) {
 			if(!(sock_poll.revents & POLLIN))
 				break;
 
+			/* We had filled buffer, reallocate it */
 			if(remaining == 0) {
 				buflen += CLNT_CHUNK_SIZE;
 				buffer = mp_realloc(buffer, buflen);
@@ -337,6 +361,13 @@ THREAD_END:
 	THREAD_FINISH(arg);
 }
 
+/**
+ * Send JSON message to remote server
+ *
+ * @param node - message
+ *
+ * @return number of sent bytes or -1 on error
+ */
 int clnt_send(JSONNODE* node) {
 	char* json_msg = NULL;
 	size_t len = 0;
@@ -350,14 +381,13 @@ int clnt_send(JSONNODE* node) {
 	}
 
 	json_msg = json_write(node);
-	len = strlen(json_msg);
+	len = strlen(json_msg) + 1;
 
 	mutex_lock(&send_mutex);
 	ret = send(clnt_sockfd, json_msg, len, MSG_NOSIGNAL);
 	mutex_unlock(&send_mutex);
 
 	json_free(json_msg);
-	json_delete(node);
 
 	return ret;
 }
@@ -391,17 +421,6 @@ int clnt_invoke(const char* command, JSONNODE* msg_node, JSONNODE** p_response) 
 	clnt_delete_handler(hdl);
 
 	return 0;
-}
-
-int clnt_hello() {
-	int ret;
-	JSONNODE* response;
-
-	ret = clnt_invoke("hello", json_clnt_hello_msg(), &response);
-
-	/*Process agent ID*/
-
-	return ret;
 }
 
 int clnt_connect() {
@@ -451,7 +470,7 @@ void* clnt_connect_thread(void* arg) {
 			/*Restart receive thread*/
 			t_init(&t_client_receive, NULL, "clnt_recv_thread", clnt_recv_thread);
 
-			clnt_hello();
+			agent_hello();
 		}
 
 		/*Wait until socket will be disconnected*/
@@ -484,19 +503,6 @@ int clnt_fini() {
 	close(clnt_sockfd);
 
 	return CLNT_OK;
-}
-
-JSONNODE* json_clnt_hello_msg() {
-	JSONNODE* node = json_new(JSON_NODE);
-
-	JSONNODE* info_node = json_new(JSON_NODE);
-	json_set_name(info_node, "info");
-
-	json_push_back(info_node, json_new_a("hostName", "localhost"));
-
-	json_push_back(node, info_node);
-
-	return node;
 }
 
 JSONNODE* json_clnt_command_format(const char* command, JSONNODE* msg_node, unsigned msg_id) {

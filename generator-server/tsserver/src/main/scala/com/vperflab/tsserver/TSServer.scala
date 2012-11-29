@@ -232,9 +232,11 @@ abstract class TSServer[CI <: TSClientInterface](portNumber: Int)
 	  val ret = method.invoke(this, args:_*)
 	  
 	  if(tsAnnotation.noReturn) {
+	    doTrace("Returning {}")
 		return Map.empty
 	  }
 	  else {
+	    doTrace("Returning" + ret)
 	    return TSObjectSerializer.doSerialize(ret.asInstanceOf[TSObject])
 	  }
 	}

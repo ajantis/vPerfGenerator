@@ -47,6 +47,8 @@ typedef struct clnt_msg_handler {
 
 #define CLNT_RETRY_TIMEOUT 3
 
+int clnt_invoke(const char* command, JSONNODE* msg_node, JSONNODE** p_response);
+
 int clnt_init();
 int clnt_fini();
 

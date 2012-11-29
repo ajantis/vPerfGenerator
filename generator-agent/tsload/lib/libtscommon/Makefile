@@ -10,7 +10,8 @@ SRC = hashmap.c \
 	  client.c	\
 	  modules.c \
 	  syncqueue.c \
-	  mempool.c
+	  mempool.c \
+	  agent.c
 	  
 OBJ = $(SRC:.c=.o)
 

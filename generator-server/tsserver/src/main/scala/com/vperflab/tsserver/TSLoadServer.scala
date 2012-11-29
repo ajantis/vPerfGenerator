@@ -5,7 +5,9 @@ class TSHostInfo extends TSObject {
   var hostName: String = _
 }
 
-class TSHostResponse(agentId: Int) extends TSObject 
+class TSHelloResponse(agentId: Int) extends TSObject {
+  val agent_id: Long = agentId 
+}
 
 /* getModulesInfo() */
 @TSObjAbstract(fieldName = "type",
@@ -73,13 +75,15 @@ trait TSLoadClient extends TSClientInterface{
 class TSLoadServer(portNumber: Int) extends TSServer[TSLoadClient](portNumber) {
 	/* Commands invoked by tsload */
 	@TSServerMethod(name = "hello", argNames = Array("info"))
-	def hello(client: TSClient[TSLoadClient], info: TSHostInfo) : TSHostResponse = {
+	def hello(client: TSClient[TSLoadClient], info: TSHostInfo) : TSHelloResponse = {
 	  System.out.println("Say hello from %s!".format(info.hostName))
 	  
 	  /*TODO: get agentId for it*/
 	  
-	  client.getInterface.getModulesInfo()
+	  val modules = client.getInterface.getModulesInfo()
 	  
-	  return new TSHostResponse(0)
+	  System.out.println(modules)
+	  
+	  return new TSHelloResponse(0)
 	}
 }

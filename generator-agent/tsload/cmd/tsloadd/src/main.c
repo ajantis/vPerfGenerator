@@ -104,6 +104,7 @@ int main(int argc, char* argv[]) {
 
 	create_default_tp();
 
+	agent_init();
 	clnt_init();
 
 	sleep(10);

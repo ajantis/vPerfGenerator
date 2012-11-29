@@ -118,12 +118,15 @@ class TSClientSender(var channel: SocketChannel) {
   def send(message: Message) = {
     val msgString = message.toJson()
     val msgByteArray = msgString.getBytes()
+    val nullTerm: Byte = 0
     
-    var buffer = ByteBuffer.allocate(msgByteArray.length + 2)
+    var buffer = ByteBuffer.allocate(msgByteArray.length + 1)
     
     buffer.put(msgByteArray)
     /* All messages are null-terminated */
-    buffer.putChar(0)
+    buffer.put(nullTerm)
+    
+    buffer.rewind()
     
     this.channel.synchronized {
       this.channel.write(buffer)
@@ -168,7 +171,7 @@ class TSClientSender(var channel: SocketChannel) {
    * @param srcId: id of sent CommandMessage
    * @param response: incoming response 
    */
-  def addResponse(response: Message) = {
+  def addResponse(response: Message) = { 
     this.msgHandlers.synchronized {
       val srcId = response.id
       val msgHandler = this.msgHandlers(srcId) 
@@ -236,8 +239,12 @@ class TSClientProcessor[CI <: TSClientInterface](var client: TSClient[CI])
   def act() {
     while(!finished) {
       receive {
-	    case CommandMessage(id, cmd, msg) => 
-	      processCommand(id, cmd, msg)
+	    case CommandMessage(id, cmd, msg) =>
+	      /* Command invokation may be cascade,
+	       * so create new actor for it */
+	      actor {
+	      	processCommand(id, cmd, msg)
+	      }
 	    case message: ResponseMessage => 
 	      client.sender.addResponse(message)
 	    case message: ErrorMessage => 
@@ -267,7 +274,7 @@ class TSClientReceiver[CI <: TSClientInterface](var channel: SocketChannel,
   
   var processor = new TSClientProcessor[CI](client)
   
-  val traceDecode = false
+  val traceDecode = true
   
   /**
    * Helper to decode ByteBuffer into JSON string
@@ -333,13 +340,14 @@ class TSClientReceiver[CI <: TSClientInterface](var channel: SocketChannel,
   
     /* Accumulate bytes in bufBytes*/
     bufBytes = bufBytes ++ chunkBytes
-  
+    
     /* If there was last message (socket closed) 
      * or chunk ended  */
-    if(length == 0 || bufBytes(length - 1) == 0) {
+    if(length == 0 || bufBytes.last == 0) {
       decodeBytes(bufBytes)
       
-      bufBytes.drop(0)
+      /*Reset bufBytes*/
+      bufBytes = new ArrayBuffer[Byte]()
   	}
   }
   

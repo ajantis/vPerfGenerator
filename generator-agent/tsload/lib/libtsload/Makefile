@@ -6,7 +6,8 @@ include ../../Makefile.master
 SRC = threadpool.c \
 	  wlparam.c \
 	  workload.c \
-	  modtsload.c
+	  modtsload.c \
+	  loadagent.c
 	  
 OBJ = $(SRC:.c=.o)
 
