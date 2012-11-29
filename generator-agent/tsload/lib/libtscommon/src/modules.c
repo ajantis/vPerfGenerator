@@ -8,6 +8,7 @@
 #define LOG_SOURCE "modules"
 #include <log.h>
 
+#include <mempool.h>
 #include <defs.h>
 #include <modules.h>
 #include <libjson.h>
@@ -62,7 +63,7 @@ int load_modules() {
 }
 
 module_t* mod_create() {
-	module_t* mod = (module_t*) malloc(sizeof(module_t));
+	module_t* mod = (module_t*) mp_malloc(sizeof(module_t));
 
 	mod->mod_library = NULL;
 	mod->mod_helper = NULL;
@@ -99,12 +100,12 @@ void mod_destroy(module_t* mod) {
 		}
 
 		if(mod->mod_helper)
-			free(mod->mod_helper);
+			mp_free(mod->mod_helper);
 
 		logmsg(LOG_INFO, "Destroying module %s", mod->mod_name);
 	}
 
-	free(mod);
+	mp_free(mod);
 }
 
 module_t* mod_search(const char* name) {
@@ -172,8 +173,8 @@ module_t* mod_load(const char* path_name) {
 		goto fail;
 	}
 
-	mod->mod_config = MOD_LOAD_SYMBOL(mod_config_func*, mod, "mod_config", flag);
-	mod->mod_unconfig = MOD_LOAD_SYMBOL(mod_config_func*, mod, "mod_unconfig", flag);
+	mod->mod_config = MOD_LOAD_SYMBOL(mod_config_func, mod, "mod_config", flag);
+	mod->mod_unconfig = MOD_LOAD_SYMBOL(mod_config_func, mod, "mod_unconfig", flag);
 
 	/*Call helper*/
 	mod->mod_status = MOD_UNCONFIGURED;

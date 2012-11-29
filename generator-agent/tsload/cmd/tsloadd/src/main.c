@@ -8,6 +8,7 @@
 #define LOG_SOURCE "tsloadd"
 #include <log.h>
 
+#include <mempool.h>
 #include <modtsload.h>
 #include <modules.h>
 #include <cfgfile.h>
@@ -81,6 +82,9 @@ int main(int argc, char* argv[]) {
 
 	set_mod_helper(MOD_TSLOAD, tsload_mod_helper);
 	parse_options(argc, argv);
+
+	if((err = mempool_init()) != 0)
+		return err;
 
 	if((err = threads_init()) != 0)
 		return err;

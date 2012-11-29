@@ -9,7 +9,7 @@ import java.nio.channels.SocketChannel
 
 import com.codahale.jerkson.Json._
 
-import scala.collection.mutable.{Map => MutableMap}
+import scala.collection.mutable.{Map => MutableMap, ArrayBuffer}
 
 import scala.actors.Actor
 import scala.actors.Actor._
@@ -25,6 +25,8 @@ abstract class Message {
 case class CommandMessage(id: Int, cmd: String, msg: Map[String, Any]) extends Message;
 case class ResponseMessage(id: Int, response: Map[String, Any]) extends Message;
 case class ErrorMessage(id: Int, error: String) extends Message;
+
+case class Stop
 
 case class MessageParserException(msg: String)
 	extends Exception(msg) {}
@@ -117,10 +119,11 @@ class TSClientSender(var channel: SocketChannel) {
     val msgString = message.toJson()
     val msgByteArray = msgString.getBytes()
     
-    var buffer = ByteBuffer.allocate(msgByteArray.length + 16)
+    var buffer = ByteBuffer.allocate(msgByteArray.length + 2)
     
     buffer.put(msgByteArray)
-    buffer.putInt(0)
+    /* All messages are null-terminated */
+    buffer.putChar(0)
     
     this.channel.synchronized {
       this.channel.write(buffer)
@@ -239,6 +242,8 @@ class TSClientProcessor[CI <: TSClientInterface](var client: TSClient[CI])
 	      client.sender.addResponse(message)
 	    case message: ErrorMessage => 
 	      client.sender.addResponse(message)
+	    case Stop =>
+	      finished = true
 	  }
     }
   }
@@ -253,23 +258,89 @@ class TSClientProcessor[CI <: TSClientInterface](var client: TSClient[CI])
 class TSClientReceiver[CI <: TSClientInterface](var channel: SocketChannel, 
     var client: TSClient[CI]) extends Runnable {
   
+  var CHUNK_SIZE = 2048
+  
   /** If set to true, thread will finish after next receive */
   var finished: Boolean = false
   
+  var bufBytes = new ArrayBuffer[Byte]()
+  
   var processor = new TSClientProcessor[CI](client)
+  
+  val traceDecode = false
   
   /**
    * Helper to decode ByteBuffer into JSON string
    * 
    * @note Uses UTF-8 as default encoding
+   * 
+   * XXX: does we really need decoding?
    */
-  def decodeByteBuffer(buffer: ByteBuffer) : String = {
+  private def decodeMessage(buffer: ByteBuffer) = {
     val decoder = Charset.forName("UTF-8").newDecoder()
     
     buffer.rewind()
-    val data = decoder.decode(buffer).toString()
+    val msgStr = decoder.decode(buffer).toString
     
-    return data
+    if(traceDecode)
+      System.out.println("Message: " + msgStr)
+    
+    var message = MessageParser.fromJson(msgStr)
+	processor ! message
+  }
+  
+  /**
+   * Decode messages from bytes sequence
+   * */
+  private def decodeBytes(bytes: ArrayBuffer[Byte]) {
+    var position = 0
+    var lastPosition = 0
+
+    while(position < bytes.length) {
+      /*Found null-terminator - this is end of message*/
+      if(bytes(position) == 0) {
+        val len = position - lastPosition
+        
+        /* Discard zero-length message (if two null-terminator
+         * follows null-terminator) */
+        if(len > 0) {
+          /* Put data into ByteBuffer to use java.nio again */
+          val msgBytes = bufBytes.slice(lastPosition, position).toArray
+          var msgBuffer = ByteBuffer.wrap(msgBytes) 
+          
+          if(traceDecode)
+          	System.out.println("Decoding message in range [" + lastPosition + ";" + position)
+          
+          decodeMessage(msgBuffer)
+        }
+        
+        lastPosition = position + 1
+      } 
+      
+      position += 1
+    }
+  }
+  
+  /**
+   * Decode messages from buffer
+   * */
+  private def decodeByteBuffer(buffer: ByteBuffer, length: Int) {
+    /* Read bytes from buffer */
+    var chunkBytes = new Array[Byte](length)
+    
+    buffer.rewind()
+    buffer.get(chunkBytes)
+  
+    /* Accumulate bytes in bufBytes*/
+    bufBytes = bufBytes ++ chunkBytes
+  
+    /* If there was last message (socket closed) 
+     * or chunk ended  */
+    if(length == 0 || bufBytes(length - 1) == 0) {
+      decodeBytes(bufBytes)
+      
+      bufBytes.drop(0)
+  	}
   }
   
   /**
@@ -278,23 +349,41 @@ class TSClientReceiver[CI <: TSClientInterface](var channel: SocketChannel,
    * NOTE: each processing is synchronous, so if agent invokes two commands simultaneously,
    * they will be processed sequentally
    * 
-   * XXX: constant ByteBuffer size
+   * Message decoding is a bit tricky, so it requires some comments. JSON messages 
+   * are split by null-terminators, so here is path of message decoding:
+   * 
+   * 1. Receiver reads chunk of CHUNK_SIZE bytes from socket
+   *    If it reads -1 bytes, that means that socket disconnected
+   * 2. decodeByteBuffer converts buffer into array of bytes
+   *    If length of array is zero, or it is ended with null-terminator, 
+   *    we found end of message, and can decode them (go to step 3)
+   *    Otherwise, we accumulate bytes in bufBytes
+   * 3. Decoding messages. Loop over bufBytes. When found null-terminator,
+   *    slice bufBytes, convert slice into ByteBuffer (because we are using
+   *    java.nio again), decode it in decodeMessages and send it to processor actor. 
    */
   def run() = {
     processor.start
     
     while(!finished) {
-      val buffer = ByteBuffer.allocate(2048)
+      val buffer = ByteBuffer.allocate(CHUNK_SIZE)
+      val readNum = channel.read(buffer)
       
-      channel.read(buffer)
+      if(traceDecode)
+        System.out.println("Read " + readNum + " bytes to " + buffer)
       
-      val msgStr = decodeByteBuffer(buffer)
-      var message = MessageParser.fromJson(msgStr)
+      decodeByteBuffer(buffer, readNum match {
+          case -1 => 0
+          case _ => readNum
+        });
       
-      processor ! message
+      if(readNum == -1) {
+        /*Disconnect*/
+        finished = true
+      }
     }
     
-    processor.finished = true
+    processor ! Stop
   }
 }
 

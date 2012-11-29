@@ -8,6 +8,7 @@
 #define LOG_SOURCE "workload"
 #include <log.h>
 
+#include <mempool.h>
 #include <modules.h>
 #include <workload.h>
 #include <modtsload.h>
@@ -23,7 +24,7 @@
  * @return NULL if malloc had failed or new workload object
  */
 workload_t* wl_create(const char* name, module_t* mod) {
-	workload_t* wl = (workload_t*) malloc(sizeof(workload_t));
+	workload_t* wl = (workload_t*) mp_malloc(sizeof(workload_t));
 	tsload_module_t* tmod = NULL;
 
 	assert(mod->mod_helper != NULL);
@@ -40,7 +41,7 @@ workload_t* wl_create(const char* name, module_t* mod) {
 	wl->wl_tp = NULL;
 	wl->wl_next = NULL;
 
-	wl->wl_params = malloc(tmod->mod_params_size);
+	wl->wl_params = mp_malloc(tmod->mod_params_size);
 
 	return wl;
 }
@@ -49,9 +50,9 @@ workload_t* wl_create(const char* name, module_t* mod) {
  * wl_free - free memory for single workload_t object
  * */
 void wl_free(workload_t* wl) {
-	free(wl->wl_params);
+	mp_free(wl->wl_params);
 
-	free(wl);
+	mp_free(wl);
 }
 
 /**
@@ -110,6 +111,7 @@ workload_t* json_workload_proc_all(JSONNODE* node) {
 workload_t* json_workload_proc(JSONNODE* node) {
 	JSONNODE_ITERATOR i_mod = json_find(node, "module");
 	JSONNODE_ITERATOR i_params = json_find(node, "params");
+	JSONNODE_ITERATOR i_end = json_end(node);
 
 	workload_t* wl = NULL;
 	module_t* mod = NULL;
@@ -127,10 +129,10 @@ workload_t* json_workload_proc(JSONNODE* node) {
 
 	logmsg(LOG_DEBUG, "Parsing workload %s", wl_name);
 
-	if(!i_mod || !i_params) {
+	if(i_mod == i_end || i_params == i_end) {
 		logmsg(LOG_WARN, "Failed to parse workload, missing parameter %s",
-				(!i_mod) ? "module" :
-				(!i_params) ? "params" : "");
+				(i_mod == i_end) ? "module" :
+				(i_params == i_end) ? "params" : "");
 		return NULL;
 	}
 

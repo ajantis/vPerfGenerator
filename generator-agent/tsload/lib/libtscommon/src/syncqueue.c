@@ -5,12 +5,14 @@
  *      Author: myaut
  */
 
+#include <mempool.h>
 #include <threads.h>
 #include <syncqueue.h>
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 
 /**
  * Initialize synchronized queue
@@ -65,13 +67,14 @@ retry:
 
 	/* Only one element left and it is head,
 	 * clear tail pointer*/
-	if(sq->sq_tail == sq->sq_head)
+	if(sq->sq_tail == sq->sq_head) {
 		sq->sq_tail = NULL;
+	}
 
 	mutex_unlock(&sq->sq_mutex);
 
 	object = el->s_data;
-	free(el);
+	mp_free(el);
 
 	return object;
 }
@@ -82,10 +85,15 @@ retry:
  * @param object element
  */
 void squeue_push(squeue_t* sq, void* object) {
-	squeue_el_t* el = malloc(sizeof(squeue_el_t));
+	squeue_el_t* el = mp_malloc(sizeof(squeue_el_t));
+
+	el->s_next = NULL;
 	el->s_data = object;
 
 	mutex_lock(&sq->sq_mutex);
+
+	/* */
+	assert(!(sq->sq_head == NULL && sq->sq_tail != NULL));
 
 	if(sq->sq_head == NULL) {
 		/* Empty queue, notify pop*/

@@ -156,7 +156,7 @@ int json_wlparam_proc_all(JSONNODE* node, wlp_descr_t* wlp, void* params) {
 	while(wlp->type != WLP_NULL) {
 		JSONNODE_ITERATOR i_param = json_find(node, wlp->name);
 
-		if(i_param == NULL) {
+		if(i_param == json_end(i_param)) {
 			logmsg(LOG_WARN, "Coulnd't find workload parameter %s", wlp->name);
 			return -1;
 		}

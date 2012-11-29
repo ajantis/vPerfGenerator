@@ -40,8 +40,14 @@ LDFLAGS = -L$(BUILDDIR)/lib $($(TYPE)_LDFLAGS)
 CFLAGS += -g
 CFLAGS += -DTS_LOCK_DEBUG
 
+CFLAGS += -DJSON_DEBUG -DJSON_MEMORY_CALLBACKS
+
 # Supress "unused" warnings
 CFLAGS += -Wno-unused-label -Wno-unused-variable
+
+# Be thread-safe!
+CFLAGS += -pthread
+LDFLAGS += -pthread
 
 TARGSRC = $(addprefix $(SRCDIR)/,$(SRC))
 TARGOBJ = $(addprefix $(OBJDIR)/,$(OBJ))

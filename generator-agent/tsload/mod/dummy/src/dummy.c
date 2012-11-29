@@ -8,6 +8,7 @@
 #define LOG_SOURCE "dummy"
 #include <log.h>
 
+#include <mempool.h>
 #include <defs.h>
 #include <workload.h>
 #include <modules.h>
@@ -96,7 +97,7 @@ int mod_workload_config(workload_t* wl) {
 		return -1;
 	}
 
-	dummy->block = malloc(dummy->block_size);
+	dummy->block = mp_malloc(dummy->block_size);
 	if(dummy->sparse) {
 		lseek(fd, dummy->file_size, SEEK_SET);
 	}

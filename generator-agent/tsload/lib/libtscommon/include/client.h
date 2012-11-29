@@ -12,8 +12,8 @@
 
 #include <threads.h>
 
-/*Receive timeout (in us)*/
-#define CLNT_RECV_TIMEOUT	10000
+/*Receive timeout (in ms)*/
+#define CLNT_RECV_TIMEOUT	1200
 
 #define CLNT_CHUNK_SIZE		2048
 

@@ -9,6 +9,7 @@
 #define LOG_SOURCE "tpool"
 #include <log.h>
 
+#include <mempool.h>
 #include <threads.h>
 #include <threadpool.h>
 #include <defs.h>
@@ -53,12 +54,12 @@ thread_pool_t* tp_create(unsigned num_threads, const char* name, uint64_t quantu
 		return NULL;
 	}
 
-	tp = (thread_pool_t*) malloc(sizeof(thread_pool_t));
+	tp = (thread_pool_t*) mp_malloc(sizeof(thread_pool_t));
 
 	strncpy(tp->tp_name, name, TPNAMELEN);
 
 	tp->tp_num_threads = num_threads;
-	tp->tp_work_threads = malloc(num_threads * sizeof(thread_t));
+	tp->tp_work_threads = mp_malloc(num_threads * sizeof(thread_t));
 
 	tp->tp_time	   = 0ll;	   /*Time is set by control thread*/
 	tp->tp_quantum = quantum;

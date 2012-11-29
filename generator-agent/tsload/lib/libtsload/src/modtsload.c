@@ -1,6 +1,8 @@
 #define LOG_SOURCE "modules"
 #include <log.h>
 
+#include <mempool.h>
+#include <defs.h>
 #include <modules.h>
 #include <modtsload.h>
 #include <wlparam.h>
@@ -12,7 +14,7 @@
 extern module_t* first_module;
 
 int tsload_mod_helper(module_t* mod) {
-	tsload_module_t* tmod = malloc(sizeof(tsload_module_t));
+	tsload_module_t* tmod = mp_malloc(sizeof(tsload_module_t));
 	size_t* params_size;
 
 	int flag = FALSE;
@@ -24,7 +26,7 @@ int tsload_mod_helper(module_t* mod) {
 	tmod->mod_wl_unconfig = MOD_LOAD_SYMBOL(mod_wl_config_func, mod, "mod_workload_unconfig", flag);
 
 	if(flag) {
-		free(tmod);
+		mp_free(tmod);
 
 		return 1;
 	}

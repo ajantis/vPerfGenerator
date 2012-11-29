@@ -1,6 +1,7 @@
 #define LOG_SOURCE "client"
 #include <log.h>
 
+#include <mempool.h>
 #include <defs.h>
 #include <threads.h>
 #include <hashmap.h>
@@ -11,6 +12,7 @@
 
 #include <stdlib.h>
 
+#include <poll.h>
 #include <unistd.h>
 #include <pthread.h>
 #include <netdb.h>
@@ -95,7 +97,7 @@ static hashmap_t hdl_hashmap = {
 
 static clnt_msg_handler_t* clnt_create_msg() {
 	unsigned msg_id = __sync_fetch_and_add(&clnt_msg_id, 1);
-	clnt_msg_handler_t* hdl = malloc(sizeof(clnt_msg_handler_t));
+	clnt_msg_handler_t* hdl = mp_malloc(sizeof(clnt_msg_handler_t));
 
 	event_init(&hdl->mh_event, "clnt_msg_handler");
 
@@ -111,7 +113,7 @@ static clnt_msg_handler_t* clnt_create_msg() {
 static void clnt_delete_handler(clnt_msg_handler_t* hdl) {
 	hash_map_remove(&hdl_hashmap, hdl);
 
-	free(hdl);
+	mp_free(hdl);
 }
 
 int clnt_process_response(unsigned msg_id, JSONNODE* response, clnt_response_type_t rt) {
@@ -153,7 +155,7 @@ int clnt_process_command(unsigned msg_id, JSONNODE* command, JSONNODE* msg) {
  *
  * @return 0 if processing successful and -1 otherwise*/
 int clnt_process_msg(JSONNODE* msg) {
-	JSONNODE_ITERATOR i_id, i_response, i_command, i_msg, i_error;
+	JSONNODE_ITERATOR i_id, i_response, i_command, i_msg, i_error, i_end;
 	unsigned msg_id;
 	int ret;
 
@@ -162,9 +164,10 @@ int clnt_process_msg(JSONNODE* msg) {
 		goto fail;
 	}
 
+	i_end = json_end(msg);
 	i_id = json_find(msg, "id");
 
-	if(i_id == NULL || json_type(*i_id) != JSON_NUMBER) {
+	if(i_id == i_end || json_type(*i_id) != JSON_NUMBER) {
 		logmsg(LOG_WARN, "Failed to process incoming message: unknown 'id'");
 		goto fail;
 	}
@@ -173,20 +176,22 @@ int clnt_process_msg(JSONNODE* msg) {
 
 	/* Determine, which type of message we received and
 	 * go to subroutine*/
-	if((i_response = json_find(msg, "response")) != NULL) {
+	if((i_response = json_find(msg, "response")) != i_end) {
 		ret = clnt_process_response(msg_id, *i_response, RT_RESPONSE);
 	} else if(
-			(i_command = json_find(msg, "command")) != NULL &&
-			(i_msg = json_find(msg, "msg")) != NULL) {
+			(i_command = json_find(msg, "cmd")) != i_end &&
+			(i_msg = json_find(msg, "msg")) != i_end) {
 		ret = clnt_process_command(msg_id, *i_command, *i_msg);
 	}
-	else if((i_error = json_find(msg, "error")) != NULL) {
+	else if((i_error = json_find(msg, "error")) != i_end) {
 		ret = clnt_process_response(msg_id, *i_error, RT_ERROR);
 	}
 	else {
 		logmsg(LOG_WARN, "Failed to process incoming message: invalid format");
 		goto fail;
 	}
+
+	json_delete(msg);
 
 	if(ret == -1)
 		goto fail;
@@ -217,109 +222,118 @@ void clnt_on_disconnect() {
 	clnt_connected = FALSE;
 	/*TODO: cleanup all client resources*/
 
+	shutdown(clnt_sockfd, SHUT_RDWR);
+	close(clnt_sockfd);
+
 	/*Notify connect thread*/
-	event_notify_one(&conn_event);
+	event_notify_all(&conn_event);
+}
+
+void* clnt_recv_parse(void* buffer, size_t recvlen) {
+	JSONNODE* node;
+	char* msg = (char*) buffer;
+
+	size_t off = 0, len = 0;
+
+	while(off < recvlen) {
+		/*Process data in buffer*/
+		logmsg(LOG_TRACE, "Processing %lu bytes off: %lu", len, off);
+
+		len = strlen(msg) + 1;
+		node = json_parse(msg);
+
+		logmsg(LOG_TRACE, "msg: %s", msg);
+
+		if(node) {
+			squeue_push(&proc_queue, node);
+		}
+		else {
+			logmsg(LOG_WARN, "Failure during receive: not a valid JSON");
+		}
+
+		off += len;
+		msg += len;
+	}
 }
 
 void* clnt_recv_thread(void* arg) {
 	THREAD_ENTRY(arg, void, unused);
 
-	JSONNODE* msg;
-
-	struct timeval tv;
-	struct timeval tv_zero;
-	fd_set read_fd;
+	struct pollfd sock_poll = {
+		.fd = clnt_sockfd,
+		.events = POLLIN | POLLNVAL | POLLHUP,
+		.revents = 0
+	};
 
 	void *buffer, *bufptr;
 	size_t buflen;
 	size_t recvlen;
 
+	size_t remaining;
+
 	int ret;
 
-	FD_ZERO(&read_fd);
-	FD_SET(clnt_sockfd, &read_fd);
-
-	tv.tv_sec = 0;
-
-	tv_zero.tv_sec = 0;
-	tv_zero.tv_usec = 0;
-
 	while(!clnt_finished && clnt_connected) {
-		tv.tv_usec = CLNT_RECV_TIMEOUT;
+		poll(&sock_poll, 1, CLNT_RECV_TIMEOUT);
 
-		if(select(1, &read_fd, NULL, NULL, &tv) != 1)
+		if(!(sock_poll.revents & POLLIN))
 			continue;
 
+		if(sock_poll.revents & POLLNVAL) {
+			logmsg(LOG_CRIT, "Invalid socket state fd: %d", clnt_sockfd);
+			break;
+		}
+
+		if(sock_poll.revents & POLLHUP) {
+			logmsg(LOG_CRIT, "Disconnected %d", clnt_sockfd);
+			break;
+		}
+
 		recvlen = 0;
-		buflen = CLNT_CHUNK_SIZE;
-		bufptr = buffer = malloc(buflen);
+		remaining = buflen = CLNT_CHUNK_SIZE;
+		bufptr = buffer = mp_malloc(buflen);
+		memset(buffer, 0, buflen);
 
 		while(1) {
 			/*Receive chunk of data*/
-			ret += recv(clnt_sockfd, bufptr, CLNT_CHUNK_SIZE, MSG_NOSIGNAL);
+			ret = recv(clnt_sockfd, bufptr, remaining, MSG_NOSIGNAL);
 
-			if(ret == -1 || ret == 0) {
-				logmsg(LOG_CRIT, "Failure during receive: disconnecting");
-				clnt_on_disconnect();
-
-				free(buffer);
+			if(ret <= 0) {
+				logmsg(LOG_WARN, "recv() was failed, disconnecting");
 
 				THREAD_EXIT();
 			}
 
+			bufptr += ret;
 			recvlen += ret;
+			remaining -= ret;
 
+			poll(&sock_poll, 1, 0);
 			/*No more data left in socket, break*/
-			if(select(1, &read_fd, NULL, NULL, &tv_zero) != 1)
+			if(!(sock_poll.revents & POLLIN))
 				break;
 
-			buflen += CLNT_CHUNK_SIZE;
-			bufptr += CLNT_CHUNK_SIZE;
-			buffer = realloc(buffer, buflen);
-		}
+			if(remaining == 0) {
+				buflen += CLNT_CHUNK_SIZE;
+				buffer = mp_realloc(buffer, buflen);
 
-		/*Process data in buffer*/
-		msg = json_parse((char*) buffer);
+				remaining += CLNT_CHUNK_SIZE;
 
-		if(msg) {
-			squeue_push(&proc_queue, msg);
-			logmsg(LOG_TRACE, "Received %lu bytes from socket", recvlen);
-		}
-		else {
-			logmsg(LOG_CRIT, "Failure during receive: not a valid JSON");
-		}
-
-		free(buffer);
-	}
-
-THREAD_END:
-	THREAD_FINISH(arg);
-}
-
-void* clnt_connect_thread(void* arg) {
-	THREAD_ENTRY(arg, void, unused);
-
-	while(!clnt_finished) {
-		if(!clnt_connected) {
-			if(connect(clnt_sockfd, (struct sockaddr*) & clnt_sa,
-						sizeof(struct sockaddr)) == -1) {
-				logmsg(LOG_CRIT, "Failed to connect to %s:%d, retrying in ", clnt_host, clnt_port);
-
-				sleep(CLNT_RETRY_TIMEOUT);
-				continue;
+				memset(bufptr, 0, CLNT_CHUNK_SIZE);
 			}
-
-			/*Restart receive thread*/
-			t_init(&t_client_receive, NULL, "clnt_recv_thread", clnt_recv_thread);
-
-			clnt_connected = TRUE;
 		}
 
-		/*Wait until socket will be disconnected*/
-		event_wait(&conn_event);
+		logmsg(LOG_TRACE, "Received buffer @%p len: %lu", buffer, recvlen);
+		clnt_recv_parse(buffer, recvlen);
+
+		mp_free(buffer);
+		buffer = NULL;
 	}
 
 THREAD_END:
+	clnt_on_disconnect();
+	mp_free(buffer);
+
 	THREAD_FINISH(arg);
 }
 
@@ -328,6 +342,12 @@ int clnt_send(JSONNODE* node) {
 	size_t len = 0;
 
 	int ret;
+
+	if(!clnt_connected) {
+		logmsg(LOG_CRIT, "Failed to send message, client not connected");
+
+		return -1;
+	}
 
 	json_msg = json_write(node);
 	len = strlen(json_msg);
@@ -384,7 +404,7 @@ int clnt_hello() {
 	return ret;
 }
 
-int clnt_init_socket() {
+int clnt_connect() {
 	struct hostent*	he;
 
 	if((he = gethostbyname(clnt_host)) == NULL) {
@@ -405,15 +425,45 @@ int clnt_init_socket() {
 
 	memset(clnt_sa.sin_zero, 0, sizeof(clnt_sa.sin_zero));
 
+	if(connect(clnt_sockfd, (struct sockaddr*) & clnt_sa,
+			   sizeof(struct sockaddr)) == -1) {
+		logmsg(LOG_CRIT, "Failed to connect to %s:%d, retrying in %ds", clnt_host, clnt_port, CLNT_RETRY_TIMEOUT);
+		return CLNT_ERR_CONNECT;
+	}
+
+	logmsg(LOG_INFO, "Connected to %s:%d", clnt_host, clnt_port);
+
 	return CLNT_OK;
 }
 
+void* clnt_connect_thread(void* arg) {
+	THREAD_ENTRY(arg, void, unused);
+
+	while(!clnt_finished) {
+		if(!clnt_connected) {
+			if(clnt_connect() != CLNT_OK) {
+				sleep(CLNT_RETRY_TIMEOUT);
+				continue;
+			}
+
+			clnt_connected = TRUE;
+
+			/*Restart receive thread*/
+			t_init(&t_client_receive, NULL, "clnt_recv_thread", clnt_recv_thread);
+
+			clnt_hello();
+		}
+
+		/*Wait until socket will be disconnected*/
+		event_wait(&conn_event);
+	}
+
+THREAD_END:
+	THREAD_FINISH(arg);
+}
+
+
 int clnt_init() {
-	int ret;
-
-	if((ret = clnt_init_socket()) != CLNT_OK)
-		return ret;
-
 	hash_map_init(&hdl_hashmap, "hdl_hashmap");
 	mutex_init(&send_mutex, "send_mutex");
 	event_init(&conn_event, "conn_event");
@@ -423,13 +473,15 @@ int clnt_init() {
 	t_init(&t_client_connect, NULL, "clnt_conn_thread", clnt_connect_thread);
 	t_init(&t_client_process, NULL, "clnt_proc_thread", clnt_proc_thread);
 
-	return clnt_hello();
+	return 0;
 }
 
 int clnt_fini() {
 	clnt_finished = TRUE;
+	clnt_connected = FALSE;
 
-	shutdown(clnt_sockfd, 2);
+	shutdown(clnt_sockfd, SHUT_RDWR);
+	close(clnt_sockfd);
 
 	return CLNT_OK;
 }
