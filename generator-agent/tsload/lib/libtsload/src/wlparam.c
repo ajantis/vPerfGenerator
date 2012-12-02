@@ -12,7 +12,9 @@
 #include <wlparam.h>
 
 #include <libjson.h>
+
 #include <stdlib.h>
+#include <string.h>
 
 #define STRSETCHUNK		256
 
@@ -152,16 +154,23 @@ int json_wlparam_proc(JSONNODE* node, wlp_descr_t* wlp, void* param) {
 	return WLPARAM_JSON_OK;
 }
 
-int json_wlparam_proc_all(JSONNODE* node, wlp_descr_t* wlp, void* params) {
+int json_wlparam_proc_all(JSONNODE* node, wlp_descr_t* wlp, void* params, wlp_descr_t** bad_param) {
+	int ret;
+
 	while(wlp->type != WLP_NULL) {
 		JSONNODE_ITERATOR i_param = json_find(node, wlp->name);
 
 		if(i_param == json_end(i_param)) {
-			logmsg(LOG_WARN, "Coulnd't find workload parameter %s", wlp->name);
-			return -1;
+			*bad_param = wlp;
+			return WLPARAM_JSON_NOT_FOUND;
 		}
 
-		json_wlparam_proc(*i_param, wlp, params + wlp->off);
+		ret = json_wlparam_proc(*i_param, wlp, params + wlp->off);
+
+		if(ret != WLPARAM_JSON_OK) {
+			*bad_param = wlp;
+			return ret;
+		}
 
 		wlp++;
 	}

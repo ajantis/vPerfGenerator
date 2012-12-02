@@ -10,6 +10,22 @@
 
 #include <assert.h>
 
+static inline void* hm_next(hashmap_t* hm, void* obj) {
+	return *((void**) (obj + hm->hm_off_next));
+}
+
+static inline void hm_set_next(hashmap_t* hm, void* obj, void* next) {
+	*((void**) (obj + hm->hm_off_next)) = next;
+}
+
+static inline void* hm_get_key(hashmap_t* hm, void* obj) {
+	return (obj + hm->hm_off_key);
+}
+
+static inline unsigned hm_hash_object(hashmap_t* hm, void* obj) {
+	return hm->hm_hash_key(hm_get_key(hm, obj));
+}
+
 void hash_map_init(hashmap_t* hm, const char* name) {
 	int i = 0;
 
@@ -21,7 +37,7 @@ void hash_map_init(hashmap_t* hm, const char* name) {
 }
 
 void hash_map_insert(hashmap_t* hm, void* object) {
-	unsigned hash = hm->hm_hash_object(object);
+	unsigned hash = hm_hash_object(hm, object);
 
 	void** head = hm->hm_heads + hash;
 	void* iter;
@@ -33,20 +49,22 @@ void hash_map_insert(hashmap_t* hm, void* object) {
 	}
 	else {
 		iter = *head;
-		next = hm->hm_next(iter);
+		next = hm_next(hm, iter);
+
+		/*FIXME: duplicates*/
 
 		while(next != NULL) {
 			iter = next;
-			next = hm->hm_next(iter);
+			next = hm_next(hm, iter);
 		}
 
-		hm->hm_set_next(iter, object);
+		hm_set_next(hm, iter, object);
 	}
 	mutex_unlock(&hm->hm_mutex);
 }
 
 void hash_map_remove(hashmap_t* hm, void* object) {
-	unsigned hash = hm->hm_hash_object(object);
+	unsigned hash = hm_hash_object(hm, object);
 
 	void** head = hm->hm_heads + hash;
 	void* iter;
@@ -57,21 +75,23 @@ void hash_map_remove(hashmap_t* hm, void* object) {
 	assert(*head != NULL);
 
 	if(*head == object) {
-		iter = hm->hm_next(*head);
+		iter = hm_next(hm, *head);
 		*head = iter;
 	}
 	else {
 		iter = *head;
-		next = hm->hm_next(iter);
+		next = hm_next(hm, iter);
+
+		/*FIXME: not found*/
 
 		while(next != object) {
 			assert(next != NULL);
 
 			iter = next;
-			next = hm->hm_next(iter);
+			next = hm_next(hm, iter);
 		}
 
-		hm->hm_set_next(iter, hm->hm_next(object));
+		hm_set_next(hm, iter, hm_next(hm, object));
 	}
 
 	mutex_unlock(&hm->hm_mutex);
@@ -84,10 +104,10 @@ void* hash_map_find(hashmap_t* hm, void* key) {
 	mutex_lock(&hm->hm_mutex);
 
 	while(iter != NULL) {
-		if(hm->hm_compare(iter, key) == 0)
+		if(hm->hm_compare(hm_get_key(hm, iter), key) == 0)
 			break;
 
-		iter =  hm->hm_next(iter);
+		iter =  hm_next(hm, iter);
 	}
 
 	mutex_unlock(&hm->hm_mutex);
@@ -105,7 +125,7 @@ void hash_map_walk(hashmap_t* hm, void (*func)(void* object)) {
 
 		while(iter != NULL) {
 			func(iter);
-			iter =  hm->hm_next(iter);
+			iter =  hm_next(hm, iter);
 		}
 	}
 	mutex_unlock(&hm->hm_mutex);

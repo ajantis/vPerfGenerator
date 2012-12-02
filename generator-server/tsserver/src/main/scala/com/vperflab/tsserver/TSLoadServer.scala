@@ -1,5 +1,7 @@
 package com.vperflab.tsserver
 
+import java.lang.{Boolean => JBoolean, Integer => JInteger, Double => JDouble}
+
 /* @hello() */
 class TSHostInfo extends TSObject {
   var hostName: String = _
@@ -59,7 +61,7 @@ class TSModulesInfo extends TSObject {
   var modules: Map[String, TSSingleModuleInfo] = _
 }
 
-/* createWorkload() */
+/* configureWorkload() */
 class TSWorkload extends TSObject {
   var module: String = _
   
@@ -67,13 +69,30 @@ class TSWorkload extends TSObject {
   var params: Map[String, AnyRef] = _
 }
 
-trait TSLoadClient extends TSClientInterface{
-  @TSClientMethod(name = "get_modules_info")
-  def getModulesInfo() : TSModulesInfo 
+class TSWorkloadList(wl_list: Map[String, TSWorkload]) extends TSObject {
+  
+  @TSObjContainer(elementClass = classOf[TSWorkload])
+  val workloads = wl_list 
 }
 
+/* workloadStatus() */
+class TSWorkloadStatus extends TSObject {
+  var workload: String = _
+  var status: String = _
+  var done: Long = _
+  var message: String = _
+}
+
+trait TSLoadClient extends TSClientInterface{
+  @TSClientMethod(name = "get_modules_info")
+  def getModulesInfo() : TSModulesInfo
+  
+  @TSClientMethod(name = "configure_workloads", argNames = Array("workloads"), noReturn = true)
+  def configureWorkloads(workloads: TSWorkloadList) 
+}
+
+
 class TSLoadServer(portNumber: Int) extends TSServer[TSLoadClient](portNumber) {
-	/* Commands invoked by tsload */
 	@TSServerMethod(name = "hello", argNames = Array("info"))
 	def hello(client: TSClient[TSLoadClient], info: TSHostInfo) : TSHelloResponse = {
 	  System.out.println("Say hello from %s!".format(info.hostName))
@@ -84,6 +103,29 @@ class TSLoadServer(portNumber: Int) extends TSServer[TSLoadClient](portNumber) {
 	  
 	  System.out.println(modules)
 	  
+	  startTestWorkload(client)
+	  
 	  return new TSHelloResponse(0)
+	}
+	
+	@TSServerMethod(name = "workload_status", argNames = Array("status"), noReturn = true) 
+	def workloadStatus(client: TSClient[TSLoadClient], status: TSWorkloadStatus) = {
+	  System.out.println("Workload %s status %s,%d: %s".format(
+	      status.workload, status.status, status.done, status.message))
+	}
+	
+	def startTestWorkload(client: TSClient[TSLoadClient]) {
+	  var workload = new TSWorkload()
+	  
+	  workload.module = "dummy"
+	  workload.params = Map("filesize" -> (16777216 : JInteger),
+	        "blocksize" -> (4096 : JInteger),
+	        "path" -> "/tmp/testfile",
+	        "test" -> "read",
+	        "sparse" -> (false : JBoolean))
+	  
+	  var workloads = new TSWorkloadList(Map("test" -> workload))
+	        
+	  client.getInterface.configureWorkloads(workloads)
 	}
 }

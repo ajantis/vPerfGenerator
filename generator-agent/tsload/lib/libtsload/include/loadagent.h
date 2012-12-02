@@ -8,6 +8,10 @@
 #ifndef LOADAGENT_H_
 #define LOADAGENT_H_
 
+#include <agent.h>
+
+void agent_workload_status(const char* wl_name, const char* status_msg, int done, const char* config_msg);
+
 void agent_init(void);
 
 #endif /* LOADAGENT_H_ */

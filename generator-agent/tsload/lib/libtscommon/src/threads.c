@@ -22,64 +22,28 @@
 #include <assert.h>
 
 /* Thread hash map. Maps pthread to our thread */
-static thread_t* t_hash_heads[THASHSIZE];
+DECLARE_HASH_MAP(thread_hash_map, thread_t, THASHSIZE, t_thread, t_next,
+	/*hash*/ {
+		pthread_t tid = * (pthread_t*) key;
 
-static unsigned th_hash_tid(pthread_t tid) {
-	unsigned hash = 0;
+		unsigned hash = 0;
 
-	while(tid != 0) {
-		hash += tid & THAHSMASK;
-		tid = tid >> THASHSHIFT;
-	}
+		while(tid != 0) {
+			hash += tid & THAHSMASK;
+			tid = tid >> THASHSHIFT;
+		}
 
-	return hash % THASHSIZE;
-}
+		return hash % THASHSIZE;
+	},
+	/*compare*/ {
+		pthread_t* tid1 = (pthread_t*) key1;
+		pthread_t* tid2 = (pthread_t*) key2;
 
-static unsigned th_hash_thread(void* object) {
-	thread_t* t = (thread_t*) object;
-	return th_hash_tid(t->t_thread);
-}
+		if(pthread_equal(*tid1, *tid2))
+			return 0;
 
-static unsigned th_hash_key(void* key) {
-	pthread_t* tid = (pthread_t*) key;
-	return th_hash_tid(*tid);
-}
-
-static void* th_next(void* obj) {
-	thread_t* t = (thread_t*) obj;
-
-	assert(sizeof(thread_t) == 176);
-
-	return t->t_next;
-}
-
-static void th_set_next(void* obj, void* next) {
-	thread_t* t = (thread_t*) obj;
-	thread_t* t_hext = (thread_t*) next;
-
-	t->t_next = t_hext;
-}
-
-static int th_compare(void* obj, void* key) {
-	thread_t* t = (thread_t*) obj;
-	pthread_t* tid = (pthread_t*) key;
-
-	if(pthread_equal(t->t_thread, *tid))
-		return 0;
-
-	return 1;
-}
-
-static hashmap_t thread_hash_map = {
-	.hm_size = THASHSIZE,
-	.hm_heads = (void**) t_hash_heads,
-
-	.hm_hash_object = th_hash_thread,
-	.hm_hash_key = th_hash_key,
-	.hm_next = th_next,
-	.hm_set_next = th_set_next,
-	.hm_compare = th_compare
-};
+		return 1;
+	});
 
 /*End of thread_hash_map declaration*/
 
@@ -139,6 +103,8 @@ void t_init(thread_t* thread, void* arg, const char* name, void* (*start)(void*)
 	thread->t_pool_next = NULL;
 
 	thread->t_system_id = 0;
+
+	logmsg(LOG_DEBUG, "Created thread #%d '%s'", thread->t_id, name);
 
 	pthread_create(&thread->t_thread,
 			       &thread->t_attr,

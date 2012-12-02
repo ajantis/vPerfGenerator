@@ -8,15 +8,37 @@
 #define LOG_SOURCE "workload"
 #include <log.h>
 
+#include <defs.h>
+#include <hashmap.h>
 #include <mempool.h>
 #include <modules.h>
+#include <threads.h>
 #include <workload.h>
 #include <modtsload.h>
+#include <loadagent.h>
 
 #include <libjson.h>
 
 #include <assert.h>
 #include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
+#include <stdarg.h>
+
+DECLARE_HASH_MAP(workload_hash_map, workload_t, WLHASHSIZE, wl_name, wl_hm_next,
+	{
+		char* p = (char*) key;
+		unsigned hash;
+
+		while(*p != 0)
+			hash += *p;
+
+		return hash & WLHASHMASK;
+	},
+	{
+		return strcmp(key1, key2);
+	}
+)
 
 /**
  * wl_create - create new workload: allocate memory and initialize fields
@@ -42,6 +64,8 @@ workload_t* wl_create(const char* name, module_t* mod) {
 	wl->wl_next = NULL;
 
 	wl->wl_params = mp_malloc(tmod->mod_params_size);
+
+	wl->wl_is_configured = FALSE;
 
 	return wl;
 }
@@ -69,8 +93,58 @@ void wl_free_all(workload_t* wl_head) {
 	}
 }
 
+/**
+ * Notify server of workload configuring progress.
+ *
+ * @param wl configuring workload
+ * @param status configuration status
+ * @param done configuration progress (in percent)
+ * @param format message format string
+ */
+void wl_notify(workload_t* wl, wl_status_t status, int done, char* format, ...) {
+	const char* status_msg[] = {"configuring", "success", "fail"};
+
+	char config_msg[512];
+	va_list args;
+
+	/* 146% and -5% are awkward */
+	if(done < 0)
+		done = 0;
+	if(done > 100)
+		done = 100;
+
+	va_start(args, format);
+	vsnprintf(config_msg, 512, format, args);
+	va_end(args);
+
+	agent_workload_status(wl->wl_name, status_msg[status], done, config_msg);
+}
+
+void* wl_config_thread(void* arg) {
+	THREAD_ENTRY(arg, workload_t, wl);
+	int ret;
+
+	logmsg(LOG_INFO, "Started configuring of workload %s", wl->wl_name);
+
+	ret = wl->wl_ts_mod->mod_wl_config(wl);
+
+	if(ret != 0) {
+		logmsg(LOG_WARN, "Failed to configure workload %s", wl->wl_name);
+
+		THREAD_EXIT();
+	}
+
+	wl->wl_is_configured = TRUE;
+
+THREAD_END:
+	THREAD_FINISH(arg);
+}
+
 void wl_config(workload_t* wl) {
-	wl->wl_ts_mod->mod_wl_config(wl);
+	char t_name[TNAMELEN];
+	snprintf(t_name, TNAMELEN, "wl-cfg-%s", wl->wl_name);
+
+	t_init(&wl->wl_cfg_thread, (void*) wl, t_name, wl_config_thread);
 }
 
 void wl_unconfig(workload_t* wl) {
@@ -121,6 +195,10 @@ workload_t* json_workload_proc(JSONNODE* node) {
 	char* wl_name = json_name(node);
 	char* mod_name = NULL;
 
+	wlp_descr_t* bad_param;
+
+	int ret;
+
 	if(strlen(wl_name) == 0) {
 		logmsg(LOG_WARN, "Failed to parse workload, no name is defined");
 
@@ -159,7 +237,14 @@ workload_t* json_workload_proc(JSONNODE* node) {
 
 	wl = wl_create(wl_name, mod);
 
-	json_wlparam_proc_all(*i_params, tmod->mod_params, wl->wl_params);
+	ret = json_wlparam_proc_all(*i_params, tmod->mod_params, wl->wl_params, &bad_param);
+
+	if(ret != WLPARAM_JSON_OK) {
+		/*FIXME: error handling*/
+
+		wl_free(wl);
+		return NULL;
+	}
 
 	return wl;
 }

@@ -17,7 +17,9 @@
 #include <dummy.h>
 
 #include <stdlib.h>
+#include <string.h>
 
+#include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
 
@@ -62,11 +64,25 @@ size_t mod_params_size = sizeof(struct dummy_workload);
 
 module_t* self = NULL;
 
-int dummy_create_file(int fd, struct dummy_workload* dummy) {
-	long i = 0, last = dummy->file_size / dummy->block_size;
+int dummy_create_file(workload_t* wl, int fd, struct dummy_workload* dummy) {
+	size_t i = 0, last = dummy->file_size / dummy->block_size;
+	float one_percent = ((float) last) / 100;
+	int last_notify = 0, done = 0;
 
 	for(i = 0; i < last; ++i) {
-		write(fd, dummy->block, dummy->block_size);
+		if(write(fd, dummy->block, dummy->block_size) == -1) {
+			wl_notify(wl, WLS_FAIL, 0,
+					"Failed to write: %s", strerror(errno));
+			return -1;
+		}
+
+		done = (int) (i / one_percent);
+
+		if(done > last_notify) {
+			wl_notify(wl, WLS_CONFIGURING, done,
+					"Written %lu bytes", i * dummy->block_size);
+			last_notify = done;
+		}
 	}
 
 	return 0;
@@ -93,7 +109,8 @@ int mod_workload_config(workload_t* wl) {
 	fd = open(dummy->path, O_WRONLY | O_CREAT, 0660);
 
 	if(fd < 0) {
-		mod_error(self, "Couldn't open file %s for writing", dummy->path);
+		wl_notify(wl, WLS_FAIL, 0,
+					"Couldn't open file %s for writing: %s", dummy->path, strerror(errno));
 		return -1;
 	}
 
@@ -102,7 +119,7 @@ int mod_workload_config(workload_t* wl) {
 		lseek(fd, dummy->file_size, SEEK_SET);
 	}
 	else {
-		dummy_create_file(fd, dummy);
+		dummy_create_file(wl, fd, dummy);
 	}
 
 	return 0;

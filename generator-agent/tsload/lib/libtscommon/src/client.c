@@ -52,48 +52,18 @@ squeue_t proc_queue;
 /*
  * Hash table helpers
  * */
-static clnt_msg_handler_t* handlers[CLNTMHTABLESIZE];
+DECLARE_HASH_MAP(hdl_hashmap, clnt_msg_handler_t, CLNTMHTABLESIZE, mh_msg_id, mh_next,
+	{
+		unsigned* msg_id = (unsigned*) key;
+		return *msg_id & CLNTMHTABLESIZE;
+	},
+	{
+		unsigned* msg_id1 = (unsigned*) key1;
+		unsigned* msg_id2 = (unsigned*) key2;
 
-static unsigned cmh_hash_handler(void* object) {
-	clnt_msg_handler_t* hdl = (clnt_msg_handler_t*) object;
-	return hdl->mh_msg_id & CLNTMHTABLEMASK;
-}
-
-static unsigned cmh_hash_key(void* key) {
-	unsigned* msg_id = (unsigned*) key;
-	return *msg_id & CLNTMHTABLESIZE;
-}
-
-static void* cmh_next(void* obj) {
-	clnt_msg_handler_t* hdl = (clnt_msg_handler_t*) obj;
-
-	return hdl->mh_next;
-}
-
-static void cmh_set_next(void* obj, void* next) {
-	clnt_msg_handler_t* hdl = (clnt_msg_handler_t*) obj;
-	clnt_msg_handler_t* h_hext = (clnt_msg_handler_t*) next;
-
-	hdl->mh_next = h_hext;
-}
-
-static int cmh_compare(void* obj, void* key) {
-	clnt_msg_handler_t* hdl = (clnt_msg_handler_t*) obj;
-	unsigned* msg_id = (unsigned*) key;
-
-	return ((int) *msg_id) - hdl->mh_msg_id;
-}
-
-static hashmap_t hdl_hashmap = {
-	.hm_size = CLNTMHTABLESIZE,
-	.hm_heads = (void**) handlers,
-
-	.hm_hash_object = cmh_hash_handler,
-	.hm_hash_key = cmh_hash_key,
-	.hm_next = cmh_next,
-	.hm_set_next = cmh_set_next,
-	.hm_compare = cmh_compare
-};
+		return ((int) *msg_id1) - *msg_id2;
+	}
+);
 
 int clnt_send(JSONNODE* node);
 

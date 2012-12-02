@@ -102,10 +102,11 @@ typedef struct {
 #define WLPARAM_JSON_OK				0
 #define WLPARAM_JSON_WRONG_TYPE		-1
 #define WLPARAM_JSON_OUTSIDE_RANGE	-2
+#define WLPARAM_JSON_NOT_FOUND		-3
 
 JSONNODE* json_wlparam_format(wlp_descr_t* wlp);
 JSONNODE* json_wlparam_format_all(wlp_descr_t* wlp);
-int json_wlparam_proc_all(JSONNODE* node, wlp_descr_t* wlp, void* params);
+int json_wlparam_proc_all(JSONNODE* node, wlp_descr_t* wlp, void* params, wlp_descr_t** bad_param);
 #endif
 
 #endif /* WLPARAM_H_ */

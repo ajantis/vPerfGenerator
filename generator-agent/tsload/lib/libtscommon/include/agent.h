@@ -13,7 +13,7 @@
 #define AGENTMAXARGC	16
 
 typedef void* (*agent_proc_func_t)(JSONNODE* arg);
-typedef JSONNODE* (*agent_method_func_t)(void* argv);
+typedef JSONNODE* (*agent_method_func_t)(void* argv[]);
 
 typedef struct {
 	char* ad_name;
