@@ -29,6 +29,7 @@ void  hash_map_insert(hashmap_t* hm, void* object);
 void  hash_map_remove(hashmap_t* hm, void* object);
 void* hash_map_find(hashmap_t* hm, void* key);
 void hash_map_walk(hashmap_t* hm, void (*func)(void* object));
+void hash_map_destroy(hashmap_t* hm);
 
 #define DECLARE_HASH_MAP(name, type, size, key_field, next_field, hm_hash_body, hm_compare_body) \
 	static int 										\

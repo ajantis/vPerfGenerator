@@ -132,26 +132,26 @@ typedef struct thread {
 void mutex_init(thread_mutex_t* mutex, const char* name);
 void mutex_lock(thread_mutex_t* mutex);
 void mutex_unlock(thread_mutex_t* mutex);
+void mutex_destroy(thread_mutex_t* mutex);
 
 void event_init(thread_event_t* event, const char* name);
-
 void event_wait_unlock(thread_event_t* event, thread_mutex_t* mutex);
 void event_wait(thread_event_t* event);
-
-void event_notify_thread(thread_t* t);
 void event_notify_one(thread_event_t* event);
 void event_notify_all(thread_event_t* event);
+void event_destroy(thread_event_t* event);
 
 thread_t* t_self();
 
 void t_init(thread_t* thread, void* arg, const char* name, void* (*start)(void*));
 thread_t* t_post_init(thread_t* t);
 void t_exit(thread_t* t);
+void t_destroy(thread_t* thread);
 
-void t_attach(thread_t* thread, thread_event_t* event);
-void t_join(thread_t* thread);
+void t_join(thread_t* thread, thread_event_t* event);
 
 int threads_init(void);
+void threads_fini(void);
 
 void t_dump_threads();
 

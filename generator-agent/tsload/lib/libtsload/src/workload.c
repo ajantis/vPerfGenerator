@@ -201,8 +201,7 @@ workload_t* json_workload_proc(JSONNODE* node) {
 
 	if(strlen(wl_name) == 0) {
 		logmsg(LOG_WARN, "Failed to parse workload, no name is defined");
-
-		return NULL;
+		goto fail;
 	}
 
 	logmsg(LOG_DEBUG, "Parsing workload %s", wl_name);
@@ -211,25 +210,26 @@ workload_t* json_workload_proc(JSONNODE* node) {
 		logmsg(LOG_WARN, "Failed to parse workload, missing parameter %s",
 				(i_mod == i_end) ? "module" :
 				(i_params == i_end) ? "params" : "");
-		return NULL;
+		goto fail;
 	}
 
 	if(json_type(*i_mod) != JSON_STRING) {
 		logmsg(LOG_WARN, "Expected that module is JSON_STRING");
-		return NULL;
+		goto fail;
 	}
 
 	if(json_type(*i_params) != JSON_NODE) {
 		logmsg(LOG_WARN, "Expected that params is JSON_NODE");
-		return NULL;
+		goto fail;
 	}
 
 	mod_name = json_as_string(*i_mod);
 	mod = mod_search(mod_name);
+	json_free(mod_name);
 
 	if(mod == NULL) {
 		logmsg(LOG_WARN, "Invalid module name %s", mod_name);
-		return NULL;
+		goto fail;
 	}
 
 	assert(mod->mod_helper != NULL);
@@ -241,10 +241,18 @@ workload_t* json_workload_proc(JSONNODE* node) {
 
 	if(ret != WLPARAM_JSON_OK) {
 		/*FIXME: error handling*/
-
-		wl_free(wl);
-		return NULL;
+		goto fail;
 	}
 
+	json_free(wl_name);
+
 	return wl;
+
+fail:
+	json_free(wl_name);
+
+	if(wl)
+		wl_free(wl);
+
+	return NULL;
 }

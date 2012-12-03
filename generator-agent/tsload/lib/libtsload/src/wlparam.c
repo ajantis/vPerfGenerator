@@ -142,6 +142,8 @@ int json_wlparam_proc(JSONNODE* node, wlp_descr_t* wlp, void* param) {
 			return WLPARAM_JSON_OUTSIDE_RANGE;
 
 		strcpy(param, js);
+
+		json_free(js);
 	}
 		break;
 	case WLP_STRING_SET:
@@ -158,9 +160,10 @@ int json_wlparam_proc_all(JSONNODE* node, wlp_descr_t* wlp, void* params, wlp_de
 	int ret;
 
 	while(wlp->type != WLP_NULL) {
-		JSONNODE_ITERATOR i_param = json_find(node, wlp->name);
+		JSONNODE_ITERATOR i_param = json_find(node, wlp->name),
+						  i_end = json_end(node);
 
-		if(i_param == json_end(i_param)) {
+		if(i_param == i_end) {
 			*bad_param = wlp;
 			return WLPARAM_JSON_NOT_FOUND;
 		}

@@ -5,6 +5,7 @@
  *      Author: myaut
  */
 
+#include <defs.h>
 #include <mempool.h>
 #include <threads.h>
 #include <syncqueue.h>
@@ -34,6 +35,8 @@ void squeue_init(squeue_t* sq, const char* name) {
 
 	sq->sq_head = NULL;
 	sq->sq_tail = NULL;
+
+	sq->sq_is_destroyed = FALSE;
 }
 
 /**
@@ -45,7 +48,7 @@ void squeue_init(squeue_t* sq, const char* name) {
  *
  * @param sq queue
  *
- * @return element
+ * @return element or NULL if squeue is destroyed
  */
 void* squeue_pop(squeue_t* sq) {
 	squeue_el_t* el = NULL;
@@ -59,7 +62,11 @@ retry:
 
 	if(el == NULL) {
 		event_wait_unlock(&sq->sq_event, &sq->sq_mutex);
-		goto retry;
+
+		if(!sq->sq_is_destroyed)
+			goto retry;
+		else
+			return NULL;
 	}
 
 	/* Move backward */
@@ -113,4 +120,36 @@ void squeue_push(squeue_t* sq, void* object) {
 	}
 
 	mutex_unlock(&sq->sq_mutex);
+}
+
+/*
+ * Destroy all elements in queue and queue itself
+ * Also notifies squeue_pop
+ *
+ * @param sq synchronized queue to destroy
+ * @param free helper to destroy element's data
+ * */
+void squeue_destroy(squeue_t* sq, void (*el_free)(void* obj)) {
+	squeue_el_t* el;
+	squeue_el_t* next;
+
+	mutex_lock(&sq->sq_mutex);
+
+	el = sq->sq_head;
+
+	while(el != sq->sq_tail) {
+		next = el->s_next;
+
+		el_free(el->s_data);
+		mp_free(el);
+
+		el = next;
+	}
+
+	sq->sq_is_destroyed = TRUE;
+	event_notify_one(&sq->sq_event);
+
+	mutex_unlock(&sq->sq_mutex);
+
+	mutex_destroy(&sq->sq_mutex);
 }

@@ -31,7 +31,7 @@ typedef struct thread_pool {
 
 thread_pool_t* tp_create(unsigned num_threads, const char* name, uint64_t quantum);
 
-void create_default_tp();
-void destroy_default_tp();
+int tp_init(void);
+void tp_fini(void);
 
 #endif /* THREADPOOL_H_ */

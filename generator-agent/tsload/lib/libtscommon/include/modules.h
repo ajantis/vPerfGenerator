@@ -51,6 +51,7 @@ typedef struct module {
 } module_t;
 
 int load_modules();
+void unload_modules(void);
 
 module_t* mod_search(const char* name);
 int mod_error(module_t* mod, char* fmtstr, ...);

@@ -80,6 +80,12 @@ static agent_dispatch_t loadagent_table[] = {
 	ADT_LAST_METHOD()
 };
 
-void agent_init(void) {
+int agent_init(void) {
 	agent_register_methods(loadagent_table);
+
+	return clnt_init();
+}
+
+void agent_fini(void) {
+	clnt_fini();
 }

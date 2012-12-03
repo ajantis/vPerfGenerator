@@ -26,12 +26,11 @@ void agent_register_methods(agent_dispatch_t* table) {
 
 JSONNODE* agent_hello_msg() {
 	JSONNODE* node = json_new(JSON_NODE);
-
 	JSONNODE* info_node = json_new(JSON_NODE);
-	json_set_name(info_node, "info");
 
 	json_push_back(info_node, json_new_a("hostName", "localhost"));
 
+	json_set_name(info_node, "info");
 	json_push_back(node, info_node);
 
 	return node;

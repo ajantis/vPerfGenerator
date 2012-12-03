@@ -83,6 +83,15 @@ thread_pool_t* tp_create(unsigned num_threads, const char* name, uint64_t quantu
 	return tp;
 }
 
-void create_default_tp() {
+int tp_init(void) {
 	default_pool = tp_create(4, "[DEFAULT]", 50 * MS);
+
+	if(default_pool == NULL)
+		return 1;
+
+	return 0;
+}
+
+void tp_fini(void) {
+	/*TODO: destroy*/
 }

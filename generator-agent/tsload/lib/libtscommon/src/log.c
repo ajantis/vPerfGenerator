@@ -70,7 +70,7 @@ int log_rotate() {
 int log_init() {
 	int ret;
 
-	pthread_mutex_init(&log_mutex, NULL);
+	mutex_init(&log_mutex, "log_mutex");
 
 	if(strcmp(log_filename, "-") == 0) {
 		log_file = stdout;
@@ -88,6 +88,8 @@ int log_init() {
 
 void log_fini() {
 	fclose(log_file);
+
+	mutex_destroy(&log_mutex);
 }
 
 void log_gettime(char* buf, int sz) {

@@ -49,7 +49,7 @@ typedef struct clnt_msg_handler {
 
 int clnt_invoke(const char* command, JSONNODE* msg_node, JSONNODE** p_response);
 
-int clnt_init();
-int clnt_fini();
+int clnt_init(void);
+void clnt_fini(void);
 
 #endif /* CLIENT_H_ */

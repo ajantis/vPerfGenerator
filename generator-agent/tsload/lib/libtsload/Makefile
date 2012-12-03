@@ -7,7 +7,8 @@ SRC = threadpool.c \
 	  wlparam.c \
 	  workload.c \
 	  modtsload.c \
-	  loadagent.c
+	  loadagent.c \
+	  tsload.c
 	  
 OBJ = $(SRC:.c=.o)
 

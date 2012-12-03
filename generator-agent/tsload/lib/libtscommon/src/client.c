@@ -95,6 +95,7 @@ int clnt_process_response(unsigned msg_id, JSONNODE* response, clnt_response_typ
 
 	if(hdl == NULL) {
 		logmsg(LOG_WARN, "Failed to process incoming message: unknown message id %u", msg_id);
+		json_delete(response);
 		return -1;
 	}
 
@@ -126,9 +127,10 @@ int clnt_process_command(unsigned msg_id, JSONNODE* command, JSONNODE* msg) {
 	}
 
 	json_push_back(ret, json_new_i("id", msg_id));
-
 	clnt_send(ret);
+
 	json_delete(ret);
+	json_free(cmd);
 
 	return 0;
 }
@@ -142,52 +144,54 @@ int clnt_process_command(unsigned msg_id, JSONNODE* command, JSONNODE* msg) {
  *
  * @return 0 if processing successful and -1 otherwise*/
 int clnt_process_msg(JSONNODE* msg) {
-	JSONNODE_ITERATOR i_id, i_response, i_command, i_msg, i_error, i_end;
+	JSONNODE *n_id, *n_response, *n_error, *n_command, *n_msg;
 	unsigned msg_id;
 	int ret;
+
+	JSONNODE* response;
 
 	if(msg == NULL) {
 		logmsg(LOG_WARN, "Failed to process incoming message: not JSON");
 		goto fail;
 	}
 
-	i_end = json_end(msg);
-	i_id = json_find(msg, "id");
+	n_id = json_get(msg, "id");
 
-	if(i_id == i_end || json_type(*i_id) != JSON_NUMBER) {
+	if(n_id == NULL || json_type(n_id) != JSON_NUMBER) {
 		logmsg(LOG_WARN, "Failed to process incoming message: unknown 'id'");
 		goto fail;
 	}
 
-	msg_id = json_as_int(*i_id);
+	msg_id = json_as_int(n_id);
 
 	/* Determine, which type of message we received and
 	 * go to subroutine*/
-	if((i_response = json_find(msg, "response")) != i_end) {
-		ret = clnt_process_response(msg_id, *i_response, RT_RESPONSE);
+	if((n_response = json_pop_back(msg, "response")) != NULL) {
+		ret = clnt_process_response(msg_id, n_response, RT_RESPONSE);
 	} else if(
-			(i_command = json_find(msg, "cmd")) != i_end &&
-			(i_msg = json_find(msg, "msg")) != i_end) {
-		ret = clnt_process_command(msg_id, *i_command, *i_msg);
+			(n_command = json_get(msg, "cmd")) != NULL &&
+			(n_msg = json_get(msg, "msg")) != NULL) {
+		ret = clnt_process_command(msg_id, n_command, n_msg);
 	}
-	else if((i_error = json_find(msg, "error")) != i_end) {
-		ret = clnt_process_response(msg_id, *i_error, RT_ERROR);
+	else if((n_error = json_pop_back(msg, "error")) != NULL) {
+		ret = clnt_process_response(msg_id, n_error, RT_ERROR);
 	}
 	else {
 		logmsg(LOG_WARN, "Failed to process incoming message: invalid format");
 		goto fail;
 	}
 
-	json_delete(msg);
-
 	if(ret == -1)
 		goto fail;
+
+	json_delete(msg);
 
 	return 0;
 
 fail:
 	if(msg)
 		json_delete(msg);
+
 	return -1;
 }
 
@@ -197,6 +201,9 @@ void* clnt_proc_thread(void* arg) {
 
 	while(!clnt_finished) {
 		msg = (JSONNODE*) squeue_pop(&proc_queue);
+
+		if(msg == NULL)
+			THREAD_EXIT();
 
 		clnt_process_msg(msg);
 	}
@@ -389,6 +396,7 @@ int clnt_invoke(const char* command, JSONNODE* msg_node, JSONNODE** p_response) 
 
 	/*Delete handler because it is not needed anymore*/
 	clnt_delete_handler(hdl);
+	json_delete(node);
 
 	return 0;
 }
@@ -465,19 +473,31 @@ int clnt_init() {
 	return 0;
 }
 
-int clnt_fini() {
+void clnt_fini(void) {
 	clnt_finished = TRUE;
 	clnt_connected = FALSE;
 
+	/*This will finish conn_thread*/
 	shutdown(clnt_sockfd, SHUT_RDWR);
 	close(clnt_sockfd);
 
-	return CLNT_OK;
+	/*Delete all remaining messages and finish proc_thread*/
+	squeue_destroy(&proc_queue, json_delete);
+
+	/*Finish connect thread*/
+	event_notify_all(&conn_event);
+
+	t_destroy(&t_client_process);
+	t_destroy(&t_client_receive);
+	t_destroy(&t_client_connect);
+
+	event_destroy(&conn_event);
+	mutex_destroy(&send_mutex);
+	hash_map_destroy(&hdl_hashmap);
 }
 
 JSONNODE* json_clnt_command_format(const char* command, JSONNODE* msg_node, unsigned msg_id) {
 	JSONNODE* node = json_new(JSON_NODE);
-	JSONNODE* cmd_node = json_new_a(node, command);
 
 	json_push_back(node, json_new_i("id", msg_id));
 	json_push_back(node, json_new_a("cmd", command));

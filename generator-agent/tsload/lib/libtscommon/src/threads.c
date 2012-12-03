@@ -140,21 +140,34 @@ void t_exit(thread_t* t) {
 		event_notify_all(t->t_event);
 }
 
-/*
- * Attach event to thread. When thread will finish it notifies us thru this event
- * if thread state is TS_DEAD, does nothing
- * */
-void t_attach(thread_t* thread, thread_event_t* event) {
-	if(thread->t_state != TS_DEAD)
-		thread->t_event = event;
-}
 
 /*
  * Wait until thread finishes (should be called with t_attach)
  * */
-void t_join(thread_t* thread) {
-	if(thread->t_event)
+void t_join(thread_t* thread, thread_event_t* event) {
+	if(thread->t_state != TS_DEAD) {
+		thread->t_event = event;
 		event_wait(thread->t_event);
+	}
+}
+
+/* Destroy dead thread
+ *
+ * @note blocks until thread exits from itself!
+ * */
+void t_destroy(thread_t* thread) {
+	if(thread->t_state != TS_DEAD) {
+		/*XXX: shouldn't this cause race condition with t_exit?*/
+		thread_event_t event;
+		event_init(&event, "(t_destroy)");
+
+		t_join(thread, &event);
+	}
+
+	hash_map_remove(&thread_hash_map, thread);
+
+	pthread_attr_destroy(&thread->t_attr);
+	pthread_detach(thread->t_thread);
 }
 
 /*
@@ -225,4 +238,8 @@ int threads_init(void) {
 	hash_map_init(&thread_hash_map, "thread_hash_map");
 
 	return 0;
+}
+
+void threads_fini(void) {
+	hash_map_destroy(&thread_hash_map);
 }

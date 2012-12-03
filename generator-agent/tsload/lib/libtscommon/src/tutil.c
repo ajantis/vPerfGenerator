@@ -59,14 +59,14 @@ void event_notify_one(thread_event_t* event) {
 
 void event_notify_all(thread_event_t* event) {
 	while(pthread_mutex_lock(&event->te_mutex) == EINVAL);
+
     pthread_cond_broadcast(&event->te_cv);
     pthread_mutex_unlock(&event->te_mutex);
 }
 
-void event_notify_thread(thread_t* t) {
-	if(t->t_block_event) {
-		event_notify_all(t->t_block_event);
-	}
+void event_destroy(thread_event_t* event) {
+	pthread_mutex_destroy(&event->te_mutex);
+	pthread_cond_destroy(&event->te_cv);
 }
 
 void mutex_init(thread_mutex_t* mutex, const char* name) {
@@ -74,7 +74,9 @@ void mutex_init(thread_mutex_t* mutex, const char* name) {
 
 	strncpy(mutex->tm_name, name, TEVENTNAMELEN);
 
+#ifdef TS_LOCK_DEBUG
 	mutex->tm_is_locked = FALSE;
+#endif
 }
 
 void mutex_lock(thread_mutex_t* mutex) {
@@ -108,4 +110,9 @@ void mutex_unlock(thread_mutex_t* mutex) {
 #ifdef TS_LOCK_DEBUG
 	mutex->tm_is_locked = FALSE;
 #endif
+}
+
+
+void mutex_destroy(thread_mutex_t* mutex) {
+	pthread_mutex_destroy(&mutex->tm_mutex);
 }

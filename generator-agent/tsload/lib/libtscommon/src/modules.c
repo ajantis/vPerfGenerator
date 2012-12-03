@@ -33,6 +33,7 @@ int mod_type = -1;
 int (*mod_load_helper)(module_t* mod) = NULL;
 
 module_t* mod_load(const char* path_name);
+void mod_destroy(module_t* mod);
 
 int load_modules() {
 	DIR* dir = opendir(mod_search_path);
@@ -60,6 +61,17 @@ int load_modules() {
 
 	closedir(dir);
 	return 0;
+}
+
+void unload_modules(void) {
+	module_t* mod = first_module;
+	module_t* next;
+
+	while(mod != NULL) {
+		next = mod->mod_next;
+		mod_destroy(mod);
+		mod = next;
+	}
 }
 
 module_t* mod_create() {

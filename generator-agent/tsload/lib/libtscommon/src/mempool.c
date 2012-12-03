@@ -49,3 +49,7 @@ int mempool_init(void) {
 	return 0;
 }
 
+void mempool_fini(void) {
+	mutex_destroy(&mp_mutex);
+}
+

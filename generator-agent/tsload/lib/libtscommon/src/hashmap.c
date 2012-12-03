@@ -130,3 +130,7 @@ void hash_map_walk(hashmap_t* hm, void (*func)(void* object)) {
 	}
 	mutex_unlock(&hm->hm_mutex);
 }
+
+void hash_map_destroy(hashmap_t* hm) {
+	mutex_destroy(&hm->hm_mutex);
+}

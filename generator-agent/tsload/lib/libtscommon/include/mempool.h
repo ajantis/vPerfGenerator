@@ -15,5 +15,6 @@ void* mp_realloc(void* old, size_t sz);
 void mp_free(void* ptr);
 
 int mempool_init(void);
+void mempool_fini(void);
 
 #endif /* MEMPOOL_H_ */

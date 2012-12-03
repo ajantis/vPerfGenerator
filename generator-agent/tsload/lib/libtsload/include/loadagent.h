@@ -12,6 +12,7 @@
 
 void agent_workload_status(const char* wl_name, const char* status_msg, int done, const char* config_msg);
 
-void agent_init(void);
+int agent_init(void);
+void agent_fini(void);
 
 #endif /* LOADAGENT_H_ */

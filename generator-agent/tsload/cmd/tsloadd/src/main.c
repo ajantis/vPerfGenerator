@@ -8,13 +8,9 @@
 #define LOG_SOURCE "tsloadd"
 #include <log.h>
 
-#include <mempool.h>
 #include <modtsload.h>
-#include <modules.h>
 #include <cfgfile.h>
-#include <client.h>
-#include <threads.h>
-#include <threadpool.h>
+#include <tsload.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -83,34 +79,13 @@ int main(int argc, char* argv[]) {
 	set_mod_helper(MOD_TSLOAD, tsload_mod_helper);
 	parse_options(argc, argv);
 
-	if((err = mempool_init()) != 0)
-		return err;
-
-	if((err = threads_init()) != 0)
-		return err;
 	sigset(SIGUSR1, sigusr1_handler);
 
 	if((err = cfg_init(config_file_name)) != CFG_OK) {
 		return 1;
 	}
 
-	if((err = log_init()) != 0)
-		return err;
-
-	logmsg(LOG_INFO, "Started tsloadd");
-
-	if((err = load_modules()) != 0)
-		return err;
-
-	create_default_tp();
-
-	agent_init();
-	clnt_init();
-
-	sleep(10);
-
-	log_fini();
-	clnt_fini();
+	tsload_start(argv[0]);
 
 	return 0;
 }
