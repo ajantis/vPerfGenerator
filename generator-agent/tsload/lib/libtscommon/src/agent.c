@@ -36,7 +36,7 @@ JSONNODE* agent_hello_msg() {
 	return node;
 }
 
-JSONNODE* agent_response_msg(JSONNODE* response) {
+void agent_response_msg(JSONNODE* response) {
 	JSONNODE* node = json_new(JSON_NODE);
 
 	assert(response != NULL);
@@ -44,37 +44,41 @@ JSONNODE* agent_response_msg(JSONNODE* response) {
 	json_set_name(response, "response");
 	json_push_back(node, response);
 
-	return node;
+	clnt_add_response(RT_RESPONSE, node);
 }
 
-JSONNODE* agent_error_msg(const char* format, ...) {
+void agent_error_msg(agent_errcode_t code, const char* format, ...) {
 	JSONNODE* node = json_new(JSON_NODE);
 	char error_msg[256];
 	va_list args;
+
+	clnt_proc_msg_t* msg = clnt_proc_get_msg();
 
 	va_start(args, format);
 	vsnprintf(error_msg, 256, format, args);
 	va_end(args);
 
+	json_push_back(node, json_new_i("code", code));
 	json_push_back(node, json_new_a("error", error_msg));
 
-	return node;
+	logmsg(LOG_WARN, "Error while processing command %s msg #%u: %s",
+			msg->m_command, msg->m_msg_id, error_msg);
+
+	clnt_add_response(RT_ERROR, node);
 }
 
-JSONNODE* agent_process_command(char* command, JSONNODE* msg) {
+void agent_process_command(char* command, JSONNODE* n_msg) {
 	agent_dispatch_t* method = agent_dispatch_table;
 	int i = 0, num_args = 0;
 
 	char* arg_name;
 	agent_proc_func_t arg_proc;
 
-	JSONNODE_ITERATOR i_arg, i_end;
+	JSONNODE* n_arg;
 	void* argv[AGENTMAXARGC];
 	JSONNODE* jargv[AGENTMAXARGC];
 
 	assert(agent_dispatch_table != NULL);
-
-	i_end = json_end(msg);
 
 	while(method->ad_name) {
 		if(strcmp(method->ad_name, command) != 0) {
@@ -82,7 +86,12 @@ JSONNODE* agent_process_command(char* command, JSONNODE* msg) {
 			continue;
 		}
 
-		/* Process arguments
+		/* Process arguments. Incoming arguments are JSON_NODE with
+		 * subnodes which names are matching arguments names.
+		 *
+		 * Finds n_arg for each argument and saves result to jargv,
+		 * than process it if needed and saves result to argv. Argv
+		 * passed to method.
 		 *
 		 * arg_proc may allocate memory, so first we check arguments
 		 * than we process them */
@@ -94,14 +103,15 @@ JSONNODE* agent_process_command(char* command, JSONNODE* msg) {
 				break;
 			}
 
-			i_arg = json_find(msg, arg_name);
+			n_arg = json_get(n_msg, arg_name);
 
-			if(i_arg == i_end) {
-				logmsg(LOG_WARN, "Invoked command %s, but argument %s is missing!", command, arg_name);
-				return agent_error_msg("Missing argument %s!", arg_name);
+			if(n_arg == NULL) {
+				agent_error_msg(AE_MESSAGE_FORMAT, "Missing argument %s!", arg_name);
+
+				return;
 			}
 
-			jargv[i] = *i_arg;
+			jargv[i] = n_arg;
 		}
 
 		for(i = 0; i < num_args; ++i) {
@@ -109,11 +119,11 @@ JSONNODE* agent_process_command(char* command, JSONNODE* msg) {
 			argv[i] = (void*) arg_proc ? arg_proc(jargv[i]) : jargv[i];
 		}
 
-		return method->ad_method(argv);
+		method->ad_method(argv);
+		return;
 	}
 
-	logmsg(LOG_WARN, "Invoked unknown command %s!", command);
-	return agent_error_msg("Not found command %s!", command);
+	agent_error_msg(AE_COMMAND_NOT_FOUND, "Not found command %s!", command);
 }
 
 int agent_hello() {

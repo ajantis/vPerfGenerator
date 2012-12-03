@@ -14,26 +14,6 @@ import scala.collection.mutable.{Map => MutableMap}
 import scala.reflect.Manifest
 
 /**
- * TSCommandNotFound - thrown if command invoked by Agent
- * is not found in TSServer methods
- */
-case class TSCommandNotFound(msg: String)
-	extends Exception(msg) {}
-
-/**
- * TSMissingArgument - thrown if one of required arguments
- * was not provided in command message
- */
-case class TSMissingArgument(msg: String) 
-	extends Exception(msg) {}
-
-/**
- * TSNotClientMethod - you try to invoke method that is not client method
- */
-case class TSNotClientMethod(msg: String) 
-	extends Exception(msg) {}
-
-/**
  * TSClientInvocationHandler - proxies requests to client 
  * 
  * Requests defined in trait derived from TSClientInterface and passed as 
@@ -49,7 +29,7 @@ class TSClientInvocationHandler[CI <: TSClientInterface](client: TSClient[CI])
     val annotation = method.getAnnotation(classOf[TSClientMethod])
     
     if(annotation == null) {
-      throw new TSNotClientMethod("Method " + method + " has no TSClientMethod annotation")
+      throw new TSClientError("Method " + method + " has no TSClientMethod annotation")
     }
     
     return annotation
@@ -170,7 +150,7 @@ abstract class TSServer[CI <: TSClientInterface](portNumber: Int)
 	    }
 	  }
 	  
-	  throw new TSCommandNotFound("Not found command %s".format(cmd))
+	  throw new TSClientCommandNotFound("Not found command %s".format(cmd))
 	}
 	
 	/**
@@ -191,14 +171,17 @@ abstract class TSServer[CI <: TSClientInterface](portNumber: Int)
 	  var args: List[AnyRef] = List(client)
 	  var argClassMap = (argNamesList zip classList).toMap
 	   
-	  for((argName, klass) <- argClassMap) {	
-	    val argMap = TSObjectSerializer.jsonMapToMap(msg(argName))
-	    val arg = TSObjectDeserializer.doDeserialize(argMap, klass)
+	  for((argName, klass) <- argClassMap) {
+	    try {
+		  val argMap = TSObjectSerializer.jsonMapToMap(msg(argName))
+		  val arg = TSObjectDeserializer.doDeserialize(argMap, klass)
 	    
-	    args = args ::: List(arg.asInstanceOf[AnyRef])
+		  args = args ::: List(arg.asInstanceOf[AnyRef])
+	    }
+	    catch {
+	      case e: NoSuchElementException => throw new TSClientMessageFormatError("Missing argument " + argName)
+	    }
 	  }
-	  
-	  System.out.println(args)
 	  
 	  return args.toArray
 	}

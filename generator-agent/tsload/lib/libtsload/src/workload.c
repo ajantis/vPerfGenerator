@@ -195,31 +195,29 @@ workload_t* json_workload_proc(JSONNODE* node) {
 	char* wl_name = json_name(node);
 	char* mod_name = NULL;
 
-	wlp_descr_t* bad_param;
-
 	int ret;
 
 	if(strlen(wl_name) == 0) {
-		logmsg(LOG_WARN, "Failed to parse workload, no name is defined");
+		agent_error_msg(AE_MESSAGE_FORMAT,"Failed to parse workload, no name is defined");
 		goto fail;
 	}
 
 	logmsg(LOG_DEBUG, "Parsing workload %s", wl_name);
 
 	if(i_mod == i_end || i_params == i_end) {
-		logmsg(LOG_WARN, "Failed to parse workload, missing parameter %s",
-				(i_mod == i_end) ? "module" :
-				(i_params == i_end) ? "params" : "");
+		agent_error_msg(AE_MESSAGE_FORMAT,"Failed to parse workload, missing parameter %s",
+						(i_mod == i_end) ? "module" :
+						(i_params == i_end) ? "params" : "");
 		goto fail;
 	}
 
 	if(json_type(*i_mod) != JSON_STRING) {
-		logmsg(LOG_WARN, "Expected that module is JSON_STRING");
+		agent_error_msg(AE_MESSAGE_FORMAT,"Expected that module is JSON_STRING");
 		goto fail;
 	}
 
 	if(json_type(*i_params) != JSON_NODE) {
-		logmsg(LOG_WARN, "Expected that params is JSON_NODE");
+		agent_error_msg(AE_MESSAGE_FORMAT, "Expected that params is JSON_NODE");
 		goto fail;
 	}
 
@@ -228,7 +226,7 @@ workload_t* json_workload_proc(JSONNODE* node) {
 	json_free(mod_name);
 
 	if(mod == NULL) {
-		logmsg(LOG_WARN, "Invalid module name %s", mod_name);
+		agent_error_msg(AE_INVALID_DATA, "Invalid module name %s", mod_name);
 		goto fail;
 	}
 
@@ -237,7 +235,7 @@ workload_t* json_workload_proc(JSONNODE* node) {
 
 	wl = wl_create(wl_name, mod);
 
-	ret = json_wlparam_proc_all(*i_params, tmod->mod_params, wl->wl_params, &bad_param);
+	ret = json_wlparam_proc_all(*i_params, tmod->mod_params, wl->wl_params);
 
 	if(ret != WLPARAM_JSON_OK) {
 		/*FIXME: error handling*/

@@ -45,7 +45,7 @@ abstract class TSObjectSerdes {
     val classMapLength = annotation.classMap.length
     
     if(classMapLength % 2 != 0) {
-      throw new TSIncorrectObject("TSObjAbstract.classMap should be pairs of key, className")
+      throw new TSClientError("TSObjAbstract.classMap should be pairs of key, className")
     }
     
     for(i <- 0 until classMapLength / 2) {
@@ -122,7 +122,7 @@ abstract class TSObjectSerdes {
       return serdesList(jsonListToList(obj), elementClass)
     }
     
-    throw new TSIncorrectObject("Invalid container type! Should be immutable.Map or immutable.List, got " + klass)
+    throw new TSClientMessageFormatError("Invalid container type! Should be immutable.Map or immutable.List, got " + klass)
   }
   
   def serdesField(value: Any, field: Field) : Any = {
@@ -155,7 +155,7 @@ abstract class TSObjectSerdes {
       return num.longValue()
     }
 
-    throw new TSIncorrectObject("Invalid number! Got " + num.getClass() + " instead of " + klass)
+    throw new TSClientMessageFormatError("Invalid number! Got " + num.getClass() + " instead of " + klass)
   }
   
   /*
@@ -185,7 +185,7 @@ abstract class TSObjectSerdes {
       return obj
     }
      
-    throw new TSIncorrectObject("Invalid klass! Got " + obj.getClass() + " instead of " + klass)
+    throw new TSClientMessageFormatError("Invalid klass! Got " + obj.getClass() + " instead of " + klass)
   }
   
   def serdesInstantiableClass(obj: Any, klass: Class[_]) : Any

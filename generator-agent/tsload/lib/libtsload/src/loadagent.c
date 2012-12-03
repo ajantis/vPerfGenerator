@@ -14,6 +14,7 @@
 #include <wlparam.h>
 #include <workload.h>
 
+/* = Agent's handlers = */
 JSONNODE* agent_get_modules_info(void* argv[]) {
 	JSONNODE* mod_info = json_modules_info();
 	JSONNODE* node = json_new(JSON_NODE);
@@ -21,30 +22,32 @@ JSONNODE* agent_get_modules_info(void* argv[]) {
 	json_set_name(mod_info, "modules");
 	json_push_back(node, mod_info);
 
-	return agent_response_msg(node);
+	agent_response_msg(node);
 }
 
-JSONNODE* agent_configure_workloads(void* argv[]) {
+void agent_configure_workloads(void* argv[]) {
 	workload_t* wl, *iter;
 	JSONNODE* wl_head = argv[0];
 	JSONNODE_ITERATOR i_list = json_find(wl_head, "workloads"),
 					  i_end = json_end(wl_head);
 
 	if(i_list == i_end) {
-		return agent_error_msg("Not found workloads");
+		return agent_error_msg(AE_INVALID_DATA, "Not found workloads");
 	}
 
 	wl = json_workload_proc_all(*i_list);
 
-	if(wl == NULL)
-		return agent_error_msg("workload_error!");
+	if(wl == NULL) {
+		agent_error_msg(AE_INTERNAL_ERROR, "workload_error!");
+	}
 
 	for(iter = wl; iter != NULL; iter = iter->wl_next)
 		wl_config(iter);
 
-	return agent_response_msg(json_new(JSON_NODE));
+	agent_response_msg(json_new(JSON_NODE));
 }
 
+/* = TSServer's methods = */
 void agent_workload_status(const char* wl_name, const char* status_msg, int done, const char* config_msg) {
 	JSONNODE* status = json_new(JSON_NODE), *node = json_new(JSON_NODE);
 	JSONNODE* response;

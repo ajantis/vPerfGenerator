@@ -12,6 +12,7 @@
 #include <libjson.h>
 
 #include <stdlib.h>
+#include <assert.h>
 
 #include <poll.h>
 #include <unistd.h>
@@ -21,8 +22,10 @@
 
 #define CLNT_CHUNK	1024
 
-JSONNODE* json_clnt_hello_msg();
 JSONNODE* json_clnt_command_format(const char* command, JSONNODE* msg_node, unsigned msg_id);
+void clnt_proc_set_msg(clnt_proc_msg_t* msg);
+
+/* Globals */
 
 int clnt_sockfd = -1;
 
@@ -76,6 +79,8 @@ static clnt_msg_handler_t* clnt_create_msg() {
 	hdl->mh_next = NULL;
 	hdl->mh_msg_id = msg_id;
 	hdl->mh_response = NULL;
+	hdl->mh_response_type = RT_NOTHING;
+	hdl->mh_error_code = 0;
 
 	hash_map_insert(&hdl_hashmap, hdl);
 
@@ -88,8 +93,9 @@ static void clnt_delete_handler(clnt_msg_handler_t* hdl) {
 	mp_free(hdl);
 }
 
-int clnt_process_response(unsigned msg_id, JSONNODE* response, clnt_response_type_t rt) {
+int clnt_process_response(unsigned msg_id, JSONNODE* response, clnt_response_type_t rt, JSONNODE* n_code) {
 	clnt_msg_handler_t* hdl = NULL;
+	int error_code;
 
 	hdl = (clnt_msg_handler_t*) hash_map_find(&hdl_hashmap, &msg_id);
 
@@ -99,38 +105,61 @@ int clnt_process_response(unsigned msg_id, JSONNODE* response, clnt_response_typ
 		return -1;
 	}
 
+	if(n_code != NULL) {
+		hdl->mh_error_code = json_as_int(n_code);
+	}
+
 	/*Notify sender thread that we got a response*/
 	hdl->mh_response_type = rt;
-	hdl->mh_response = response;
+	hdl->mh_response = json_copy(response);
 
 	event_notify_one(&hdl->mh_event);
 
 	return 0;
 }
 
-int clnt_process_command(unsigned msg_id, JSONNODE* command, JSONNODE* msg) {
-	char* cmd;
-	JSONNODE* ret;
+/**
+ * Process incoming command
+ *
+ * @return 0 if all OK or -1 if message was incorrect
+ */
+int clnt_process_command(unsigned msg_id, JSONNODE* n_cmd, JSONNODE* n_msg) {
+	clnt_proc_msg_t* msg;
 
-	if(json_type(command) != JSON_STRING)
+	if(json_type(n_cmd) != JSON_STRING ||
+	   json_type(n_msg) != JSON_NODE)
 		return -1;
 
-	cmd = json_as_string(command);
+	/* Create proc message */
+	msg = (clnt_proc_msg_t*) mp_malloc(sizeof(clnt_proc_msg_t));
 
-	logmsg(LOG_TRACE, "Invoked command %s", cmd);
+	msg->m_msg_id = msg_id;
+	msg->m_command = json_as_string(n_cmd);
+	msg->m_response_type = RT_NOTHING;
+	msg->m_response = NULL;
 
-	ret = agent_process_command(cmd, msg);
+	clnt_proc_set_msg(msg);
 
-	if(ret == NULL) {
-		logmsg(LOG_WARN, "Processed command %s returned NULL!", cmd);
-		return -1;
-	}
+	/* Call agent's method */
 
-	json_push_back(ret, json_new_i("id", msg_id));
-	clnt_send(ret);
+	logmsg(LOG_TRACE, "Invoked command %s message #%d", msg->m_command, msg_id);
 
-	json_delete(ret);
-	json_free(cmd);
+	agent_process_command(msg->m_command, n_msg);
+
+	/* Process response */
+
+	assert(msg->m_response != NULL);
+
+	json_push_back(msg->m_response, json_new_i("id", msg_id));
+	clnt_send(msg->m_response);
+
+	/* Clean up */
+
+	json_delete(msg->m_response);
+	json_free(msg->m_command);
+
+	clnt_proc_set_msg(NULL);
+	mp_free(msg);
 
 	return 0;
 }
@@ -144,54 +173,53 @@ int clnt_process_command(unsigned msg_id, JSONNODE* command, JSONNODE* msg) {
  *
  * @return 0 if processing successful and -1 otherwise*/
 int clnt_process_msg(JSONNODE* msg) {
-	JSONNODE *n_id, *n_response, *n_error, *n_command, *n_msg;
+	JSONNODE_ITERATOR i_id, i_response, i_command, i_msg, i_error, i_code, i_end;
 	unsigned msg_id;
 	int ret;
-
-	JSONNODE* response;
 
 	if(msg == NULL) {
 		logmsg(LOG_WARN, "Failed to process incoming message: not JSON");
 		goto fail;
 	}
 
-	n_id = json_get(msg, "id");
+	i_end = json_end(msg);
+	i_id = json_find(msg, "id");
 
-	if(n_id == NULL || json_type(n_id) != JSON_NUMBER) {
+	if(i_id == i_end || json_type(*i_id) != JSON_NUMBER) {
 		logmsg(LOG_WARN, "Failed to process incoming message: unknown 'id'");
 		goto fail;
 	}
 
-	msg_id = json_as_int(n_id);
+	msg_id = json_as_int(*i_id);
 
 	/* Determine, which type of message we received and
-	 * go to subroutine*/
-	if((n_response = json_pop_back(msg, "response")) != NULL) {
-		ret = clnt_process_response(msg_id, n_response, RT_RESPONSE);
+	* go to subroutine*/
+	if((i_response = json_find(msg, "response")) != i_end) {
+		ret = clnt_process_response(msg_id, *i_response, RT_RESPONSE, NULL);
 	} else if(
-			(n_command = json_get(msg, "cmd")) != NULL &&
-			(n_msg = json_get(msg, "msg")) != NULL) {
-		ret = clnt_process_command(msg_id, n_command, n_msg);
+			(i_command = json_find(msg, "cmd")) != i_end &&
+			(i_msg = json_find(msg, "msg")) != i_end) {
+		ret = clnt_process_command(msg_id, *i_command, *i_msg);
 	}
-	else if((n_error = json_pop_back(msg, "error")) != NULL) {
-		ret = clnt_process_response(msg_id, n_error, RT_ERROR);
+	else if((i_code = json_find(msg, "code")) != i_end &&
+			(i_error = json_find(msg, "error")) != i_end) {
+		ret = clnt_process_response(msg_id, *i_error, RT_ERROR, *i_code);
 	}
 	else {
 		logmsg(LOG_WARN, "Failed to process incoming message: invalid format");
 		goto fail;
 	}
 
+	json_delete(msg);
+
 	if(ret == -1)
 		goto fail;
-
-	json_delete(msg);
 
 	return 0;
 
 fail:
 	if(msg)
 		json_delete(msg);
-
 	return -1;
 }
 
@@ -336,6 +364,50 @@ THREAD_END:
 	mp_free(buffer);
 
 	THREAD_FINISH(arg);
+}
+
+/*
+ * Should be called from clnt_proc_thread
+ *
+ * @return message that is currently processed
+ * */
+clnt_proc_msg_t* clnt_proc_get_msg(void) {
+	assert(t_self() == &t_client_process);
+
+	return (clnt_proc_msg_t*) t_client_process.t_arg;
+}
+
+void clnt_proc_set_msg(clnt_proc_msg_t* msg) {
+	assert(t_self() == &t_client_process);
+
+	t_client_process.t_arg = (void*) msg;
+}
+
+/* Adds response to command that is processed
+ * Called by agent and saves response message (error or message)
+ * to clnt_proc_thread.t_arg
+ *
+ * @param node response or error
+ *
+ * @see agent_response_msg, @see agent_error_msg
+ * */
+void clnt_add_response(clnt_response_type_t type, JSONNODE* node) {
+	clnt_proc_msg_t* msg = clnt_proc_get_msg();
+
+	assert(node != NULL);
+	assert(msg != NULL);
+
+	if(msg->m_response != NULL) {
+		/* Already has a response, discard this one.
+		 *
+		 * This may happen if callee already reports error,
+		 * than caller reports an internal error just to
+		 * be sure */
+		json_delete(node);
+	}
+
+	msg->m_response_type = type;
+	msg->m_response = node;
 }
 
 /**

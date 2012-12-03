@@ -106,7 +106,7 @@ typedef struct {
 
 JSONNODE* json_wlparam_format(wlp_descr_t* wlp);
 JSONNODE* json_wlparam_format_all(wlp_descr_t* wlp);
-int json_wlparam_proc_all(JSONNODE* node, wlp_descr_t* wlp, void* params, wlp_descr_t** bad_param);
+int json_wlparam_proc_all(JSONNODE* node, wlp_descr_t* wlp, void* params);
 #endif
 
 #endif /* WLPARAM_H_ */

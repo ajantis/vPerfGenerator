@@ -106,7 +106,7 @@ typedef struct thread {
 	int				t_id;
 	int				t_local_id;
 
-	/*XXX: only for linux*/
+	/*FIXME: only for linux*/
 	pid_t			t_system_id;
 
 	char 			t_name[TNAMELEN];

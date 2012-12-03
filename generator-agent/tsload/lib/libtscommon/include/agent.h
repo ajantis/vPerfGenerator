@@ -30,9 +30,16 @@ typedef struct {
 #define ADT_LAST_ARG()  { .ad_arg_name = NULL }
 #define ADT_LAST_METHOD() { .ad_name = NULL }
 
-JSONNODE* agent_process_command(char* command, JSONNODE* msg);
-JSONNODE* agent_response_msg(JSONNODE* response);
-JSONNODE* agent_error_msg(const char* format, ...);
+typedef enum agent_errcode {
+	AE_COMMAND_NOT_FOUND = 100,
+	AE_MESSAGE_FORMAT	 = 101,
+	AE_INVALID_DATA		 = 102,
+	AE_INTERNAL_ERROR	 = 200
+} agent_errcode_t;
+
+void agent_process_command(char* command, JSONNODE* msg);
+void agent_response_msg(JSONNODE* response);
+void agent_error_msg(agent_errcode_t code, const char* format, ...);
 void agent_register_methods(agent_dispatch_t* table);
 
 int agent_hello();

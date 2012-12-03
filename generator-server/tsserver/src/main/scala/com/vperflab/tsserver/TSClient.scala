@@ -24,15 +24,21 @@ abstract class Message {
 
 case class CommandMessage(id: Int, cmd: String, msg: Map[String, Any]) extends Message;
 case class ResponseMessage(id: Int, response: Map[String, Any]) extends Message;
-case class ErrorMessage(id: Int, error: String) extends Message;
+case class ErrorMessage(id: Int, code: Int, error: String) extends Message;
 
 case class Stop
 
 case class MessageParserException(msg: String)
-	extends Exception(msg) {}
+	extends Exception(msg) 
 
 case class TSClientError(msg: String)
-	extends Exception(msg) {}
+	extends Exception(msg) 
+case class TSClientCommandNotFound(cmsg: String)
+	extends TSClientError(cmsg)
+case class TSClientMessageFormatError(cmsg: String)
+	extends TSClientError(cmsg)
+case class TSClientInvalidData(cmsg: String)
+	extends TSClientError(cmsg)
 
 /**
  * MessageParser - factory that parses incoming json message
@@ -66,7 +72,7 @@ object MessageParser {
     else if (jsonMap contains "response") {
       message = parse[ResponseMessage](json)
     }
-    else if (jsonMap contains "error") {
+    else if ((jsonMap contains "error") && (jsonMap contains "code")) {
       message = parse[ErrorMessage](json)
     }
     else {
@@ -75,6 +81,33 @@ object MessageParser {
     
     return message
   }
+}
+
+object ErrorFactory {
+	val AE_COMMAND_NOT_FOUND = 100
+	val AE_MESSAGE_FORMAT	 = 101
+	val AE_INVALID_DATA		 = 102
+	val AE_INTERNAL_ERROR	 = 200
+	
+	def createException(msg: ErrorMessage): TSClientError = {
+	  return msg.code match {
+	    case AE_COMMAND_NOT_FOUND => new TSClientCommandNotFound(msg.error)
+	    case AE_MESSAGE_FORMAT => new TSClientMessageFormatError(msg.error)
+	    case AE_INVALID_DATA => new TSClientInvalidData(msg.error)
+	    
+	    case _ => new TSClientError(msg.error)
+	  }
+	}
+	
+	def createErrorMessage(msgId: Int, e: Exception): ErrorMessage = {
+	  return e match {
+	    case TSClientCommandNotFound(msg) => new ErrorMessage(msgId, AE_COMMAND_NOT_FOUND, msg)
+	    case TSClientMessageFormatError(msg) => new ErrorMessage(msgId, AE_MESSAGE_FORMAT, msg)
+	    case TSClientInvalidData(msg) => new ErrorMessage(msgId, AE_INVALID_DATA, msg)
+	    
+	    case _ => new ErrorMessage(msgId, AE_INTERNAL_ERROR, e.toString())
+	  }
+	}
 }
 
 class MessageHandler(srcId: Int) {
@@ -160,7 +193,7 @@ class TSClientSender(var channel: SocketChannel) {
     
     return msgHandler.getResponse match {
       case ResponseMessage(id, response) => response
-	  case ErrorMessage(id, errorMsg) => throw new TSClientError(errorMsg)
+	  case message: ErrorMessage => throw ErrorFactory.createException(message)
     }
   }  
   
@@ -208,7 +241,7 @@ class TSClientSender(var channel: SocketChannel) {
     System.out.println(e.toString())
     e.printStackTrace()
     
-    send(new ErrorMessage(srcId, errorMsg))
+    send(ErrorFactory.createErrorMessage(srcId, e))
   }
 }
 

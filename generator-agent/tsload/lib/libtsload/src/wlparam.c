@@ -10,6 +10,7 @@
 
 #include <modules.h>
 #include <wlparam.h>
+#include <agent.h>
 
 #include <libjson.h>
 
@@ -156,7 +157,7 @@ int json_wlparam_proc(JSONNODE* node, wlp_descr_t* wlp, void* param) {
 	return WLPARAM_JSON_OK;
 }
 
-int json_wlparam_proc_all(JSONNODE* node, wlp_descr_t* wlp, void* params, wlp_descr_t** bad_param) {
+int json_wlparam_proc_all(JSONNODE* node, wlp_descr_t* wlp, void* params) {
 	int ret;
 
 	while(wlp->type != WLP_NULL) {
@@ -164,16 +165,21 @@ int json_wlparam_proc_all(JSONNODE* node, wlp_descr_t* wlp, void* params, wlp_de
 						  i_end = json_end(node);
 
 		if(i_param == i_end) {
-			*bad_param = wlp;
+			agent_error_msg(AE_INVALID_DATA, "Workload parameter %s not specified", wlp->name);
 			return WLPARAM_JSON_NOT_FOUND;
 		}
 
 		ret = json_wlparam_proc(*i_param, wlp, params + wlp->off);
 
-		if(ret != WLPARAM_JSON_OK) {
-			*bad_param = wlp;
+		if(ret == WLPARAM_JSON_WRONG_TYPE) {
+			agent_error_msg(AE_INVALID_DATA, "Workload parameter %s has wrong type", wlp->name);
 			return ret;
 		}
+		if(ret == WLPARAM_JSON_OUTSIDE_RANGE) {
+			agent_error_msg(AE_INVALID_DATA, "Workload parameter %s outside defined range", wlp->name);
+			return ret;
+		}
+
 
 		wlp++;
 	}
