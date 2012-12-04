@@ -1,18 +1,21 @@
 all: $(TARGSRC)  $(OBJDIR) $(TARGET)
 
 $(OBJDIR):
-	mkdir $(OBJDIR)
+	mkdir -p $@
 
-$(TARGET): $(TARGOBJ) $(TARGEXTRAS)
+$(TARGET): $(OBJDIR) $(TARGOBJDIRS) $(TARGOBJ) $(TARGEXTRAS)
 	$(CC) -o $(BUILDDIR)/$(TARGETFILE) $(TARGOBJ) $(LDFLAGS)
 
 $(EXTRAS_DIR)/%: % 
 	cp $< $@
 
-$(OBJDIR)/%.o: $(SRCDIR)/%.c  
+$(OBJDIR)/%/:
+	mkdir -p $@
+
+$(OBJDIR)/%.o: $(SRCDIR)/%.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(OBJDIR)/%.o: $(SRCDIR)/%.cpp
+$(OBJDIR)/%.o: $(SRCDIR)/%.cpp 
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 clean:

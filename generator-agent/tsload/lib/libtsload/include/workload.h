@@ -12,6 +12,7 @@
 #include <threadpool.h>
 #include <wlparam.h>
 #include <modules.h>
+#include <syncqueue.h>
 #include <modtsload.h>
 
 #define WLHASHSIZE	8
@@ -37,11 +38,15 @@ typedef struct workload {
 	thread_pool_t*	 wl_tp;
 	void*			 wl_params;
 
-	thread_t		 wl_cfg_thread;
+	thread_t		 wl_cfg_thread;		/**< Thread responsible for configuration*/
 
 	int 			 wl_is_configured;
 
+	squeue_t		 wl_steps;			/**< Number of requests per each step*/
+	squeue_t		 wl_requests;		/**< Request statistics per each step*/
+
 	struct workload* wl_next;			/**<next in workload chain*/
+	struct workload* wl_tp_next;		/**<next in thread pool wl list*/
 	struct workload* wl_hm_next;		/**<next in workload hashmap*/
 } workload_t;
 
@@ -49,6 +54,9 @@ void wl_notify(workload_t* wl, wl_status_t status, int done, char* format, ...) 
 
 void wl_config(workload_t* wl);
 void wl_unconfig(workload_t* wl);
+
+int wl_init(void);
+void wl_fini(void);
 
 #ifndef NO_JSON
 #include <libjson.h>

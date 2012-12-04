@@ -8,9 +8,12 @@ SRC = threadpool.c \
 	  workload.c \
 	  modtsload.c \
 	  loadagent.c \
-	  tsload.c
+	  tsload.c \
+	  worker.c \
+	  disp/simple.c 
 	  
 OBJ = $(SRC:.c=.o)
+OBJSUBDIRS += disp/
 
 JSON_DEBUG = -DNDEBUG
 

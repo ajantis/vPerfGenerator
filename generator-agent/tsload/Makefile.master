@@ -5,6 +5,7 @@ SRCDIR = src
 INCDIR = include
 BUILDDIR = ../../build
 OBJDIR = $(BUILDDIR)/obj/$(TARGETDIR)
+OBJSUBDIRS = ./
 EXTRAS_DIR = $(BUILDDIR)/etc
 
 INCTSCOMMON = -I../../lib/libtscommon/include
@@ -51,6 +52,7 @@ LDFLAGS += -pthread
 
 TARGSRC = $(addprefix $(SRCDIR)/,$(SRC))
 TARGOBJ = $(addprefix $(OBJDIR)/,$(OBJ))
+TARGOBJDIRS = $(addprefix $(OBJDIR)/,$(OBJSUBDIRS))
 TARGEXTRAS = $(addprefix $(EXTRAS_DIR)/,$(EXTRAS))
 
 TARGETFILE = $(addprefix $($(TYPE)_DIR)/,$(TARGET))

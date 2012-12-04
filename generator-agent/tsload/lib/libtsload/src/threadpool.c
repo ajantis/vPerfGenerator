@@ -13,31 +13,17 @@
 #include <threads.h>
 #include <threadpool.h>
 #include <defs.h>
+#include <workload.h>
 
+#include <assert.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
 
 thread_pool_t* default_pool = NULL;
 
-/*Thread code*/
-void* control_thread(void* arg) {
-	THREAD_ENTRY(arg, thread_pool_t, tp);
-
-	logmsg(LOG_DEBUG, "Started control thread (tpool: %s)", tp->tp_name);
-
-THREAD_END:
-	THREAD_FINISH(arg);
-}
-
-void* worker_thread(void* arg) {
-	THREAD_ENTRY(arg, thread_pool_t, tp);
-
-	logmsg(LOG_DEBUG, "Started worker thread #%d (tpool: %s)", thread->t_id, tp->tp_name);
-
-THREAD_END:
-	THREAD_FINISH(arg);
-}
+void* worker_thread(void* arg);
+void* control_thread(void* arg);
 
 thread_pool_t* tp_create(unsigned num_threads, const char* name, uint64_t quantum) {
 	thread_pool_t* tp = NULL;
@@ -46,9 +32,10 @@ thread_pool_t* tp_create(unsigned num_threads, const char* name, uint64_t quantu
 	char control_name[TNAMELEN];
 	char worker_name[TNAMELEN];
 	char event_name[TEVENTNAMELEN];
+	char mutex_name[TMUTEXNAMELEN];
 
 	if(num_threads > TPMAXTHREADS) {
-		logmsg(LOG_WARN, "Failed to create thread_pool %s: no more %d threads allowed (%d requested)",
+		logmsg(LOG_WARN, "Failed to create thread_pool %s: maximum %d threads allowed (%d requested)",
 				name, TPMAXTHREADS, num_threads);
 
 		return NULL;
@@ -64,6 +51,8 @@ thread_pool_t* tp_create(unsigned num_threads, const char* name, uint64_t quantu
 	tp->tp_time	   = 0ll;	   /*Time is set by control thread*/
 	tp->tp_quantum = quantum;
 
+	tp->tp_is_dead = FALSE;
+
 	snprintf(event_name, TEVENTNAMELEN, "tp-%s-event", name);
     event_init(&tp->tp_event, event_name);
 
@@ -78,20 +67,97 @@ thread_pool_t* tp_create(unsigned num_threads, const char* name, uint64_t quantu
 		tp->tp_ctl_thread.t_local_id = WORKER_TID + tid;
 	}
 
+	snprintf(mutex_name, TMUTEXNAMELEN, "tp-%s-mutex", name);
+	mutex_init(&tp->tp_mutex, mutex_name);
+
 	logmsg(LOG_INFO, "Created thread pool %s with %d threads", name, num_threads);
 
 	return tp;
 }
 
-int tp_init(void) {
-	default_pool = tp_create(4, "[DEFAULT]", 50 * MS);
+void tp_destroy(thread_pool_t* tp) {
+	int tid;
 
-	if(default_pool == NULL)
-		return 1;
+	tp->tp_is_dead = TRUE;
+
+	/* Notify workers that we are done */
+	event_notify_all(&tp->tp_event);
+
+	for(tid = 0; tid < tp->tp_num_threads; ++tid) {
+		t_destroy(tp->tp_work_threads + tid);
+	}
+
+	t_destroy(&tp->tp_ctl_thread);
+
+	mp_free(tp);
+}
+
+thread_pool_t* tp_search(const char* name) {
+	if(strcmp(name, DEFAULT_TP_NAME) == 0)
+		return default_pool;
+
+	return NULL;
+}
+
+/**
+ * Insert workload into thread pool's list
+ */
+void tp_attach(thread_pool_t* tp, struct workload* wl) {
+	assert(wl->wl_tp == tp);
+
+	mutex_lock(&tp->tp_mutex);
+
+	/* FIXME: implement list routines */
+	if(tp->tp_wl_head == NULL) {
+		tp->tp_wl_head = wl;
+	}
+	else {
+		tp->tp_wl_tail->wl_tp_next = wl;
+		tp->tp_wl_tail = wl;
+	}
+
+	mutex_unlock(&tp->tp_mutex);
+}
+
+/**
+ * Remove workload from thread pool list
+ */
+void tp_detach(thread_pool_t* tp, struct workload* wl) {
+	struct workload* prev = NULL;
+
+	assert(wl->wl_tp == tp);
+
+	mutex_lock(&tp->tp_mutex);
+
+	/* FIXME: implement list routines */
+	if(tp->tp_wl_head == wl) {
+		tp->tp_wl_head = wl->wl_tp_next;
+	}
+	else {
+		prev = tp->tp_wl_head;
+
+		while(prev && prev->wl_tp_next != wl)
+			prev = prev->wl_tp_next;
+
+		assert(prev != NULL);
+
+		prev->wl_tp_next = wl->wl_tp_next;
+
+		if(tp->tp_wl_tail == wl) {
+			tp->tp_wl_tail = prev;
+		}
+	}
+
+	mutex_unlock(&tp->tp_mutex);
+}
+
+int tp_init(void) {
+	default_pool = tp_create(4, DEFAULT_TP_NAME, 50 * MS);
+	assert(default_pool == NULL);
 
 	return 0;
 }
 
 void tp_fini(void) {
-	/*TODO: destroy*/
+	tp_destroy(default_pool);
 }

@@ -13,6 +13,7 @@
 #include <mempool.h>
 #include <modules.h>
 #include <threads.h>
+#include <threadpool.h>
 #include <workload.h>
 #include <modtsload.h>
 #include <loadagent.h>
@@ -45,9 +46,12 @@ DECLARE_HASH_MAP(workload_hash_map, workload_t, WLHASHSIZE, wl_name, wl_hm_next,
  *
  * @return NULL if malloc had failed or new workload object
  */
-workload_t* wl_create(const char* name, module_t* mod) {
+workload_t* wl_create(const char* name, module_t* mod, thread_pool_t* tp) {
 	workload_t* wl = (workload_t*) mp_malloc(sizeof(workload_t));
 	tsload_module_t* tmod = NULL;
+
+	char sq_steps_name[SQUEUENAMELEN];
+	char sq_requests_name[SQUEUENAMELEN];
 
 	assert(mod->mod_helper != NULL);
 
@@ -60,37 +64,57 @@ workload_t* wl_create(const char* name, module_t* mod) {
 	wl->wl_mod = mod;
 	wl->wl_ts_mod = tmod;
 
-	wl->wl_tp = NULL;
+	wl->wl_tp = tp;
+
 	wl->wl_next = NULL;
+	wl->wl_tp_next = NULL;
+	wl->wl_hm_next = NULL;
 
 	wl->wl_params = mp_malloc(tmod->mod_params_size);
 
 	wl->wl_is_configured = FALSE;
 
+	snprintf(sq_steps_name, SQUEUENAMELEN, "wl-%s-steps", name);
+	snprintf(sq_requests_name, SQUEUENAMELEN, "wl-%s-rqs", name);
+
+	squeue_init(&wl->wl_steps, sq_steps_name);
+	squeue_init(&wl->wl_requests, sq_requests_name);
+
+	hash_map_insert(&workload_hash_map, wl);
+
 	return wl;
 }
 
 /**
- * wl_free - free memory for single workload_t object
+ * wl_destroy - free memory for single workload_t object
  * */
-void wl_free(workload_t* wl) {
+void wl_destroy(workload_t* wl) {
+	hash_map_remove(&workload_hash_map, wl);
+
+	squeue_destroy(&wl->wl_steps, mp_free);
+	squeue_destroy(&wl->wl_requests, mp_free);
+
 	mp_free(wl->wl_params);
 
 	mp_free(wl);
 }
 
 /**
- * wl_free - free memory for chain of workload objects
+ * wl_destroy_all - free memory for chain of workload objects
  * */
-void wl_free_all(workload_t* wl_head) {
+void wl_destroy_all(workload_t* wl_head) {
 	workload_t* wl = wl_head;
 
 	while(wl) {
 		wl_head = wl;
 		wl = wl->wl_next;
 
-		wl_free(wl_head);
+		wl_destroy(wl_head);
 	}
+}
+
+workload_t* wl_search(const char* name) {
+	return hash_map_find(&workload_hash_map, name);
 }
 
 /**
@@ -164,7 +188,7 @@ workload_t* json_workload_proc_all(JSONNODE* node) {
 		 * free all workloads that are already parsed and return NULL*/
 		if(wl == NULL) {
 			logmsg(LOG_WARN, "Failed to process workloads from JSON, discarding all of them");
-			wl_free_all(wl_head);
+			wl_destroy_all(wl_head);
 
 			return NULL;
 		}
@@ -182,75 +206,119 @@ workload_t* json_workload_proc_all(JSONNODE* node) {
 	return wl_head;
 }
 
+
+#define JSON_GET_VALIDATE_PARAM(iter, name, req_type)	\
+	({											\
+		iter = json_find(node, name);			\
+		if(iter == i_end) {						\
+			agent_error_msg(AE_MESSAGE_FORMAT,	\
+					"Failed to parse workload, missing parameter %s", name);	\
+			goto fail;							\
+		}										\
+		if(json_type(*iter) != req_type) {		\
+			agent_error_msg(AE_MESSAGE_FORMAT,	\
+					"Expected that " name " is " #req_type );	\
+			goto fail;							\
+		}										\
+	})
+
+#define SEARCH_OBJ(iter, type, search) 		\
+	({										\
+		type* obj = NULL;					\
+		char* name = json_as_string(*iter);	\
+		obj = search(name);					\
+		json_free(name);					\
+		if(obj == NULL) {					\
+			agent_error_msg(AE_INVALID_DATA,				\
+					"Invalid " #type " name %s", name);		\
+			goto fail;						\
+		}									\
+		obj;								\
+	});
+
+
+/**
+ * Process incoming workload in format
+ * {
+ * 		"module": "..."
+ * 		"threadpool": "...",
+ * 		"params": {}
+ * }
+ * and create workload. Called from agent context,
+ * so returns NULL in case of error and invokes agent_error_msg
+ * */
 workload_t* json_workload_proc(JSONNODE* node) {
-	JSONNODE_ITERATOR i_mod = json_find(node, "module");
-	JSONNODE_ITERATOR i_params = json_find(node, "params");
+	JSONNODE_ITERATOR i_mod = NULL;
+	JSONNODE_ITERATOR i_tp = NULL;
+	JSONNODE_ITERATOR i_params = NULL;
 	JSONNODE_ITERATOR i_end = json_end(node);
 
 	workload_t* wl = NULL;
 	module_t* mod = NULL;
-
 	tsload_module_t* tmod = NULL;
+	thread_pool_t* tp = NULL;
 
-	char* wl_name = json_name(node);
-	char* mod_name = NULL;
+	char* wl_name = NULL;
 
 	int ret;
 
-	if(strlen(wl_name) == 0) {
-		agent_error_msg(AE_MESSAGE_FORMAT,"Failed to parse workload, no name is defined");
-		goto fail;
-	}
-
 	logmsg(LOG_DEBUG, "Parsing workload %s", wl_name);
 
-	if(i_mod == i_end || i_params == i_end) {
-		agent_error_msg(AE_MESSAGE_FORMAT,"Failed to parse workload, missing parameter %s",
-						(i_mod == i_end) ? "module" :
-						(i_params == i_end) ? "params" : "");
-		goto fail;
-	}
+	/* Get threadpool and module from incoming message
+	 * and find corresponding objects*/
+	JSON_GET_VALIDATE_PARAM(i_mod, "module", JSON_STRING);
+	JSON_GET_VALIDATE_PARAM(i_tp, "threadpool", JSON_STRING);
+	JSON_GET_VALIDATE_PARAM(i_params, "params", JSON_NODE);
 
-	if(json_type(*i_mod) != JSON_STRING) {
-		agent_error_msg(AE_MESSAGE_FORMAT,"Expected that module is JSON_STRING");
-		goto fail;
-	}
+	mod = SEARCH_OBJ(i_mod, module_t, mod_search);
+	tp = SEARCH_OBJ(i_tp, thread_pool_t, tp_search);
 
-	if(json_type(*i_params) != JSON_NODE) {
-		agent_error_msg(AE_MESSAGE_FORMAT, "Expected that params is JSON_NODE");
-		goto fail;
-	}
-
-	mod_name = json_as_string(*i_mod);
-	mod = mod_search(mod_name);
-	json_free(mod_name);
-
-	if(mod == NULL) {
-		agent_error_msg(AE_INVALID_DATA, "Invalid module name %s", mod_name);
-		goto fail;
-	}
-
+	/* Save tmod interface */
 	assert(mod->mod_helper != NULL);
 	tmod = (tsload_module_t*) mod->mod_helper;
 
-	wl = wl_create(wl_name, mod);
+	/* Get workload's name */
+	wl_name = json_name(node);
 
-	ret = json_wlparam_proc_all(*i_params, tmod->mod_params, wl->wl_params);
-
-	if(ret != WLPARAM_JSON_OK) {
-		/*FIXME: error handling*/
+	if(strlen(wl_name) == 0) {
+		agent_error_msg(AE_MESSAGE_FORMAT,"Failed to parse workload, no name was defined");
 		goto fail;
 	}
 
-	json_free(wl_name);
+	if(wl_search(wl_name) != NULL) {
+		agent_error_msg(AE_INVALID_DATA, "Workload %s already exists %s", wl_name);
+		goto fail;
+	}
+
+	/* Create workload */
+	wl = wl_create(wl_name, mod, tp);
+
+	/* Process params from i_params to wl_params, where mod_params contains
+	 * parameters descriptions (see wlparam) */
+	ret = json_wlparam_proc_all(*i_params, tmod->mod_params, wl->wl_params);
+
+	if(ret != WLPARAM_JSON_OK) {
+		goto fail;
+	}
 
 	return wl;
 
 fail:
-	json_free(wl_name);
+	if(wl_name)
+		json_free(wl_name);
 
 	if(wl)
-		wl_free(wl);
+		wl_destroy(wl);
 
 	return NULL;
+}
+
+int wl_init(void) {
+	hash_map_init(&workload_hash_map, "workload_hash_map");
+
+	return 0;
+}
+
+void wl_fini(void) {
+	hash_map_destroy(&workload_hash_map);
 }

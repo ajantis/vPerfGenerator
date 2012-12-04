@@ -10,6 +10,11 @@
 
 #include <wlparam.h>
 
+enum dummy_test {
+	DUMMY_READ,
+	DUMMY_WRITE
+};
+
 struct dummy_workload {
 	wlp_size_t file_size;
 	wlp_size_t block_size;
@@ -20,6 +25,9 @@ struct dummy_workload {
 	wlp_bool_t	 sparse;
 
 	int	fd;
+
+	enum dummy_test test_type;
+
 	void* block;
 };
 

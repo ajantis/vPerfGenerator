@@ -25,6 +25,8 @@ int tsload_mod_helper(module_t* mod) {
 	tmod->mod_wl_config = MOD_LOAD_SYMBOL(mod_wl_config_func, mod, "mod_workload_config", flag);
 	tmod->mod_wl_unconfig = MOD_LOAD_SYMBOL(mod_wl_config_func, mod, "mod_workload_unconfig", flag);
 
+	tmod->mod_run_request = MOD_LOAD_SYMBOL(mod_run_request_func, mod, "mod_run_request", flag);
+
 	if(flag) {
 		mp_free(tmod);
 

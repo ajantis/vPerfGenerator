@@ -10,6 +10,7 @@
 
 #include <threads.h>
 #include <mempool.h>
+#include <workload.h>
 #include <modules.h>
 #include <loadagent.h>
 #include <threadpool.h>
@@ -49,6 +50,7 @@ struct subsystem subsys[] = {
 	SUBSYSTEM("threads", threads_init, threads_fini),
 	SUBSYSTEM("log", log_init, log_fini),
 	SUBSYSTEM("modules", load_modules, unload_modules),
+	SUBSYSTEM("workload", wl_init, wl_fini),
 	SUBSYSTEM("threadpool", tp_init, tp_fini),
 	SUBSYSTEM("agent", agent_init, agent_fini)
 };
