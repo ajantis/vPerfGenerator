@@ -8,6 +8,7 @@
 #include <hashmap.h>
 #include <syncqueue.h>
 #include <client.h>
+#include <atomic.h>
 
 #include <libjson.h>
 
@@ -35,7 +36,7 @@ char clnt_host[CLNTHOSTLEN] = "localhost";
 struct sockaddr_in clnt_sa;
 
 /* Message unique identifier */
-static unsigned clnt_msg_id = 0;
+static atomic_t clnt_msg_id = 0;
 
 /* Threads and it's flags */
 int clnt_connected = FALSE;
@@ -71,7 +72,7 @@ DECLARE_HASH_MAP(hdl_hashmap, clnt_msg_handler_t, CLNTMHTABLESIZE, mh_msg_id, mh
 int clnt_send(JSONNODE* node);
 
 static clnt_msg_handler_t* clnt_create_msg() {
-	unsigned msg_id = __sync_fetch_and_add(&clnt_msg_id, 1);
+	unsigned msg_id = (unsigned) atomic_inc_ret(&clnt_msg_id, 1);
 	clnt_msg_handler_t* hdl = mp_malloc(sizeof(clnt_msg_handler_t));
 
 	event_init(&hdl->mh_event, "clnt_msg_handler");

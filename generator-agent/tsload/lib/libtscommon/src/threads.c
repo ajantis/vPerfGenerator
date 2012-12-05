@@ -176,6 +176,7 @@ void t_destroy(thread_t* thread) {
  * @param tv - time interwal
  * */
 void t_get_wait_time(thread_t* t, struct timeval* tv) {
+	/*FIXME: Use tstime*/
 	gettimeofday(tv, NULL);
 
 	if (t->t_block_time.tv_usec < tv->tv_usec) {

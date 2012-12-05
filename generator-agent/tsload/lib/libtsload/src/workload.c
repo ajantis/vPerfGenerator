@@ -51,7 +51,7 @@ workload_t* wl_create(const char* name, module_t* mod, thread_pool_t* tp) {
 	tsload_module_t* tmod = NULL;
 
 	char sq_steps_name[SQUEUENAMELEN];
-	char sq_requests_name[SQUEUENAMELEN];
+	char mtx_requests_name[TMUTEXNAMELEN];
 
 	assert(mod->mod_helper != NULL);
 
@@ -66,6 +66,9 @@ workload_t* wl_create(const char* name, module_t* mod, thread_pool_t* tp) {
 
 	wl->wl_tp = tp;
 
+	wl->wl_current_rq = 0;
+	wl->wl_current_step = 0;
+
 	wl->wl_next = NULL;
 	wl->wl_tp_next = NULL;
 	wl->wl_hm_next = NULL;
@@ -75,10 +78,11 @@ workload_t* wl_create(const char* name, module_t* mod, thread_pool_t* tp) {
 	wl->wl_is_configured = FALSE;
 
 	snprintf(sq_steps_name, SQUEUENAMELEN, "wl-%s-steps", name);
-	snprintf(sq_requests_name, SQUEUENAMELEN, "wl-%s-rqs", name);
+	snprintf(sq_requests_name, TMUTEXNAMELEN, "wl-%s-rqs", name);
 
 	squeue_init(&wl->wl_steps, sq_steps_name);
-	squeue_init(&wl->wl_requests, sq_requests_name);
+
+	mutex_init(&wl->wl_requests, mtx_requests_name);
 
 	hash_map_insert(&workload_hash_map, wl);
 
@@ -92,7 +96,8 @@ void wl_destroy(workload_t* wl) {
 	hash_map_remove(&workload_hash_map, wl);
 
 	squeue_destroy(&wl->wl_steps, mp_free);
-	squeue_destroy(&wl->wl_requests, mp_free);
+
+	mutex_destroy(&wl->wl_requests);
 
 	mp_free(wl->wl_params);
 
@@ -173,6 +178,26 @@ void wl_config(workload_t* wl) {
 
 void wl_unconfig(workload_t* wl) {
 	wl->wl_ts_mod->mod_wl_unconfig(wl);
+}
+
+/**
+ * Create request structure, append it to requests queue, initialize
+ *
+ * @param wl workload for request
+ * @param thread_id id of thread that will execute thread
+ * */
+request_t* wl_create_request(workload_t* wl, int thread_id) {
+	request_t* rq = (request_t*) mp_malloc(sizeof(request_t));
+
+	rq->rq_step = wl->wl_current_step;
+	rq->rq_id = wl->wl_current_rq++;
+
+	rq->rq_thread_id = thread_id;
+
+	rq->rq_flags = 0;
+
+	rq->rq_workload = wl;
+	rq->rq_next = NULL;
 }
 
 workload_t* json_workload_proc_all(JSONNODE* node) {

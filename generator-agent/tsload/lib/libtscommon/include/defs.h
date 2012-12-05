@@ -22,5 +22,6 @@
 #define NS 		1
 #define US		1000 * NS
 #define MS		1000 * US
+#define SEC		1000 * MS
 
 #endif /* DEFS_H_ */
