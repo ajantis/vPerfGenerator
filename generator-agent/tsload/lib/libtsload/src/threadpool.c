@@ -71,6 +71,8 @@ thread_pool_t* tp_create(unsigned num_threads, const char* name, uint64_t quantu
 	tp->tp_is_dead = FALSE;
 	tp->tp_wl_changed = FALSE;
 
+	tp->tp_wl_count = 0;
+
 	/*Initialize objects*/
 	list_head_init(&tp->tp_wl_head, "tp-%s", name);
     event_init(&tp->tp_event, "tp-%s", name);
