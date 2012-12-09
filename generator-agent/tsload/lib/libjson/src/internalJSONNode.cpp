@@ -188,6 +188,8 @@ internalJSONNode::~internalJSONNode(void) json_nothrow {
 void internalJSONNode::FetchNumber(void) const json_nothrow {
     #ifdef JSON_STRICT
 		_value._number = NumberToString::_atof(_string.c_str());
+		/*FIXME: should be JSON_STRICT implementation*/
+		_value._integer = (json_int_t) std::atoll(_string.c_str());
     #else 
 	   #ifdef JSON_UNICODE
 		  const size_t len = _string.length();
@@ -214,8 +216,10 @@ void internalJSONNode::FetchNumber(void) const json_nothrow {
 		  #endif 
 		  temp.ptr[res] = '\0';
 		  _value._number = (json_number)std::atof(temp.ptr);
+		  _value._integer = (json_int_t) std::atoll(temp.ptr);
 	   #else
 		  _value._number = (json_number)std::atof(_string.c_str());
+		  _value._integer = (json_int_t) std::atoll(_string.c_str());
 	   #endif
     #endif
     #if((!defined(JSON_CASTABLE) && defined(JSON_LESS_MEMORY)) && !defined(JSON_WRITE_PRIORITY))
@@ -540,8 +544,9 @@ internalJSONNode::operator bool() const json_nothrow {
 		  }
 	   #endif /*<- */
 	   JSON_ASSERT(type() == JSON_NUMBER, json_global(ERROR_UNDEFINED) + JSON_TEXT("as_int"));
-	   JSON_ASSERT(_value._number == (json_number)((json_int_t)_value._number), json_string(JSON_TEXT("as_int will truncate ")) + _string);
-	   return (json_int_t)_value._number;
+	   /* JSON_ASSERT(_value._integer == (json_number)((json_int_t)_value._integer), json_string(JSON_TEXT("as_int will truncate ")) + _string); */
+
+	   return _value._integer;
     }
 #else /*<- else */
     #ifndef JSON_ISO_STRICT /*-> !JSON_ISO_STRICT */

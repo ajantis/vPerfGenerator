@@ -72,7 +72,7 @@ DECLARE_HASH_MAP(hdl_hashmap, clnt_msg_handler_t, CLNTMHTABLESIZE, mh_msg_id, mh
 int clnt_send(JSONNODE* node);
 
 static clnt_msg_handler_t* clnt_create_msg() {
-	unsigned msg_id = (unsigned) atomic_inc_ret(&clnt_msg_id, 1);
+	unsigned msg_id = (unsigned) atomic_inc_ret(&clnt_msg_id);
 	clnt_msg_handler_t* hdl = mp_malloc(sizeof(clnt_msg_handler_t));
 
 	event_init(&hdl->mh_event, "clnt_msg_handler");
@@ -303,7 +303,7 @@ void* clnt_recv_thread(void* arg) {
 	while(!clnt_finished && clnt_connected) {
 		poll(&sock_poll, 1, CLNT_RECV_TIMEOUT);
 
-		/*XXX: poll return events on disconnect are platform-specific*/
+		/*FIXME: poll return events on disconnect are platform-specific*/
 		if(!(sock_poll.revents & POLLIN))
 			continue;
 
@@ -405,6 +405,7 @@ void clnt_add_response(clnt_response_type_t type, JSONNODE* node) {
 		 * than caller reports an internal error just to
 		 * be sure */
 		json_delete(node);
+		return;
 	}
 
 	msg->m_response_type = type;
@@ -519,7 +520,7 @@ void* clnt_connect_thread(void* arg) {
 			clnt_connected = TRUE;
 
 			/*Restart receive thread*/
-			t_init(&t_client_receive, NULL, "clnt_recv_thread", clnt_recv_thread);
+			t_init(&t_client_receive, NULL, clnt_recv_thread, "clnt_recv_thread");
 
 			agent_hello();
 		}
@@ -540,8 +541,8 @@ int clnt_init() {
 
 	squeue_init(&proc_queue, "proc_queue");
 
-	t_init(&t_client_connect, NULL, "clnt_conn_thread", clnt_connect_thread);
-	t_init(&t_client_process, NULL, "clnt_proc_thread", clnt_proc_thread);
+	t_init(&t_client_connect, NULL, clnt_connect_thread, "clnt_conn_thread");
+	t_init(&t_client_process, NULL, clnt_proc_thread, "clnt_proc_thread");
 
 	return 0;
 }

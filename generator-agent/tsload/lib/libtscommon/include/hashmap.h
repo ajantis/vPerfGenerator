@@ -20,24 +20,25 @@ typedef struct {
 	ptrdiff_t hm_off_key;
 	ptrdiff_t hm_off_next;
 
-	unsigned (*hm_hash_key)(void* key);
-	int (*hm_compare)(void* key1, void* key2);
+	unsigned (*hm_hash_key)(const void* key);
+	int (*hm_compare)(const void* key1, const void* key2);
 } hashmap_t;
 
 void hash_map_init(hashmap_t* hm, const char* name);
 void  hash_map_insert(hashmap_t* hm, void* object);
 void  hash_map_remove(hashmap_t* hm, void* object);
-void* hash_map_find(hashmap_t* hm, void* key);
+void* hash_map_find(hashmap_t* hm, const void* key);
 void hash_map_walk(hashmap_t* hm, void (*func)(void* object));
 void hash_map_destroy(hashmap_t* hm);
 
 #define DECLARE_HASH_MAP(name, type, size, key_field, next_field, hm_hash_body, hm_compare_body) \
 	static int 										\
-	hm_compare_##name(void* key1, void* key2) 		\
+	hm_compare_##name(const void* key1, 			\
+					  const void* key2) 			\
 	hm_compare_body								    \
 												    \
 	static unsigned									\
-	hm_hash_##name(void* key)						\
+	hm_hash_##name(const void* key)					\
 	hm_hash_body									\
 													\
 	static type* hm_heads_##name[size];				\

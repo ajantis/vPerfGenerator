@@ -12,22 +12,21 @@
 
 #define AGENTMAXARGC	16
 
-typedef void* (*agent_proc_func_t)(JSONNODE* arg);
-typedef JSONNODE* (*agent_method_func_t)(void* argv[]);
+typedef void (*agent_method_func_t)(JSONNODE* argv[]);
 
 typedef struct {
 	char* ad_name;
 
 	struct {
-		char* ad_arg_name;
-		agent_proc_func_t ad_arg_proc;
+		char* ada_name;
+		char ada_type;
 	} ad_args[AGENTMAXARGC];
 
 	agent_method_func_t ad_method;
 } agent_dispatch_t;
 
-#define ADT_ARGUMENT(name, proc) { .ad_arg_name = name, .ad_arg_proc = proc }
-#define ADT_LAST_ARG()  { .ad_arg_name = NULL }
+#define ADT_ARGUMENT(name, type) { .ada_name = name, .ada_type = type }
+#define ADT_LAST_ARG()  { .ada_name = NULL, .ada_type = JSON_NULL }
 #define ADT_LAST_METHOD() { .ad_name = NULL }
 
 typedef enum agent_errcode {

@@ -8,6 +8,7 @@
 #define LOG_SOURCE "load"
 #include <log.h>
 
+#include <list.h>
 #include <workload.h>
 
 #include <commands.h>
@@ -87,13 +88,16 @@ int wl_init() {
 int do_load() {
 	int err = LOAD_OK;
 	workload_t* wl = NULL;
+	list_head_t wl_list;
+
+	list_head_init(&wl_list, "wl_list");
 
 	if((err = wl_init()) != LOAD_OK)
 		return err;
 
-	wl = json_workload_proc_all(wl_node);
+	json_workload_proc_all(wl_node, &wl_list);
 
-	if(wl == NULL)
+	if(list_empty(&wl_list))
 		return LOAD_ERR_JSON_PROC;
 
 	wl_config(wl);

@@ -20,13 +20,11 @@ struct dummy_workload {
 	wlp_size_t block_size;
 
 	wlp_string_t path[512];
-	wlp_string_t test[32];
+	wlp_strset_t test;
 
 	wlp_bool_t	 sparse;
 
 	int	fd;
-
-	enum dummy_test test_type;
 
 	void* block;
 };

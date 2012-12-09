@@ -41,10 +41,10 @@ LDFLAGS = -L$(BUILDDIR)/lib $($(TYPE)_LDFLAGS)
 CFLAGS += -g
 CFLAGS += -DTS_LOCK_DEBUG
 
-CFLAGS += -DJSON_DEBUG -DJSON_MEMORY_CALLBACKS
+CFLAGS += -DJSON_DEBUG -DJSON_MEMORY_CALLBACKS -DJSON_INT_TYPE="long long"
 
 # Supress "unused" warnings
-CFLAGS += -Wno-unused-label -Wno-unused-variable
+CFLAGS += -Wno-unused-label -Wno-unused-variable -Wno-unused-function
 
 # Be thread-safe!
 CFLAGS += -pthread

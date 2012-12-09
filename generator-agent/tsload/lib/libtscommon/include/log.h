@@ -31,6 +31,6 @@ int logmsg_src(int severity, const char* source, const char* format, ...)
 	__attribute__ ((format (printf, 3, 4)))		/*For GCC printf warnings*/;
 
 #define logmsg(severity, ...) \
-	logmsg_src(severity, LOG_SOURCE, __VA_ARGS__)
+	logmsg_src((severity), LOG_SOURCE, __VA_ARGS__)
 
 #endif /* LOG_H_ */

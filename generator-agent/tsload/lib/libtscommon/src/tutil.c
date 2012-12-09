@@ -8,15 +8,21 @@
 #include <threads.h>
 #include <defs.h>
 
+#include <stdarg.h>
 #include <string.h>
+#include <stdio.h>
 
 #include <errno.h>
 
-void event_init(thread_event_t* event, const char* name) {
+void event_init(thread_event_t* event, const char* namefmt, ...) {
+	va_list va;
+
 	pthread_mutex_init(&event->te_mutex, NULL);
 	pthread_cond_init (&event->te_cv, NULL);
 
-	strncpy(event->te_name, name, TEVENTNAMELEN);
+	va_start(va, namefmt);
+	vsnprintf(event->te_name, TEVENTNAMELEN, namefmt, va);
+	va_end(va);
 }
 
 void event_wait_unlock(thread_event_t* event, thread_mutex_t* mutex) {
@@ -69,21 +75,39 @@ void event_destroy(thread_event_t* event) {
 	pthread_cond_destroy(&event->te_cv);
 }
 
-void mutex_init(thread_mutex_t* mutex, const char* name) {
-	pthread_mutex_init(&mutex->tm_mutex, NULL);
+static void __mutex_init(thread_mutex_t* mutex,
+						 pthread_mutexattr_t* attr,
+					     const char* namefmt, va_list va) {
+	pthread_mutex_init(&mutex->tm_mutex, attr);
 
-	strncpy(mutex->tm_name, name, TEVENTNAMELEN);
-
-#ifdef TS_LOCK_DEBUG
-	mutex->tm_is_locked = FALSE;
-#endif
+	vsnprintf(mutex->tm_name, TMUTEXNAMELEN, namefmt, va);
 }
+
+void mutex_init(thread_mutex_t* mutex, const char* namefmt, ...) {
+	va_list va;
+
+	va_start(va, namefmt);
+	__mutex_init(mutex, NULL, namefmt, va);
+	va_end(va);
+
+
+}
+
+void rmutex_init(thread_mutex_t* mutex, const char* namefmt, ...) {
+	va_list va;
+	pthread_mutexattr_t mta;
+
+	pthread_mutexattr_settype(&mta, PTHREAD_MUTEX_RECURSIVE);
+
+	va_start(va, namefmt);
+	__mutex_init(mutex, &mta, namefmt, va);
+	va_end(va);
+}
+
 
 void mutex_lock(thread_mutex_t* mutex) {
 #ifdef TS_LOCK_DEBUG
 	thread_t* t = NULL;
-
-	mutex->tm_is_locked = TRUE;
 
 	t = t_self();
 
@@ -106,10 +130,6 @@ void mutex_lock(thread_mutex_t* mutex) {
 
 void mutex_unlock(thread_mutex_t* mutex) {
 	pthread_mutex_unlock(&mutex->tm_mutex);
-
-#ifdef TS_LOCK_DEBUG
-	mutex->tm_is_locked = FALSE;
-#endif
 }
 
 

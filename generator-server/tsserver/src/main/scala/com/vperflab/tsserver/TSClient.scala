@@ -307,7 +307,7 @@ class TSClientReceiver[CI <: TSClientInterface](var channel: SocketChannel,
   
   var processor = new TSClientProcessor[CI](client)
   
-  val traceDecode = true
+  val traceDecode = false
   
   /**
    * Helper to decode ByteBuffer into JSON string

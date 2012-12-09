@@ -11,6 +11,7 @@ SRC = hashmap.c \
 	  modules.c \
 	  syncqueue.c \
 	  mempool.c \
+	  tstime.c	\
 	  agent.c
 	  
 OBJ = $(SRC:.c=.o)

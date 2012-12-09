@@ -10,6 +10,7 @@
 #include <threads.h>
 #include <syncqueue.h>
 
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -21,17 +22,15 @@
  * @param sq - queue
  * @param name - name of queue (for debugging purposes)
  */
-void squeue_init(squeue_t* sq, const char* name) {
-	char sq_event_name[TEVENTNAMELEN];
-	char sq_mutex_name[TMUTEXNAMELEN];
+void squeue_init(squeue_t* sq, const char* namefmt, ...) {
+	va_list va;
 
-	snprintf(sq_event_name, TEVENTNAMELEN, "%s.event", name);
-	snprintf(sq_mutex_name, TMUTEXNAMELEN, "%s.mutex", name);
+	va_start(va, namefmt);
+	vsnprintf(sq->sq_name, SQUEUENAMELEN, namefmt, va);
+	va_end(va);
 
-	mutex_init(&sq->sq_mutex, sq_mutex_name);
-	event_init(&sq->sq_event, sq_event_name);
-
-	strncpy(sq->sq_name, name, SQUEUENAMELEN);
+	mutex_init(&sq->sq_mutex, "sq-%s", sq->sq_name);
+	event_init(&sq->sq_event, "sq-%s", sq->sq_name);
 
 	sq->sq_head = NULL;
 	sq->sq_tail = NULL;

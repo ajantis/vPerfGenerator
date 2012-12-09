@@ -10,6 +10,7 @@
 
 #include <stdint.h>
 
+#include <defs.h>
 #include <sys/time.h>
 #include <pthread.h>
 #include <unistd.h>
@@ -94,10 +95,7 @@ typedef struct {
 
 	pthread_mutex_t	tm_mutex;
 
-#ifdef TS_LOCK_DEBUG
-	/*See t_self() comment*/
-	int 			tm_is_locked;
-#endif
+	int				tm_is_recursive;
 } thread_mutex_t;
 
 typedef struct thread {
@@ -129,12 +127,13 @@ typedef struct thread {
 	struct thread*	t_pool_next;	/*< Next thread in pool*/
 } thread_t;
 
-void mutex_init(thread_mutex_t* mutex, const char* name);
+void mutex_init(thread_mutex_t* mutex, const char* namefmt, ...);
+void rmutex_init(thread_mutex_t* mutex, const char* namefmt, ...);
 void mutex_lock(thread_mutex_t* mutex);
 void mutex_unlock(thread_mutex_t* mutex);
 void mutex_destroy(thread_mutex_t* mutex);
 
-void event_init(thread_event_t* event, const char* name);
+void event_init(thread_event_t* event, const char* namefmt, ...);
 void event_wait_unlock(thread_event_t* event, thread_mutex_t* mutex);
 void event_wait(thread_event_t* event);
 void event_notify_one(thread_event_t* event);
@@ -143,7 +142,9 @@ void event_destroy(thread_event_t* event);
 
 thread_t* t_self();
 
-void t_init(thread_t* thread, void* arg, const char* name, void* (*start)(void*));
+void t_init(thread_t* thread, void* arg,
+		void* (*start)(void*),
+		const char* namefmt, ...);
 thread_t* t_post_init(thread_t* t);
 void t_exit(thread_t* t);
 void t_destroy(thread_t* thread);

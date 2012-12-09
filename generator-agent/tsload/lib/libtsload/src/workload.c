@@ -9,6 +9,7 @@
 #include <log.h>
 
 #include <defs.h>
+#include <list.h>
 #include <hashmap.h>
 #include <mempool.h>
 #include <modules.h>
@@ -17,6 +18,7 @@
 #include <workload.h>
 #include <modtsload.h>
 #include <loadagent.h>
+#include <tstime.h>
 
 #include <libjson.h>
 
@@ -29,10 +31,10 @@
 DECLARE_HASH_MAP(workload_hash_map, workload_t, WLHASHSIZE, wl_name, wl_hm_next,
 	{
 		char* p = (char*) key;
-		unsigned hash;
+		unsigned hash = 0;
 
 		while(*p != 0)
-			hash += *p;
+			hash += *p++;
 
 		return hash & WLHASHMASK;
 	},
@@ -50,9 +52,6 @@ workload_t* wl_create(const char* name, module_t* mod, thread_pool_t* tp) {
 	workload_t* wl = (workload_t*) mp_malloc(sizeof(workload_t));
 	tsload_module_t* tmod = NULL;
 
-	char sq_steps_name[SQUEUENAMELEN];
-	char mtx_requests_name[TMUTEXNAMELEN];
-
 	assert(mod->mod_helper != NULL);
 
 	tmod = (tsload_module_t*) mod->mod_helper;
@@ -67,24 +66,26 @@ workload_t* wl_create(const char* name, module_t* mod, thread_pool_t* tp) {
 	wl->wl_tp = tp;
 
 	wl->wl_current_rq = 0;
-	wl->wl_current_step = 0;
+	wl->wl_current_step = -1;
+	wl->wl_last_step = -1;
 
-	wl->wl_next = NULL;
-	wl->wl_tp_next = NULL;
 	wl->wl_hm_next = NULL;
+
+	list_node_init(&wl->wl_chain);
+	list_node_init(&wl->wl_tp_node);
 
 	wl->wl_params = mp_malloc(tmod->mod_params_size);
 
 	wl->wl_is_configured = FALSE;
 
-	snprintf(sq_steps_name, SQUEUENAMELEN, "wl-%s-steps", name);
-	snprintf(sq_requests_name, TMUTEXNAMELEN, "wl-%s-rqs", name);
+	wl->wl_is_started = FALSE;
+	wl->wl_start_time = TS_TIME_MAX;
 
-	squeue_init(&wl->wl_steps, sq_steps_name);
-
-	mutex_init(&wl->wl_requests, mtx_requests_name);
+	mutex_init(&wl->wl_rq_mutex, "wl-%s-rq", name);
 
 	hash_map_insert(&workload_hash_map, wl);
+
+	tp_attach(tp, wl);
 
 	return wl;
 }
@@ -95,26 +96,22 @@ workload_t* wl_create(const char* name, module_t* mod, thread_pool_t* tp) {
 void wl_destroy(workload_t* wl) {
 	hash_map_remove(&workload_hash_map, wl);
 
-	squeue_destroy(&wl->wl_steps, mp_free);
+	list_del(&wl->wl_chain);
 
-	mutex_destroy(&wl->wl_requests);
+	mutex_destroy(&wl->wl_rq_mutex);
 
 	mp_free(wl->wl_params);
-
 	mp_free(wl);
 }
 
 /**
  * wl_destroy_all - free memory for chain of workload objects
  * */
-void wl_destroy_all(workload_t* wl_head) {
-	workload_t* wl = wl_head;
+void wl_destroy_all(list_head_t* wl_head) {
+	workload_t *wl, *wl_tmp;
 
-	while(wl) {
-		wl_head = wl;
-		wl = wl->wl_next;
-
-		wl_destroy(wl_head);
+	list_for_each_entry_safe(wl, wl_tmp, wl_head, wl_chain) {
+		wl_destroy(wl);
 	}
 }
 
@@ -125,28 +122,44 @@ workload_t* wl_search(const char* name) {
 /**
  * Notify server of workload configuring progress.
  *
+ * done is presented in percent. If status is WLS_FAIL - it would be set to -1,
+ * if status is WLS_SUCCESS or WLS_FINISHED - it would be set to 100
+ *
  * @param wl configuring workload
- * @param status configuration status
+ * @param status configuration/execution status
  * @param done configuration progress (in percent)
  * @param format message format string
  */
 void wl_notify(workload_t* wl, wl_status_t status, int done, char* format, ...) {
-	const char* status_msg[] = {"configuring", "success", "fail"};
-
 	char config_msg[512];
 	va_list args;
 
-	/* 146% and -5% are awkward */
-	if(done < 0)
-		done = 0;
-	if(done > 100)
+	switch(status) {
+	case WLS_CONFIGURING:
+		/* 146% and -5% are awkward */
+		if(done < 0) done = 0;
+		if(done > 100) done = 100;
+	break;
+	case WLS_FAIL:
+		done = -1;
+	break;
+	case WLS_SUCCESS:
+	case WLS_FINISHED:
 		done = 100;
+	break;
+	default:
+		assert(status == WLS_CONFIGURING);
+	break;
+	}
 
 	va_start(args, format);
 	vsnprintf(config_msg, 512, format, args);
 	va_end(args);
 
-	agent_workload_status(wl->wl_name, status_msg[status], done, config_msg);
+	logmsg((status == WLS_FAIL)? LOG_WARN : LOG_INFO,
+			"Workload %s status: %s", wl->wl_name, config_msg);
+
+	agent_workload_status(wl->wl_name, status, done, config_msg);
 }
 
 void* wl_config_thread(void* arg) {
@@ -165,19 +178,115 @@ void* wl_config_thread(void* arg) {
 
 	wl->wl_is_configured = TRUE;
 
+	wl_notify(wl, WLS_SUCCESS, 100, "Successfully configured workload %s", wl->wl_name);
+
+
+
 THREAD_END:
 	THREAD_FINISH(arg);
 }
 
 void wl_config(workload_t* wl) {
-	char t_name[TNAMELEN];
-	snprintf(t_name, TNAMELEN, "wl-cfg-%s", wl->wl_name);
-
-	t_init(&wl->wl_cfg_thread, (void*) wl, t_name, wl_config_thread);
+	t_init(&wl->wl_cfg_thread, (void*) wl, wl_config_thread,
+			"wl-cfg-%s", wl->wl_name);
 }
 
 void wl_unconfig(workload_t* wl) {
 	wl->wl_ts_mod->mod_wl_unconfig(wl);
+}
+
+int wl_is_started(workload_t* wl) {
+	if(wl->wl_is_started)
+		return TRUE;
+
+	if(tm_get_time() >= wl->wl_start_time) {
+		logmsg("Starting workload %s...", wl->wl_name);
+
+		wl->wl_is_started = TRUE;
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
+/**
+ * Provide number of requests for current step
+ *
+ * Responds to agent:
+ * 	- Error AE_INVALID_DATA if step_id is incorrect
+ * 	- Response { "success": true | false, "reason": "Reason" }
+ *
+ * @param wl workload
+ * @param step_id step id to be provided
+ * @param num_rqs number
+ *
+ * @return 0 if steps are saved, -1 if incorrect step provided or wl_requests is full
+ * */
+int wl_provide_step(workload_t* wl, long step_id, unsigned num_rqs) {
+	int ret = WL_STEP_OK;
+	long step_off = step_id & WLSTEPQMASK;
+
+	mutex_lock(&wl->wl_rq_mutex);
+
+	if((wl->wl_last_step - wl->wl_current_step) == WLSTEPQSIZE) {
+		ret = WL_STEP_QUEUE_FULL;
+		goto done;
+	}
+
+	if(step_id != (wl->wl_last_step + 1)) {
+		/*Provided incorrect step*/
+		agent_error_msg(AE_INVALID_DATA, "Step %ld is not correct, last step was %ld!", step_id, wl->wl_last_step);
+
+		ret = WL_STEP_INVALID;
+		goto done;
+	}
+
+	wl->wl_last_step = step_id;
+	wl->wl_rqs_per_step[step_off] = num_rqs;
+
+done:
+	mutex_unlock(&wl->wl_rq_mutex);
+
+	return ret;
+}
+
+/**
+ * Proceed to next step, and return number of requests in it
+ *
+ * @param wl processing workload
+ * @param p_num_rqs variable where number of requests is saved. Cannot be NULL
+ *
+ * @return 0 if operation successful or -1 if not steps on queue
+ * */
+int wl_advance_step(workload_step_t* step) {
+	int ret = 0;
+	long step_off;
+
+	workload_t* wl = NULL;
+
+	assert(step != NULL);
+
+	wl = step->wls_workload;
+
+	mutex_lock(&wl->wl_rq_mutex);
+
+	wl->wl_current_step++;
+
+	if(wl->wl_current_step > wl->wl_last_step) {
+		/* No steps on queue */
+		logmsg(LOG_WARN, "No steps on queue %s, step #%d!", wl->wl_name, wl->wl_current_step);
+
+		ret = -1;
+		goto done;
+	}
+
+	step_off = wl->wl_current_step  & WLSTEPQMASK;
+	step->wls_rq_count = wl->wl_rqs_per_step[step_off];
+
+done:
+	mutex_unlock(&wl->wl_rq_mutex);
+
+	return ret;
 }
 
 /**
@@ -197,13 +306,46 @@ request_t* wl_create_request(workload_t* wl, int thread_id) {
 	rq->rq_flags = 0;
 
 	rq->rq_workload = wl;
-	rq->rq_next = NULL;
+
+	rq->rq_start_time = 0;
+	rq->rq_end_time = 0;
+
+	list_node_init(&rq->rq_node);
+
+	return rq;
 }
 
-workload_t* json_workload_proc_all(JSONNODE* node) {
+/**
+ * Run request for execution
+ */
+void wl_run_request(request_t* rq) {
+	int ret;
+	workload_t* wl = rq->rq_workload;
+
+	rq->rq_flags |= RQF_STARTED;
+
+	rq->rq_start_time = tm_get_time();
+	ret = wl->wl_ts_mod->mod_run_request(rq);
+	rq->rq_end_time = tm_get_time();
+
+	/* FIXME: on-time condition*/
+	if(rq->rq_end_time < (wl->wl_tp->tp_time + wl->wl_tp->tp_quantum))
+		rq->rq_flags |= RQF_ONTIME;
+
+	if(ret == 0)
+		rq->rq_flags |= RQF_SUCCESS;
+
+	rq->rq_flags |= RQF_FINISHED;
+}
+
+void wl_request_free(request_t* rq) {
+	mp_free(rq);
+}
+
+void json_workload_proc_all(JSONNODE* node, list_head_t* wl_list) {
 	JSONNODE_ITERATOR iter = json_begin(node),
 			          end = json_end(node);
-	workload_t* wl, *wl_head = NULL, *wl_last = NULL;
+	workload_t* wl;
 
 	while(iter != end) {
 		wl = json_workload_proc(*iter);
@@ -213,22 +355,14 @@ workload_t* json_workload_proc_all(JSONNODE* node) {
 		 * free all workloads that are already parsed and return NULL*/
 		if(wl == NULL) {
 			logmsg(LOG_WARN, "Failed to process workloads from JSON, discarding all of them");
-			wl_destroy_all(wl_head);
+			wl_destroy_all(wl_list);
 
-			return NULL;
+			return;
 		}
 
 		/* Insert workload into workload chain */
-		if(wl_head == NULL) {
-			wl_last = wl_head = wl;
-		}
-		else {
-			wl_last->wl_next = wl;
-			wl_last = wl;
-		}
+		list_add_tail(&wl->wl_chain, wl_list);
 	}
-
-	return wl_head;
 }
 
 
@@ -287,8 +421,6 @@ workload_t* json_workload_proc(JSONNODE* node) {
 
 	int ret;
 
-	logmsg(LOG_DEBUG, "Parsing workload %s", wl_name);
-
 	/* Get threadpool and module from incoming message
 	 * and find corresponding objects*/
 	JSON_GET_VALIDATE_PARAM(i_mod, "module", JSON_STRING);
@@ -304,6 +436,7 @@ workload_t* json_workload_proc(JSONNODE* node) {
 
 	/* Get workload's name */
 	wl_name = json_name(node);
+	logmsg(LOG_DEBUG, "Parsing workload %s", wl_name);
 
 	if(strlen(wl_name) == 0) {
 		agent_error_msg(AE_MESSAGE_FORMAT,"Failed to parse workload, no name was defined");

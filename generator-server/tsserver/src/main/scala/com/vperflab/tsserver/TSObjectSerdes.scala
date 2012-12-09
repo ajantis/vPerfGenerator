@@ -294,7 +294,9 @@ object TSObjectSerializer extends TSObjectSerdes {
     return Map(fieldName -> className) ++ objMap 
   }
   
-  def doSerialize(obj: TSObject) : Map[String, Any] = {
-    return serdes(obj, obj.getClass()).asInstanceOf[Map[String, Any]]
+  def doSerialize(obj: Any, klass: Class[_]) : Any = serdes(obj, klass)
+  
+  def doSerializeObject(obj: Any) : Map[String, Any] = {
+    return serdes(obj.asInstanceOf[TSObject], obj.getClass()).asInstanceOf[Map[String, Any]]
   }
 }

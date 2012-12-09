@@ -72,11 +72,10 @@ void agent_process_command(char* command, JSONNODE* n_msg) {
 	int i = 0, num_args = 0;
 
 	char* arg_name;
-	agent_proc_func_t arg_proc;
+	char arg_type;
 
+	JSONNODE* argv[AGENTMAXARGC];
 	JSONNODE* n_arg;
-	void* argv[AGENTMAXARGC];
-	JSONNODE* jargv[AGENTMAXARGC];
 
 	assert(agent_dispatch_table != NULL);
 
@@ -86,17 +85,11 @@ void agent_process_command(char* command, JSONNODE* n_msg) {
 			continue;
 		}
 
-		/* Process arguments. Incoming arguments are JSON_NODE with
-		 * subnodes which names are matching arguments names.
-		 *
-		 * Finds n_arg for each argument and saves result to jargv,
-		 * than process it if needed and saves result to argv. Argv
-		 * passed to method.
-		 *
-		 * arg_proc may allocate memory, so first we check arguments
-		 * than we process them */
+		/* Process arguments. Incoming n_msg is JSON_NODE with
+		 * subnodes which names are matching arguments names.*/
 		for(i = 0; i < AGENTMAXARGC; ++i) {
-			arg_name = method->ad_args[i].ad_arg_name;
+			arg_name = method->ad_args[i].ada_name;
+			arg_type = method->ad_args[i].ada_type;
 
 			if(arg_name == NULL) {
 				num_args = i + 1;
@@ -106,17 +99,14 @@ void agent_process_command(char* command, JSONNODE* n_msg) {
 			n_arg = json_get(n_msg, arg_name);
 
 			if(n_arg == NULL) {
-				agent_error_msg(AE_MESSAGE_FORMAT, "Missing argument %s!", arg_name);
-
-				return;
+				return agent_error_msg(AE_MESSAGE_FORMAT, "Missing argument %s!", arg_name);
 			}
 
-			jargv[i] = n_arg;
-		}
+			if(arg_type != JSON_NULL && json_type(n_arg) != arg_type) {
+				return agent_error_msg(AE_MESSAGE_FORMAT, "Invalid type of argument %s!", arg_name);
+			}
 
-		for(i = 0; i < num_args; ++i) {
-			arg_proc = method->ad_args[i].ad_arg_proc;
-			argv[i] = (void*) arg_proc ? arg_proc(jargv[i]) : jargv[i];
+			argv[i] = n_arg;
 		}
 
 		method->ad_method(argv);

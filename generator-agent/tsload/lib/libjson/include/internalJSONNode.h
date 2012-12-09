@@ -262,7 +262,10 @@ public:
     //the value of the json
     union value_union_t {
 	   bool _bool BITS(1);
-	   json_number _number;
+	   struct {
+		   json_number _number;
+		   json_int_t  _integer;
+	   };
 	   #ifdef JSON_LESS_MEMORY
 		  jsonChildren * Children;
 	   #endif

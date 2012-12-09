@@ -10,7 +10,7 @@
 
 #include <agent.h>
 
-void agent_workload_status(const char* wl_name, const char* status_msg, int done, const char* config_msg);
+void agent_workload_status(const char* wl_name, int status, int done, const char* config_msg);
 
 int agent_init(void);
 void agent_fini(void);

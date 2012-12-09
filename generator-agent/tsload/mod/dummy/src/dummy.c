@@ -114,17 +114,6 @@ int mod_workload_config(workload_t* wl) {
 		return -1;
 	}
 
-	if(strcmp(dummy->test, "read") == 0) {
-		dummy->test_type = DUMMY_READ;
-	}
-	else if(strcmp(dummy->test, "write") == 0) {
-		dummy->test_type = DUMMY_WRITE;
-	}
-	else {
-		/* Can't be: string sets are checked by wlparam */
-		return -1;
-	}
-
 	dummy->block = mp_malloc(dummy->block_size);
 	if(dummy->sparse) {
 		lseek(fd, dummy->file_size, SEEK_SET);
@@ -132,6 +121,8 @@ int mod_workload_config(workload_t* wl) {
 	else {
 		dummy_create_file(wl, fd, dummy);
 	}
+
+	dummy->fd = fd;
 
 	return 0;
 }
@@ -146,12 +137,12 @@ int mod_workload_unconfig(workload_t* wl) {
 	return 0;
 }
 
-int mod_run_request(workload_t* wl) {
-	struct dummy_workload* dummy = (struct dummy_workload*) wl->wl_params;
+int mod_run_request(request_t* rq) {
+	struct dummy_workload* dummy = (struct dummy_workload*) rq->rq_workload->wl_params;
 	int ret;
 
 	/* FIXME: read/writes to same buffer: need request context */
-	switch(dummy->test_type) {
+	switch(dummy->test) {
 	case DUMMY_READ:
 		ret = read(dummy->fd, dummy->block, dummy->block_size);
 		break;

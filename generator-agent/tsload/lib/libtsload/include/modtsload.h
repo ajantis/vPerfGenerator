@@ -13,9 +13,10 @@
 
 struct module;
 struct workload;
+struct request;
 
 typedef int (* mod_wl_config_func)(struct workload* wl);
-typedef int (* mod_run_request_func)(struct workload* wl);
+typedef int (* mod_run_request_func)(struct request* wl);
 
 typedef struct {
 	wlp_descr_t* mod_params;

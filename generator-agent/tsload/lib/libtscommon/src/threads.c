@@ -15,6 +15,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <stdarg.h>
 #include <sys/types.h>
 #include <sys/syscall.h>
 #include <sys/time.h>
@@ -47,30 +48,20 @@ DECLARE_HASH_MAP(thread_hash_map, thread_t, THASHSIZE, t_thread, t_next,
 
 /*End of thread_hash_map declaration*/
 
+pthread_key_t thread_key;
+
+static thread_key_destructor(void* key) {
+	/* threads are freed by their spawners so simply
+	 * do nothing*/
+}
+
 /**
  * returns pointer to current thread
- *
- * may return NULL in two cases:
- *    if current thread is not under management of threads (pthreads in particular)
- *    called when thread_hash_map.hm_mutex is already held
  *
  * Used to monitor mutex/event deadlock and starvation (see tutil.c)
  *  */
 thread_t* t_self() {
-	pthread_t tid = pthread_self();
-
-	/* XXX: oh, that's really awkward */
-
-	/* Sometimes mutex_lock called from context of thread routines,
-	 * i.e. when logging in t_dump_thread or hash_map_find (see below :) )
-	 *
-	 * If this happen, hash_map_find tries to lock hm->hm_mutex
-	 * and this causes deadlock. So return NULL if hm->hm_mutex is locking*/
-
-	if(thread_hash_map.hm_mutex.tm_is_locked)
-		return NULL;
-
-	return hash_map_find(&thread_hash_map, &tid);
+	return (thread_t*) pthread_getspecific(thread_key);
 }
 
 /*
@@ -85,11 +76,17 @@ int t_assign_id() {
 /*
  * Initialize and run thread
  * */
-void t_init(thread_t* thread, void* arg, const char* name, void* (*start)(void*)) {
+void t_init(thread_t* thread, void* arg,
+		void* (*start)(void*),
+		const char* namefmt, ...) {
+	va_list va;
+
 	thread->t_id = t_assign_id();
 	thread->t_local_id = 0;
 
-	strncpy(thread->t_name, name, TNAMELEN);
+	va_start(va, namefmt);
+	vsnprintf(thread->t_name, TNAMELEN, namefmt, va);
+	va_end(va);
 
 	pthread_attr_init(&thread->t_attr);
 	pthread_attr_setdetachstate(&thread->t_attr, PTHREAD_CREATE_JOINABLE);
@@ -104,7 +101,7 @@ void t_init(thread_t* thread, void* arg, const char* name, void* (*start)(void*)
 
 	thread->t_system_id = 0;
 
-	logmsg(LOG_DEBUG, "Created thread #%d '%s'", thread->t_id, name);
+	logmsg(LOG_DEBUG, "Created thread #%d '%s'", thread->t_id, thread->t_name);
 
 	pthread_create(&thread->t_thread,
 			       &thread->t_attr,
@@ -123,6 +120,8 @@ thread_t* t_post_init(thread_t* t) {
 	t->t_state = TS_RUNNABLE;
 
 	hash_map_insert(&thread_hash_map, t);
+
+	pthread_setspecific(thread_key, (void*) t);
 
 	return t;
 }
@@ -236,6 +235,8 @@ void t_dump_threads() {
 }
 
 int threads_init(void) {
+	pthread_key_create(&thread_key, thread_key_destructor);
+
 	hash_map_init(&thread_hash_map, "thread_hash_map");
 
 	return 0;
@@ -243,4 +244,6 @@ int threads_init(void) {
 
 void threads_fini(void) {
 	hash_map_destroy(&thread_hash_map);
+
+	pthread_key_delete(&thread_key);
 }

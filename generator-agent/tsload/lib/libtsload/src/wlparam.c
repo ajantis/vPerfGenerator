@@ -95,6 +95,53 @@ JSONNODE* json_wlparam_format_all(wlp_descr_t* wlp) {
 	return node;
 }
 
+int json_wlparam_string_proc(JSONNODE* node, wlp_descr_t* wlp, void* param) {
+	wlp_string_t* str = (wlp_string_t*) param;
+	char* js = NULL;
+
+	if(json_type(node) != JSON_STRING)
+		return WLPARAM_JSON_WRONG_TYPE;
+
+	js = json_as_string(node);
+
+	if(strlen(js) > wlp->range.str_length)
+		return WLPARAM_JSON_OUTSIDE_RANGE;
+
+	strcpy(param, js);
+
+	json_free(js);
+
+	return WLPARAM_JSON_OK;
+}
+
+
+int json_wlparam_strset_proc(JSONNODE* node, wlp_descr_t* wlp, void* param) {
+	int i;
+	wlp_strset_t* ss = (wlp_strset_t*) param;
+	char* js = NULL;
+
+	if(json_type(node) != JSON_STRING)
+		return WLPARAM_JSON_WRONG_TYPE;
+
+	js = json_as_string(node);
+
+	for(i = 0; i < wlp->range.ss_num; ++i) {
+		if(strcmp(wlp->range.ss_strings[i], js) == 0) {
+			*ss = i;
+
+			json_free(js);
+
+			return WLPARAM_JSON_OK;
+		}
+	}
+
+	/* No match found - wrong value provided*/
+	json_free(js);
+
+	*ss = -1;
+	return WLPARAM_JSON_OUTSIDE_RANGE;
+}
+
 #define WLPARAM_RANGE_CHECK(min, max) 							\
 		if(*p < wlp->range.min || *p > wlp->range.max)			\
 					return WLPARAM_JSON_OUTSIDE_RANGE;
@@ -130,28 +177,9 @@ int json_wlparam_proc(JSONNODE* node, wlp_descr_t* wlp, void* param) {
 				json_as_int, WLPARAM_RANGE_CHECK(sz_min, sz_max));
 		break;
 	case WLP_RAW_STRING:
-	{
-		wlp_string_t* str = (wlp_size_t*) param;
-		char* js = NULL;
-
-		if(json_type(node) != JSON_STRING)
-			return WLPARAM_JSON_WRONG_TYPE;
-
-		js = json_as_string(node);
-
-		if(strlen(js) > wlp->range.str_length)
-			return WLPARAM_JSON_OUTSIDE_RANGE;
-
-		strcpy(param, js);
-
-		json_free(js);
-	}
-		break;
+		return json_wlparam_string_proc(node, wlp, param);
 	case WLP_STRING_SET:
-		/*NOTIMPLEMENTED*/
-
-		break;
-
+		return json_wlparam_strset_proc(node, wlp, param);
 	}
 
 	return WLPARAM_JSON_OK;
@@ -175,6 +203,7 @@ int json_wlparam_proc_all(JSONNODE* node, wlp_descr_t* wlp, void* params) {
 			agent_error_msg(AE_INVALID_DATA, "Workload parameter %s has wrong type", wlp->name);
 			return ret;
 		}
+
 		if(ret == WLPARAM_JSON_OUTSIDE_RANGE) {
 			agent_error_msg(AE_INVALID_DATA, "Workload parameter %s outside defined range", wlp->name);
 			return ret;
@@ -183,4 +212,6 @@ int json_wlparam_proc_all(JSONNODE* node, wlp_descr_t* wlp, void* params) {
 
 		wlp++;
 	}
+
+	return WLPARAM_JSON_OK;
 }

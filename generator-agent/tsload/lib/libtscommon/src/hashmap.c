@@ -33,7 +33,7 @@ void hash_map_init(hashmap_t* hm, const char* name) {
 		hm->hm_heads[i] = NULL;
 	}
 
-	mutex_init(&hm->hm_mutex, name);
+	mutex_init(&hm->hm_mutex, "hm-%s", name);
 }
 
 void hash_map_insert(hashmap_t* hm, void* object) {
@@ -97,7 +97,7 @@ void hash_map_remove(hashmap_t* hm, void* object) {
 	mutex_unlock(&hm->hm_mutex);
 }
 
-void* hash_map_find(hashmap_t* hm, void* key) {
+void* hash_map_find(hashmap_t* hm, const void* key) {
 	unsigned hash = hm->hm_hash_key(key);
 	void* iter = hm->hm_heads[hash];
 

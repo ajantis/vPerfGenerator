@@ -49,18 +49,19 @@ class TSClientInvocationHandler[CI <: TSClientInterface](client: TSClient[CI])
     val methodInfo = getMethodInfo(method)
     
     val argNamesList = methodInfo.argNames.toList
+    val classList = method.getParameterTypes().toList
+    
     val argList = args match {
       case null => Nil
       case args => args.toList
     }
     
-    var argMap = (argNamesList zip argList).toMap
+    var argMap = (argNamesList zip (classList zip argList)).toMap
     
     var msg = MutableMap[String, Any]() 
     
-    for((argName, argValue) <- argMap) { 
-        val tsObject = argValue.asInstanceOf[TSObject]
-    	msg += argName -> TSObjectSerializer.doSerialize(tsObject)
+    for((argName, (argClass, argValue)) <- argMap) { 
+    	msg += argName -> TSObjectSerializer.doSerialize(argValue, argClass)
     }
     
     val ret = client.invoke(methodInfo.name, msg.toMap)
@@ -220,7 +221,7 @@ abstract class TSServer[CI <: TSClientInterface](portNumber: Int)
 	  }
 	  else {
 	    doTrace("Returning" + ret)
-	    return TSObjectSerializer.doSerialize(ret.asInstanceOf[TSObject])
+	    return TSObjectSerializer.doSerializeObject(ret)
 	  }
 	}
 }
