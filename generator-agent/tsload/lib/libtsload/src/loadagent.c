@@ -109,18 +109,33 @@ void agent_provide_step(JSONNODE* argv[]) {
 
 /* = TSServer's methods = */
 void agent_workload_status(const char* wl_name, int status, int done, const char* config_msg) {
-	JSONNODE* msg = json_new(JSON_NODE), *node = json_new(JSON_NODE);
+	JSONNODE* msg = json_new(JSON_NODE), *arg0 = json_new(JSON_NODE);
 	JSONNODE* response;
 
-	json_push_back(msg, json_new_a("workload", wl_name));
-	json_push_back(msg, json_new_i("status", status));
-	json_push_back(msg, json_new_i("done", done));
-	json_push_back(msg, json_new_a("message", config_msg));
+	json_push_back(arg0, json_new_a("workload", wl_name));
+	json_push_back(arg0, json_new_i("status", status));
+	json_push_back(arg0, json_new_i("done", done));
+	json_push_back(arg0, json_new_a("message", config_msg));
 
-	json_set_name(msg, "status");
-	json_push_back(node, msg);
+	json_set_name(arg0, "status");
+	json_push_back(msg, arg0);
 
-	clnt_invoke("workload_status", node, &response);
+	clnt_invoke("workload_status", msg, &response);
+
+	json_delete(response);
+}
+
+void agent_requests_report(JSONNODE* j_rq_list) {
+	JSONNODE *msg = json_new(JSON_NODE), *arg0 = json_new(JSON_NODE);
+	JSONNODE *response;
+
+	json_set_name(arg0, "requests");
+	json_set_name(j_rq_list, "requests");
+
+	json_push_back(arg0, j_rq_list);
+	json_push_back(msg, arg0);
+
+	clnt_invoke("requests_report", msg, &response);
 
 	json_delete(response);
 }

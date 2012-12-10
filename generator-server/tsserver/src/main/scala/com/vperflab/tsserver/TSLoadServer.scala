@@ -81,10 +81,10 @@ class TSWorkloadList(wl_list: Map[String, TSWorkload]) extends TSObject {
 
 /*Sibling to wl_status_t*/
 object TSWorkloadStatusCode {
-  val WLS_CONFIGURING = 1
-  val WLS_SUCCESS = 2
-  val WLS_FAIL = 3
-  val WLS_FINISHED = 4
+  val CONFIGURING = 1
+  val SUCCESS = 2
+  val FAIL = 3
+  val FINISHED = 4
 }
 
 class TSWorkloadStatus extends TSObject {
@@ -100,6 +100,32 @@ class TSProvideStepResult extends TSObject {
   var result: Long = _
 }
 
+/* @requestsReport() */
+
+object TSRequestFlag {
+  val STARTED  = 0x01
+  val SUCCESS  = 0x02
+  val ONTIME   = 0x04
+  val FINISHED = 0x08
+}
+
+class TSRequest extends TSObject {
+  var step: Long = _
+  var request: Long = _
+  var thread: Long = _
+  
+  var start: Long = _
+  var end: Long = _
+  
+  var flags: Long = _
+  
+  override def toString(): String = "<RQ %d/%d@%d>".format(step, request, thread)
+}
+
+class TSRequestReport extends TSObject {
+  @TSObjContainer(elementClass = classOf[TSRequest])
+  var requests: List[TSRequest] = _
+}
 /* END OF TYPES */
 
 trait TSLoadClient extends TSClientInterface{
@@ -122,7 +148,8 @@ trait TSLoadClient extends TSClientInterface{
 }
 
 class TSLoadServer(portNumber: Int) extends TSServer[TSLoadClient](portNumber) {
-	@TSServerMethod(name = "hello", argNames = Array("info"))
+	@TSServerMethod(name = "hello", 
+	                argNames = Array("info"))
 	def hello(client: TSClient[TSLoadClient], info: TSHostInfo) : TSHelloResponse = {
 	  System.out.println("Say hello from %s!".format(info.hostName))
 	  
@@ -137,12 +164,14 @@ class TSLoadServer(portNumber: Int) extends TSServer[TSLoadClient](portNumber) {
 	  return new TSHelloResponse(0)
 	}
 	
-	@TSServerMethod(name = "workload_status", argNames = Array("status"), noReturn = true) 
+	@TSServerMethod(name = "workload_status", 
+				    argNames = Array("status"), 
+				    noReturn = true) 
 	def workloadStatus(client: TSClient[TSLoadClient], status: TSWorkloadStatus) = {
 	  System.out.println("Workload %s status %s,%d: %s".format(
 	      status.workload, status.status, status.done, status.message))
 	      
-	  if(status.status == TSWorkloadStatusCode.WLS_SUCCESS) {
+	  if(status.status == TSWorkloadStatusCode.SUCCESS) {
 	    var startTime: Long = (System.currentTimeMillis() + 5000) * 1000 * 1000
 	    
 	    client.getInterface.startWorkload(status.workload, startTime);
@@ -150,6 +179,15 @@ class TSLoadServer(portNumber: Int) extends TSServer[TSLoadClient](portNumber) {
 	    for(stepId <- 0 to 11) {
 	      client.getInterface.provideStep(status.workload, stepId, 9)
 	    }
+	  }
+	}
+	
+	@TSServerMethod(name = "requests_report", 
+                    argNames = Array("requests"),
+                    noReturn = true)
+    def requestsReport(client: TSClient[TSLoadClient], report: TSRequestReport) {
+	  for(rq <- report.requests) {
+	    System.out.println(rq)
 	  }
 	}
 	

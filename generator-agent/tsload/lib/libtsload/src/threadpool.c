@@ -77,7 +77,6 @@ thread_pool_t* tp_create(unsigned num_threads, const char* name, uint64_t quantu
 	list_head_init(&tp->tp_wl_head, "tp-%s", name);
     event_init(&tp->tp_event, "tp-%s", name);
     mutex_init(&tp->tp_mutex, "tp-%s", name);
-    squeue_init(&tp->tp_requests, "tp-%s", name);
 
 	/*Create threads*/
 	t_init(&tp->tp_ctl_thread, (void*) tp, control_thread,
@@ -91,17 +90,6 @@ thread_pool_t* tp_create(unsigned num_threads, const char* name, uint64_t quantu
 	logmsg(LOG_INFO, "Created thread pool %s with %d threads", name, num_threads);
 
 	return tp;
-}
-
-void tp_rq_chain_destroy(void *p_rq_chain) {
-	list_head_t* rq_chain = (list_head_t*) p_rq_chain;
-	request_t *rq, *rq_tmp;
-
-	list_for_each_entry_safe(rq, rq_tmp, rq_chain, rq_node) {
-		wl_request_free(rq);
-	}
-
-	mp_free(p_rq_chain);
 }
 
 void tp_destroy(thread_pool_t* tp) {
@@ -120,7 +108,6 @@ void tp_destroy(thread_pool_t* tp) {
 
 	event_destroy(&tp->tp_event);
 	mutex_destroy(&tp->tp_mutex);
-	squeue_destroy(&tp->tp_requests, tp_rq_chain_destroy);
 
 	mp_free(tp->tp_workers);
 	mp_free(tp);
@@ -238,7 +225,6 @@ void tp_distribute_requests(workload_step_t* step, thread_pool_t* tp) {
 int tp_init(void) {
 	/*FIXME: default pool should have threads number num_of_phys_cores*/
 	default_pool = tp_create(4, DEFAULT_TP_NAME, 250 * MS);
-	assert(default_pool == NULL);
 
 	return 0;
 }

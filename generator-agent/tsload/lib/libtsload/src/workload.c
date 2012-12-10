@@ -28,6 +28,10 @@
 #include <stdio.h>
 #include <stdarg.h>
 
+squeue_t	wl_requests;
+
+thread_t	t_wl_requests;
+
 DECLARE_HASH_MAP(workload_hash_map, workload_t, WLHASHSIZE, wl_name, wl_hm_next,
 	{
 		char* p = (char*) key;
@@ -271,6 +275,7 @@ int wl_advance_step(workload_step_t* step) {
 	mutex_lock(&wl->wl_rq_mutex);
 
 	wl->wl_current_step++;
+	wl->wl_current_rq = 0;
 
 	if(wl->wl_current_step > wl->wl_last_step) {
 		/* No steps on queue */
@@ -338,8 +343,71 @@ void wl_run_request(request_t* rq) {
 	rq->rq_flags |= RQF_FINISHED;
 }
 
+void wl_rq_chain_push(list_head_t* rq_chain) {
+	squeue_push(&wl_requests, rq_chain);
+}
+
+void wl_rq_chain_destroy(void *p_rq_chain) {
+	list_head_t* rq_chain = (list_head_t*) p_rq_chain;
+	request_t *rq, *rq_tmp;
+
+	list_for_each_entry_safe(rq, rq_tmp, rq_chain, rq_node) {
+		wl_request_free(rq);
+	}
+
+	mp_free(p_rq_chain);
+}
+
+void* wl_requests_thread(void* arg) {
+	THREAD_ENTRY(arg, void, unused);
+	list_head_t* rq_chain;
+
+	JSONNODE* j_rq_chain;
+
+	request_t *rq, *rq_tmp;
+
+	while(TRUE) {
+		rq_chain =  (list_head_t*) squeue_pop(&wl_requests);
+
+		if(rq_chain == NULL)
+			THREAD_EXIT();
+
+		j_rq_chain = json_request_format_all(rq_chain);
+		agent_requests_report(j_rq_chain);
+
+		wl_rq_chain_destroy(rq_chain);
+	}
+
+THREAD_END:
+	THREAD_FINISH(arg);
+}
+
 void wl_request_free(request_t* rq) {
 	mp_free(rq);
+}
+
+JSONNODE* json_request_format_all(list_head_t* rq_list) {
+	JSONNODE* jrq;
+	JSONNODE* j_rq_list = json_new(JSON_ARRAY);
+
+	request_t* rq;
+
+	list_for_each_entry(rq, rq_list, rq_node) {
+		jrq = json_new(JSON_NODE);
+
+		json_push_back(jrq, json_new_i("step", rq->rq_step));
+		json_push_back(jrq, json_new_i("request", rq->rq_id));
+		json_push_back(jrq, json_new_i("thread", rq->rq_thread_id));
+
+		json_push_back(jrq, json_new_i("start", rq->rq_start_time));
+		json_push_back(jrq, json_new_i("end", rq->rq_end_time));
+
+		json_push_back(jrq, json_new_i("flags", rq->rq_flags));
+
+		json_push_back(j_rq_list, jrq);
+	}
+
+	return j_rq_list;
 }
 
 void json_workload_proc_all(JSONNODE* node, list_head_t* wl_list) {
@@ -474,9 +542,15 @@ fail:
 int wl_init(void) {
 	hash_map_init(&workload_hash_map, "workload_hash_map");
 
+	squeue_init(&wl_requests, "wl-requests");
+	t_init(&t_wl_requests, NULL, wl_requests_thread, "wl_requests");
+
 	return 0;
 }
 
 void wl_fini(void) {
+	squeue_destroy(&wl_requests, wl_rq_chain_destroy);
+	t_destroy(&t_wl_requests);
+
 	hash_map_destroy(&workload_hash_map);
 }

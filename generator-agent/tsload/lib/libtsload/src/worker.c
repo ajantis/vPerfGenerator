@@ -137,25 +137,36 @@ void* worker_thread(void* arg) {
 
 	thread_pool_t* tp = worker->w_tp;
 
+	long worker_step = 0;
+
 	logmsg(LOG_DEBUG, "Started worker thread #%d (tpool: %s)",
 			thread->t_local_id, tp->tp_name);
 
 	while(!worker->w_tp->tp_is_dead) {
-		rq_chain = (list_head_t*) mp_malloc(sizeof(list_head_t));
-		list_head_init(rq_chain, "rqs-%s-%d", tp->tp_name, thread->t_local_id);
-
-		/* Extract requests from queue */
 		mutex_lock(&worker->w_rq_mutex);
-		list_splice_init(&worker->w_requests, list_head_node(rq_chain));
-		mutex_unlock(&worker->w_rq_mutex);
 
-		/*FIXME: quantum exhaustion*/
-		list_for_each_entry(rq, rq_chain, rq_node)  {
-			wl_run_request(rq);
+		if(!list_empty(&worker->w_requests)) {
+			/*There are new requests on queue*/
+
+			rq_chain = (list_head_t*) mp_malloc(sizeof(list_head_t));
+			list_head_init(rq_chain, "rqs-%s-%d", tp->tp_name, thread->t_local_id);
+
+			/* Extract requests from queue */
+			list_splice_init(&worker->w_requests, list_head_node(rq_chain));
+			mutex_unlock(&worker->w_rq_mutex);
+
+			/*FIXME: quantum exhaustion*/
+			list_for_each_entry(rq, rq_chain, rq_node)  {
+				wl_run_request(rq);
+			}
+
+			/*Push chain of requests to global chain*/
+			wl_rq_chain_push(rq_chain);
 		}
-
-		/*Push chain of requests to tp's chain*/
-		squeue_push(&tp->tp_requests, rq_chain);
+		else {
+			/* No requests, sweet dreams, worker */
+			mutex_unlock(&worker->w_rq_mutex);
+		}
 
 		event_wait(&tp->tp_event);
 	}

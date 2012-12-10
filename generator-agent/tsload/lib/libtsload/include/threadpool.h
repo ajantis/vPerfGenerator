@@ -52,8 +52,6 @@ typedef struct thread_pool {
 
 	thread_mutex_t tp_mutex;		/**< Protects workload list*/
 
-	squeue_t tp_requests;
-
 	list_head_t	   tp_wl_head;
 	int tp_wl_count;
 	int tp_wl_changed;

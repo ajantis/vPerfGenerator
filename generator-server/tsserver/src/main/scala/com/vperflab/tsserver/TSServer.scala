@@ -22,6 +22,11 @@ import scala.reflect.Manifest
 class TSClientInvocationHandler[CI <: TSClientInterface](client: TSClient[CI]) 
 	extends InvocationHandler {
   
+  
+  def doTrace(msg: String) {
+	System.out.println(msg)
+  }
+  
   /**
    * @return  TSClientMethod annotation for method
    * */
@@ -63,6 +68,8 @@ class TSClientInvocationHandler[CI <: TSClientInterface](client: TSClient[CI])
     for((argName, (argClass, argValue)) <- argMap) { 
     	msg += argName -> TSObjectSerializer.doSerialize(argValue, argClass)
     }
+    
+    doTrace("Invoking %s(%s)".format(methodInfo.name, msg.toMap))
     
     val ret = client.invoke(methodInfo.name, msg.toMap)
     
@@ -211,7 +218,7 @@ abstract class TSServer[CI <: TSClientInterface](portNumber: Int)
 	  
 	  var args = convertArguments(client, msg, argNamesList, classList)
 	  
-	  doTrace("Got method %s and args %s".format(method, args))
+	  /* doTrace("Got method %s and args %s".format(method, args)) */
 	  
 	  val ret = method.invoke(this, args:_*)
 	  

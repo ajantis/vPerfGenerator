@@ -18,7 +18,7 @@ class TSObjectDeserializerTest extends Assert {
     
 	var obj = TSObjectDeserializer.doDeserialize(jsonMap, classOf[TSModulesInfo])
 	var modulesInfo = obj.asInstanceOf[TSModulesInfo]  
-	val newJsonMap = TSObjectSerializer.doSerialize(modulesInfo)
+	val newJsonMap = TSObjectSerializer.doSerializeObject(modulesInfo)
 	val newJsonStr = generate(newJsonMap)
 	
 	assertEquals(testJsonStr, newJsonStr)
@@ -36,7 +36,7 @@ class TSObjectDeserializerTest extends Assert {
         "sparse" -> (false : JBoolean))
     
    
-   val wlJsonMap = TSObjectSerializer.doSerialize(workload)
+   val wlJsonMap = TSObjectSerializer.doSerializeObject(workload)
    val wlJsonStr = generate(wlJsonMap)
 		
    assertEquals(wlJsonStr, """{"module":"dummy","params":{"test":"read","filesize":16777216,"sparse":false,"path":"/tmp/testfile","blocksize":4096}}""")

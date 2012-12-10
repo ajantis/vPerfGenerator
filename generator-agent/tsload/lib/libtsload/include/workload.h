@@ -29,6 +29,7 @@
 #define WLSTEPQSIZE	16
 #define WLSTEPQMASK	(WLSTEPQSIZE - 1)
 
+/* Request flags sibling of TSRequestFlag */
 #define RQF_STARTED		0x01
 #define RQF_SUCCESS		0x02
 #define RQF_ONTIME		0x04
@@ -111,6 +112,7 @@ int wl_advance_step(workload_step_t* step);
 request_t* wl_create_request(workload_t* wl, int thread_id);
 void wl_run_request(request_t* rq);
 void wl_request_free(request_t* rq);
+void wl_rq_chain_push(list_head_t* rq_chain);
 
 int wl_init(void);
 void wl_fini(void);
@@ -122,6 +124,7 @@ void wl_fini(void);
 #ifndef NO_JSON
 #include <libjson.h>
 
+JSONNODE* json_request_format_all(list_head_t* rq_list);
 void json_workload_proc_all(JSONNODE* node, list_head_t* wl_List);
 workload_t* json_workload_proc(JSONNODE* node);
 #endif

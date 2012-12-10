@@ -11,6 +11,7 @@
 #include <agent.h>
 
 void agent_workload_status(const char* wl_name, int status, int done, const char* config_msg);
+void agent_requests_report(JSONNODE* j_rq_list);
 
 int agent_init(void);
 void agent_fini(void);
