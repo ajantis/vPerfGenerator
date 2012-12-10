@@ -1,4 +1,4 @@
-package com.vperflab.generator.web.lib
+package com.vperflab.web.lib
 
 import net.liftweb._
 import http._

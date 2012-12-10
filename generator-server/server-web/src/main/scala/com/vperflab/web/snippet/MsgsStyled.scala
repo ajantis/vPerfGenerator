@@ -1,4 +1,4 @@
-package com.vperflab.generator.web.snippet
+package com.vperflab.web.snippet
 
 import _root_.net.liftweb.http._
 import _root_.scala.xml._

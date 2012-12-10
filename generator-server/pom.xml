@@ -4,7 +4,7 @@
 
     <groupId>com.vperflab</groupId>
     <artifactId>generator-server</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>0.1</version>
     <packaging>pom</packaging>
     <name>vPerfGenerator</name>
 
@@ -17,6 +17,7 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <org.springframework.version>3.1.0.RELEASE</org.springframework.version>
         <scala.version>2.9.1</scala.version>
         <akka.version>2.0</akka.version>
         <project.reporting.outputEncoding>${project.build.sourceEncoding}</project.reporting.outputEncoding>
@@ -48,12 +49,12 @@
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-surefire-plugin</artifactId>
                     <configuration>
-                        <testFailureIgnore>false</testFailureIgnore>                        
+                        <testFailureIgnore>false</testFailureIgnore>
                     </configuration>
                 </plugin>
             </plugins>
-        </pluginManagement>
-
+        </pluginManagement>  
+    
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -129,7 +130,55 @@
                 <artifactId>server-core</artifactId>
                 <version>${version}</version>
             </dependency>
+   
+            <dependency>
+                <groupId>org.springframework</groupId>
+                <artifactId>spring-beans</artifactId>
+                <version>${org.springframework.version}</version>
+            </dependency>
 
+            <dependency>
+                <groupId>org.springframework</groupId>
+                <artifactId>spring-context</artifactId>
+                <version>${org.springframework.version}</version>
+            </dependency>
+
+
+            <dependency>
+                <groupId>org.springframework</groupId>
+                <artifactId>spring-core</artifactId>
+                <version>${org.springframework.version}</version>
+                <exclusions>
+                    <exclusion>
+                        <groupId>commons-logging</groupId>
+                        <artifactId>commons-logging</artifactId>
+                    </exclusion>
+                </exclusions>
+            </dependency>
+
+            <dependency>
+                <groupId>org.springframework</groupId>
+                <artifactId>spring-web</artifactId>
+                <version>${org.springframework.version}</version>
+            </dependency>
+           
+            <dependency>
+                <groupId>commons-io</groupId>
+                <artifactId>commons-io</artifactId>
+                <version>1.4</version>
+            </dependency>
+
+            <dependency>
+                <groupId>commons-codec</groupId>
+                <artifactId>commons-codec</artifactId>
+                <version>1.5</version>
+            </dependency>
+
+            <dependency>
+                <groupId>commons-httpclient</groupId>
+                <artifactId>commons-httpclient</artifactId>
+                <version>3.1</version>
+            </dependency>            
         </dependencies>
     </dependencyManagement>
 
@@ -166,8 +215,4 @@
             <url>http://scala-tools.org/repo-releases</url>
         </pluginRepository>
     </pluginRepositories>
-
-  <modules>
-    <module>tsserver</module>
-  </modules>
 </project>

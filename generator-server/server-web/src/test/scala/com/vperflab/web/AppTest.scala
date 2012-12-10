@@ -1,10 +1,11 @@
-package com.vperflab.generator.web
+package com.vperflab.web
 
 import _root_.java.io.File
 import _root_.junit.framework._
 import Assert._
-import net.liftweb.util.PCDataXmlParser
-import net.liftweb.common.Full
+import _root_.scala.xml.XML
+import _root_.net.liftweb.util._
+import _root_.net.liftweb.common._
 
 object AppTest {
   def suite: Test = {
