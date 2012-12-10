@@ -3,12 +3,14 @@ package com.vperflab.tsserver
 import java.util.Date
 import java.lang.{Boolean => JBoolean, Integer => JInteger, Double => JDouble}
 
+import com.vperflab.agent.AgentService
+
 /* @hello() */
 class TSHostInfo extends TSObject {
   var hostName: String = _
 }
 
-class TSHelloResponse(agentId: Int) extends TSObject {
+class TSHelloResponse(agentId: Long) extends TSObject {
   val agent_id: Long = agentId 
 }
 
@@ -151,35 +153,16 @@ class TSLoadServer(portNumber: Int) extends TSServer[TSLoadClient](portNumber) {
 	@TSServerMethod(name = "hello", 
 	                argNames = Array("info"))
 	def hello(client: TSClient[TSLoadClient], info: TSHostInfo) : TSHelloResponse = {
-	  System.out.println("Say hello from %s!".format(info.hostName))
+	  val agentId = AgentService.registerLoadAgent(info.hostName)
 	  
-	  /*TODO: get agentId for it*/
-	  
-	  val modules = client.getInterface.getModulesInfo()
-	  
-	  System.out.println(modules)
-	  
-	  startTestWorkload(client)
-	  
-	  return new TSHelloResponse(0)
+	  return new TSHelloResponse(agentId)
 	}
 	
 	@TSServerMethod(name = "workload_status", 
 				    argNames = Array("status"), 
 				    noReturn = true) 
 	def workloadStatus(client: TSClient[TSLoadClient], status: TSWorkloadStatus) = {
-	  System.out.println("Workload %s status %s,%d: %s".format(
-	      status.workload, status.status, status.done, status.message))
-	      
-	  if(status.status == TSWorkloadStatusCode.SUCCESS) {
-	    var startTime: Long = (System.currentTimeMillis() + 5000) * 1000 * 1000
-	    
-	    client.getInterface.startWorkload(status.workload, startTime);
-	    
-	    for(stepId <- 0 to 11) {
-	      client.getInterface.provideStep(status.workload, stepId, 9)
-	    }
-	  }
+	  /* TODO: Workload status*/
 	}
 	
 	@TSServerMethod(name = "requests_report", 
@@ -187,23 +170,7 @@ class TSLoadServer(portNumber: Int) extends TSServer[TSLoadClient](portNumber) {
                     noReturn = true)
     def requestsReport(client: TSClient[TSLoadClient], report: TSRequestReport) {
 	  for(rq <- report.requests) {
-	    System.out.println(rq)
+	    /* TODO: report requests */
 	  }
-	}
-	
-	def startTestWorkload(client: TSClient[TSLoadClient]) {
-	  var workload = new TSWorkload()
-	  
-	  workload.module = "dummy"
-	  workload.threadpool = "[DEFAULT]"
-	  workload.params = Map("filesize" -> (16777216 : JInteger),
-	        "blocksize" -> (4096 : JInteger),
-	        "path" -> "/tmp/testfile",
-	        "test" -> "read",
-	        "sparse" -> (false : JBoolean))
-	  
-	  var workloads = new TSWorkloadList(Map("test" -> workload))
-	        
-	  client.getInterface.configureWorkloads(workloads)
 	}
 }

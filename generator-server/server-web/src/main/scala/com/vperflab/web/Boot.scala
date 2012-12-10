@@ -5,11 +5,13 @@ import _root_.net.liftweb.common._
 import _root_.net.liftweb.http._
 import _root_.net.liftweb.http.provider._
 import _root_.net.liftweb.sitemap._
+import _root_.net.liftweb.sitemap.Loc.LocGroup
 import _root_.net.liftweb.mapper.{DB, Schemifier, DefaultConnectionIdentifier, StandardDBVendor}
 import _root_.net.liftweb.widgets.logchanger._
 import net.liftweb.widgets.flot._
 import net.liftweb.http.ResourceServer
-import com.vperflab.model.{Iteration, Experiment, IterationExecution, Execution}
+import com.vperflab.model.{Iteration, Experiment, 
+			IterationExecution, Execution, Agent}
 import model.User
 import snippet.LogLevel
 import net.liftweb.sitemap.Loc.Hidden
@@ -38,15 +40,22 @@ class Boot extends Bootable {
 
     snippetPackages.foreach(LiftRules.addToPackages(_))
 
-    Schemifier.schemify(true, Schemifier.infoF _, User, Experiment, Iteration, IterationExecution, Execution)
+    Schemifier.schemify(true, Schemifier.infoF _, User, Experiment, Iteration, 
+        IterationExecution, Execution, Agent)
 
     // Build SiteMap
     def sitemap() = SiteMap(
-      Menu("Home") / "index", // >> User.AddUserMenusAfter,
-      Menu("Experiments") / "experiments" / "index",
-      Menu("New experiment") / "experiments" / "new",
-      Menu("Experiment") / "experiments" / "view" >> Hidden,
-      Menu("Execution") / "experiments" / "executions" / "view" >> Hidden,
+      // Menus on bottom bar (main menu)
+      Menu("Welcome") / "index" >> LocGroup("mainMenu") , // >> User.AddUserMenusAfter,
+      Menu("Agents") / "agents" / "index" >> LocGroup("mainMenu"),
+      Menu("Experiments") / "experiments" / "index" >> LocGroup("mainMenu"),
+      Menu("Profiles") / "profiles" / "index" >> LocGroup("mainMenu"),
+      Menu("Monitoring") / "monitoring" >> LocGroup("mainMenu"),
+      
+      // Menus on top bar (helper menu)
+      Menu("Help") / "help" >> LocGroup("topMenu"),
+      Menu("About") / "about" >> LocGroup("topMenu"),
+      
       LogLevel.menu // adding a menu for log level changer snippet page. By default it's /loglevel/change
     )
 
@@ -67,7 +76,7 @@ class Boot extends Bootable {
     LiftRules.early.append(makeUtf8)
 
     LiftRules.loggedInTest = Full(() => User.loggedIn_?)
-
+    
     LiftRules.statelessRewrite.prepend(NamedPF("ParticularExperimentRewrite") {
       case RewriteRequest(
       ParsePath("experiments" :: experimentId :: Nil , _, _,_), _, _) if (isNumeric(experimentId)) =>
