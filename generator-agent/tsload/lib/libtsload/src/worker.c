@@ -45,7 +45,7 @@ void* control_thread(void* arg) {
 	while(!tp->tp_is_dead) {
 		tp->tp_time = tm_get_time();
 
-		logmsg(LOG_TRACE, "Control thread %s is running (tm: %lld)",
+		logmsg(LOG_TRACE, "Control thread %s is running (tm: %llu)",
 					tp->tp_name, tp->tp_time);
 
 		mutex_lock(&tp->tp_mutex);

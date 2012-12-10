@@ -11,10 +11,12 @@ EXTRAS_DIR = $(BUILDDIR)/etc
 INCTSCOMMON = -I../../lib/libtscommon/include
 INCTSLOAD = -I../../lib/libtsload/include $(INCTSCOMMON)
 INCJSON	= -I../../lib/libjson/include
+INCHOSTINFO	= -I../../lib/libhostinfo/include
 
-LINKTSCOMMON = -ltscommon
+LINKTSCOMMON = -ltscommon $(LINKHOSTINFO)
 LINKTSLOAD = -ltsload $(LINKTSCOMMON)
 LINKJSON = -ljson
+LINKHOSTINFO = -lhostinfo
 
 EXEC_CFLAGS = 
 EXEC_CXXFLAGS = 

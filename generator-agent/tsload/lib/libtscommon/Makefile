@@ -16,7 +16,7 @@ SRC = hashmap.c \
 	  
 OBJ = $(SRC:.c=.o)
 
-CFLAGS += $(INCJSON) $(JSON_DEBUG)
-LDFLAGS += -lc -ldl -lpthread $(LINKJSON)
+CFLAGS += $(INCJSON) $(INCHOSTINFO) $(JSON_DEBUG)
+LDFLAGS += -lc -ldl -lpthread $(LINKHOSTINFO) $(LINKJSON)
 	
 include ../../Makefile.build

@@ -50,7 +50,7 @@ DECLARE_HASH_MAP(thread_hash_map, thread_t, THASHSIZE, t_thread, t_next,
 
 pthread_key_t thread_key;
 
-static thread_key_destructor(void* key) {
+static void thread_key_destructor(void* key) {
 	/* threads are freed by their spawners so simply
 	 * do nothing*/
 }
@@ -190,7 +190,7 @@ void t_get_wait_time(thread_t* t, struct timeval* tv) {
 	}
 }
 
-static void t_dump_thread(void* object) {
+static int t_dump_thread(void* object, void* arg) {
 	const char* t_state_name[] = {
 			"INIT",
 			"RUNA",
@@ -226,12 +226,14 @@ static void t_dump_thread(void* object) {
 			t->t_id, t->t_system_id,
 			t->t_name, t_state_name[t->t_state],
 			t_wait_state);
+
+	return HM_WALKER_CONTINUE;
 }
 
 void t_dump_threads() {
 	logmsg(LOG_DEBUG, "%5s %5s %32s %5s %s", "TID", "STID", "NAME", "STATE", "BLOCK");
 
-	hash_map_walk(&thread_hash_map, t_dump_thread);
+	(void) hash_map_walk(&thread_hash_map, t_dump_thread, NULL);
 }
 
 int threads_init(void) {
@@ -245,5 +247,5 @@ int threads_init(void) {
 void threads_fini(void) {
 	hash_map_destroy(&thread_hash_map);
 
-	pthread_key_delete(&thread_key);
+	pthread_key_delete(thread_key);
 }

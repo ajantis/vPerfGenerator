@@ -16,14 +16,14 @@
 #include <workload.h>
 
 /* = Agent's handlers = */
-JSONNODE* agent_get_modules_info(JSONNODE* argv[]) {
+void agent_get_modules_info(JSONNODE* argv[]) {
 	JSONNODE* mod_info = json_modules_info();
 	JSONNODE* node = json_new(JSON_NODE);
 
 	json_set_name(mod_info, "modules");
 	json_push_back(node, mod_info);
 
-	agent_response_msg(node);
+	return agent_response_msg(node);
 }
 
 void agent_configure_workloads(JSONNODE* argv[]) {

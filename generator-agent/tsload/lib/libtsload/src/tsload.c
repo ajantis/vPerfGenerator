@@ -67,10 +67,14 @@ int init(void) {
 			subsys[i].s_state = SS_ERROR;
 			fprintf(stderr, "Failure initializing %s, exiting", subsys[i].s_name);
 			exit(err);
+
+			return err;
 		}
 
 		subsys[i].s_error_code = err;
 	}
+
+	return 0;
 }
 
 void finish(void) {
@@ -88,9 +92,12 @@ int tsload_start(const char* basename) {
 	atexit(finish);
 	init();
 
-	logmsg("Started %s...", basename);
+	logmsg(LOG_INFO, "Started %s...", basename);
 
 	/*Wait until universe collapses or we receive a signal :)*/
 	select(0, NULL, NULL, NULL, NULL);
+
+	/*NOTREACHED*/
+	return 0;
 }
 

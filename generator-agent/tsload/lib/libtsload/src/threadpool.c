@@ -176,8 +176,7 @@ void tp_detach(thread_pool_t* tp, struct workload* wl) {
  * @param num extra number of requests
  * @param len length of array
  * @param array pointer to array
- *
- * FIXME: doesn't work for TPMAXTHREADS > 64*/
+ * */
 static void distribute_requests(int def, int num, int len, int* array) {
 	int i = 0, bit = 0;
 	long rand_value = rand();

@@ -14,7 +14,7 @@ static long atomic_read(atomic_t* atom) {
 	return __sync_fetch_and_add(atom, 0);
 }
 
-static atomic_set(atomic_t* atom, long value) {
+static void atomic_set(atomic_t* atom, long value) {
 	 (void) __sync_lock_test_and_set(atom, value);
 }
 

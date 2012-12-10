@@ -27,6 +27,7 @@ JSONNODE* json_clnt_command_format(const char* command, JSONNODE* msg_node, unsi
 void clnt_proc_set_msg(clnt_proc_msg_t* msg);
 
 /* Globals */
+int clnt_trace_decode = FALSE;
 
 int clnt_sockfd = -1;
 
@@ -260,12 +261,13 @@ void clnt_recv_parse(void* buffer, size_t recvlen) {
 
 	while(off < recvlen) {
 		/*Process data in buffer*/
-		logmsg(LOG_TRACE, "Processing %lu bytes off: %lu", len, off);
+		if(clnt_trace_decode)
+			logmsg(LOG_TRACE, "Processing %lu bytes off: %lu", len, off);
 
 		len = strlen(msg) + 1;
 		node = json_parse(msg);
 
-		logmsg(LOG_TRACE, "msg: %s", msg);
+		logmsg(LOG_TRACE, "IN msg: %s", msg);
 
 		if(node) {
 			squeue_push(&proc_queue, node);
@@ -353,7 +355,9 @@ void* clnt_recv_thread(void* arg) {
 			}
 		}
 
-		logmsg(LOG_TRACE, "Received buffer @%p len: %lu", buffer, recvlen);
+		if(clnt_trace_decode)
+			logmsg(LOG_TRACE, "Received buffer @%p len: %lu", buffer, recvlen);
+
 		clnt_recv_parse(buffer, recvlen);
 
 		mp_free(buffer);
@@ -433,6 +437,8 @@ int clnt_send(JSONNODE* node) {
 
 	json_msg = json_write(node);
 	len = strlen(json_msg) + 1;
+
+	logmsg(LOG_TRACE, "OUT msg: %s", json_msg);
 
 	mutex_lock(&send_mutex);
 	ret = send(clnt_sockfd, json_msg, len, MSG_NOSIGNAL);

@@ -10,6 +10,7 @@
 
 #include <agent.h>
 #include <client.h>
+#include <uname.h>
 
 #include <libjson.h>
 
@@ -28,7 +29,7 @@ JSONNODE* agent_hello_msg() {
 	JSONNODE* node = json_new(JSON_NODE);
 	JSONNODE* info_node = json_new(JSON_NODE);
 
-	json_push_back(info_node, json_new_a("hostName", "localhost"));
+	json_push_back(info_node, json_new_a("hostName", hi_get_nodename()));
 
 	json_set_name(info_node, "info");
 	json_push_back(node, info_node);

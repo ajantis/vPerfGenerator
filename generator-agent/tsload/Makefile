@@ -3,49 +3,50 @@ MODULES = dummy
 
 ifeq (clean, $(findstring clean,$(MAKECMDGOALS)))
 	TARGET = clean
-	ACTION = Cleaning
+	ACTNAME = Cleaning
 else 
 	TARGET = all
-	ACTION = Building
+	ACTNAME = Building
 endif
+
+ACTIONS  = echo 						; \
+		   echo $(ACTNAME) $(TARGDIR) 	; \
+		   make -C $(TARGDIR) $(TARGET)
 
 all: tsloadd run-tsload
 clean: tsloadd run-tsload
 
-build-json: libjson
-clean-json: libjson
-	
-libjson: 
-	@echo
-	@echo $(ACTION) libjson...
-	make -C lib/libjson $(TARGET)
-	
-libtscommon: 
-	@echo
-	@echo $(ACTION) libtscommon...
-	make -C lib/libtscommon $(TARGET)
+build-json: 
+	make -C lib/libjson
+
+clean-json: 
+	make -C lib/libjson clean
+
+libhostinfo: 
+	$(eval TARGDIR := lib/$@)
+	@$(ACTIONS)
+
+libtscommon: libhostinfo
+	$(eval TARGDIR := lib/$@)
+	@$(ACTIONS)
 
 libtsload: libtscommon
-	@echo
-	@echo $(ACTION) libtsload...
-	make -C lib/libtsload $(TARGET)
+	$(eval TARGDIR := lib/$@)
+	@$(ACTIONS)
 	
 modules: $(MODULES)
 	@echo
-	@echo $(ACTION) modules...
+	@echo $(ACTNAME) modules...
 
 tsloadd: libtsload modules
-	@echo
-	@echo $(ACTION) tsload daemon...
-	make -C cmd/tsloadd $(TARGET)
+	$(eval TARGDIR := cmd/$@)
+	@$(ACTIONS)
 	
 run-tsload: libtsload modules
-	@echo
-	@echo $(ACTION) run-tsload daemon...
-	make -C cmd/run-tsload $(TARGET)
+	$(eval TARGDIR := cmd/$@)
+	@$(ACTIONS)
 
 $(MODULES):
-	@echo
-	@echo $(ACTION) module $@
-	make -C mod/$@ $(TARGET)
+	$(eval TARGDIR := mod/$@)
+	@$(ACTIONS)
 	
