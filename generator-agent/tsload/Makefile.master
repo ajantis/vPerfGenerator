@@ -1,0 +1,61 @@
+CC = /usr/bin/gcc
+
+TARGETDIR = $(basename $(notdir $(TARGET)))
+SRCDIR = src
+INCDIR = include
+BUILDDIR = ../../build
+OBJDIR = $(BUILDDIR)/obj/$(TARGETDIR)
+OBJSUBDIRS = ./
+EXTRAS_DIR = $(BUILDDIR)/etc
+
+INCTSCOMMON = -I../../lib/libtscommon/include
+INCTSLOAD = -I../../lib/libtsload/include $(INCTSCOMMON)
+INCJSON	= -I../../lib/libjson/include
+INCHOSTINFO	= -I../../lib/libhostinfo/include
+
+LINKTSCOMMON = -ltscommon $(LINKHOSTINFO)
+LINKTSLOAD = -ltsload $(LINKTSCOMMON)
+LINKJSON = -ljson
+LINKHOSTINFO = -lhostinfo
+
+EXEC_CFLAGS = 
+EXEC_CXXFLAGS = 
+EXEC_LDFLAGS = 
+EXEC_DIR = bin
+
+SHARED_CFLAGS = -fPIC
+SHARED_CXXFLAGS = -fPIC
+SHARED_LDFLAGS = -shared
+SHARED_DIR = lib
+
+MODULE_CFLAGS = $(SHARED_CFLAGS) $(INCTSLOAD) -DNO_JSON
+MODULE_CXXFLAGS = 
+MODULE_LDFLAGS = $(SHARED_LDFLAGS) $(LINKTSLOAD)
+MODULE_DIR = mod
+
+EXTRAS = 
+
+CFLAGS = -m64 -Wall -I$(INCDIR) $($(TYPE)_CFLAGS) -DJSON_DEBUG
+CXXFLAGS = $(CFLAGS) $($(TYPE)_CXXFLAGS)
+LDFLAGS = -L$(BUILDDIR)/lib $($(TYPE)_LDFLAGS)
+
+# For debugging
+CFLAGS += -g
+CFLAGS += -DTS_LOCK_DEBUG
+
+CFLAGS += -DJSON_DEBUG -DJSON_MEMORY_CALLBACKS -DJSON_INT_TYPE="long long"
+
+# Supress "unused" warnings
+CFLAGS += -Wno-unused-label -Wno-unused-variable -Wno-unused-function
+
+# Be thread-safe!
+CFLAGS += -pthread
+LDFLAGS += -pthread
+
+TARGSRC = $(addprefix $(SRCDIR)/,$(SRC))
+TARGOBJ = $(addprefix $(OBJDIR)/,$(OBJ))
+TARGOBJDIRS = $(addprefix $(OBJDIR)/,$(OBJSUBDIRS))
+TARGEXTRAS = $(addprefix $(EXTRAS_DIR)/,$(EXTRAS))
+
+TARGETFILE = $(addprefix $($(TYPE)_DIR)/,$(TARGET))
+	

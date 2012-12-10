@@ -1,0 +1,27 @@
+all: $(TARGSRC)  $(OBJDIR) $(TARGET)
+
+$(OBJDIR):
+	@mkdir -p $@
+
+$(TARGET): $(OBJDIR) $(TARGOBJDIRS) $(TARGOBJ) $(TARGEXTRAS)
+	@echo [LINK] $@ '<' $(OBJ)
+	@$(CC) -o $(BUILDDIR)/$(TARGETFILE) $(TARGOBJ) $(LDFLAGS)
+
+$(EXTRAS_DIR)/%: %
+	@echo [CP] $@ 
+	@cp $< $@
+
+$(OBJDIR)/%/:
+	@mkdir -p $@
+
+$(OBJDIR)/%.o: $(SRCDIR)/%.c
+	@echo [CC] $@
+	@$(CC) $(CFLAGS) -c $< -o $@
+
+$(OBJDIR)/%.o: $(SRCDIR)/%.cpp 
+	@echo [CXX] $@
+	@$(CXX) $(CXXFLAGS) -c $< -o $@
+
+clean:
+	rm $(TARGOBJ)
+	rm -rf $(OBJDIR)
