@@ -153,7 +153,7 @@ class TSLoadServer(portNumber: Int) extends TSServer[TSLoadClient](portNumber) {
 	@TSServerMethod(name = "hello", 
 	                argNames = Array("info"))
 	def hello(client: TSClient[TSLoadClient], info: TSHostInfo) : TSHelloResponse = {
-	  val agentId = AgentService.registerLoadAgent(info.hostName)
+	  val agentId = AgentService.registerLoadAgent(info.hostName, client)
 	  
 	  return new TSHelloResponse(agentId)
 	}
