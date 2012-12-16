@@ -26,28 +26,17 @@ void agent_get_modules_info(JSONNODE* argv[]) {
 	return agent_response_msg(node);
 }
 
-void agent_configure_workloads(JSONNODE* argv[]) {
-	workload_t* wl;
-	JSONNODE* j_wl_head = argv[0];
-	list_head_t wl_list;
-	JSONNODE_ITERATOR i_list = json_find(j_wl_head, "workloads"),
-					  i_end = json_end(j_wl_head);
+void agent_configure_workload(JSONNODE* argv[]) {
+	char* wl_name = (char*) argv[0];
+	JSONNODE* wl_params = (JSONNODE*) argv[1];
 
-	if(i_list == i_end) {
-		return agent_error_msg(AE_INVALID_DATA, "Not found workloads");
+	workload_t* wl = json_workload_proc(wl_name, wl_params);
+
+	if(wl == NULL) {
+		return agent_error_msg(AE_INTERNAL_ERROR, "Error in agent_configure_workload!");
 	}
 
-	list_head_init(&wl_list, "wl_list");
-
-	json_workload_proc_all(*i_list, &wl_list);
-
-	if(list_empty(&wl_list)) {
-		return agent_error_msg(AE_INTERNAL_ERROR, "workload_error!");
-	}
-
-	list_for_each_entry(wl, &wl_list, wl_chain) {
-		wl_config(wl);
-	}
+	wl_config(wl);
 
 	/*Response */
 	agent_response_msg(json_new(JSON_NODE));
@@ -149,12 +138,13 @@ static agent_dispatch_t loadagent_table[] = {
 		.ad_method = agent_get_modules_info
 	},
 	{
-		.ad_name = "configure_workloads",
+		.ad_name = "configure_workload",
 		{
-			ADT_ARGUMENT("workloads", JSON_NODE),
+			ADT_ARGUMENT("workload_name", JSON_STRING),
+			ADT_ARGUMENT("workload_params", JSON_NODE),
 			ADT_LAST_ARG()
 		},
-		.ad_method = agent_configure_workloads
+		.ad_method = agent_configure_workload
 	},
 	{
 		.ad_name = "start_workload",

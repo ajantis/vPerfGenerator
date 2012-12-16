@@ -102,6 +102,8 @@ void wl_destroy(workload_t* wl) {
 
 	list_del(&wl->wl_chain);
 
+	tp_detach(wl->wl_tp, wl);
+
 	mutex_destroy(&wl->wl_rq_mutex);
 
 	mp_free(wl->wl_params);
@@ -414,10 +416,15 @@ void json_workload_proc_all(JSONNODE* node, list_head_t* wl_list) {
 	JSONNODE_ITERATOR iter = json_begin(node),
 			          end = json_end(node);
 	workload_t* wl;
+	char* wl_name;
 
 	while(iter != end) {
-		wl = json_workload_proc(*iter);
+		wl_name = json_name(*iter);
+
+		wl = json_workload_proc(wl_name, *iter);
 		++iter;
+
+		json_free(wl_name);
 
 		/* json_workload_proc failed to process workload,
 		 * free all workloads that are already parsed and return NULL*/
@@ -474,7 +481,7 @@ void json_workload_proc_all(JSONNODE* node, list_head_t* wl_list) {
  * and create workload. Called from agent context,
  * so returns NULL in case of error and invokes agent_error_msg
  * */
-workload_t* json_workload_proc(JSONNODE* node) {
+workload_t* json_workload_proc(const char* wl_name, JSONNODE* node) {
 	JSONNODE_ITERATOR i_mod = NULL;
 	JSONNODE_ITERATOR i_tp = NULL;
 	JSONNODE_ITERATOR i_params = NULL;
@@ -484,8 +491,6 @@ workload_t* json_workload_proc(JSONNODE* node) {
 	module_t* mod = NULL;
 	tsload_module_t* tmod = NULL;
 	thread_pool_t* tp = NULL;
-
-	char* wl_name = NULL;
 
 	int ret;
 
@@ -503,7 +508,6 @@ workload_t* json_workload_proc(JSONNODE* node) {
 	tmod = (tsload_module_t*) mod->mod_helper;
 
 	/* Get workload's name */
-	wl_name = json_name(node);
 	logmsg(LOG_DEBUG, "Parsing workload %s", wl_name);
 
 	if(strlen(wl_name) == 0) {
@@ -530,9 +534,6 @@ workload_t* json_workload_proc(JSONNODE* node) {
 	return wl;
 
 fail:
-	if(wl_name)
-		json_free(wl_name);
-
 	if(wl)
 		wl_destroy(wl);
 

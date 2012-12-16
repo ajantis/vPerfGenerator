@@ -73,12 +73,6 @@ class TSWorkload extends TSObject {
   var params: Map[String, AnyRef] = _
 }
 
-class TSWorkloadList(wl_list: Map[String, TSWorkload]) extends TSObject {
-  
-  @TSObjContainer(elementClass = classOf[TSWorkload])
-  val workloads = wl_list 
-}
-
 /* @workloadStatus() */
 
 /*Sibling to wl_status_t*/
@@ -134,10 +128,10 @@ trait TSLoadClient extends TSClientInterface{
   @TSClientMethod(name = "get_modules_info")
   def getModulesInfo() : TSModulesInfo
   
-  @TSClientMethod(name = "configure_workloads", 
-		  		  argNames = Array("workloads"), 
+  @TSClientMethod(name = "configure_workload", 
+		  		  argNames = Array("workload_name", "workload_params"), 
 		  		  noReturn = true)
-  def configureWorkloads(workloads: TSWorkloadList)
+  def configureWorkload(workloadName: String, workloadParams: TSWorkload)
   
   @TSClientMethod(name = "start_workload", 
                   argNames = Array("workload_name", "start_time"), 

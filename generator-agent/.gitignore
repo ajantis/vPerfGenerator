@@ -1,0 +1,8 @@
+build
+client
+.cproject
+.project
+.pydevproject
+*.pyc
+*.pyo
+.sconsign.dblite
