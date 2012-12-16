@@ -1,0 +1,6 @@
+Import('env')
+
+lib = env.Clone(LIBS = ['c'])
+
+lib.AddDeps(('lib', 'libjson'), ('lib', 'libtscommon'), ('lib', 'libtsagent'))
+lib.SharedLibrary(lib.Target('lib/libtsload'), Glob("src/*.c") + Glob("src/disp/*.c"))

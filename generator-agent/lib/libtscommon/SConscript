@@ -1,0 +1,6 @@
+Import('env')
+
+lib = env.Clone(LIBS = ['c', 'dl', 'pthread'])
+
+lib.AddDeps(('lib', 'libjson'))
+lib.SharedLibrary(lib.Target('lib/libtscommon'), Glob("src/*.c"))

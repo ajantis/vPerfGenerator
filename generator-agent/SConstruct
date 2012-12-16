@@ -1,0 +1,79 @@
+import os
+
+PathJoin = os.path.join
+
+def BuildDir(self, dir):
+    return PathJoin('#build', 'build', dir)
+
+def Target(self, target):
+    return PathJoin('#build', self['PLATFORM'], target)
+
+def AddDeps(self, *deps):
+    for dir, dep in deps:
+        self['CPPPATH'] += ['#%s/%s/include' % (dir, dep)]
+        self['LIBS'] += [dep]
+
+def Module(self, mod_name):
+    mod = self.Clone(CFLAGS = ['-DNO_JSON'])
+    
+    mod.AddDeps(('lib', 'libtscommon'), ('lib', 'libtsload'))
+    mod.SharedLibrary(mod.Target(PathJoin('mod', mod_name)), Glob("src/*.c"))
+
+def InstallFile(self, target, file_name):
+    self.Command(PathJoin(self.Target(target), file_name),
+                 file_name, Copy("$TARGET", "$SOURCE"))
+
+# Prepare build environment
+
+env = DefaultEnvironment()
+
+env.AddMethod(AddDeps)
+env.AddMethod(BuildDir)
+env.AddMethod(Target)
+env.AddMethod(Module)
+env.AddMethod(InstallFile)
+
+env['CPPPATH'] = ['include']
+env['LIBPATH'] = [env.Target('lib')]
+env['LIBS'] = []
+
+env['CCFLAGS'] = ['-m64', '-Wall']
+
+# env[] syntax not working here :(
+env.Append(LINKFLAGS = ['-z origin'])
+env.Append(RPATH = env.Literal(os.path.join('\\$$ORIGIN', os.pardir, 'lib')))
+
+# For debugging
+env['CCFLAGS'] += ["-g"]
+env['CCFLAGS'] += ["-DTS_LOCK_DEBUG"]
+
+env['CCFLAGS'] += ['-DJSON_DEBUG', '-DJSON_MEMORY_CALLBACKS', '-DJSON_INT_TYPE=long long']
+
+# Supress "unused" warnings
+env['CCFLAGS'] += ['-Wno-unused-label', '-Wno-unused-variable', '-Wno-unused-function']
+
+# Building shared libraries
+SConscript('lib/libjson/SConscript', 'env', 
+           variant_dir = env.BuildDir('libjson'))
+SConscript('lib/libtscommon/SConscript', 'env', 
+           variant_dir = env.BuildDir('libtscommon'))
+SConscript('lib/libhostinfo/SConscript', 'env', 
+           variant_dir = env.BuildDir('libhostinfo'))
+SConscript('lib/libtsagent/SConscript', 'env', 
+           variant_dir = env.BuildDir('libtsagent'))
+SConscript('lib/libtsload/SConscript', 'env', 
+           variant_dir = env.BuildDir('libtsload'))
+
+# Building commands
+
+SConscript('cmd/tsloadd/SConscript', 'env', 
+           variant_dir = env.BuildDir('cmd_tsloadd'))
+
+
+# Building modules
+
+for mod in Dir('mod').glob('*'):
+    mod_name = os.path.basename(str(mod))
+        
+    SConscript(PathJoin(str(mod), 'SConscript'), 'env', 
+           variant_dir = env.BuildDir('mod_' + mod_name))

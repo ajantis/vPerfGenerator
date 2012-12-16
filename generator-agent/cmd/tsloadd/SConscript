@@ -1,0 +1,15 @@
+import os
+
+Import('env')
+
+cmd = env.Clone(LIBS = ['c'])
+
+cmd.AddDeps(('lib', 'libtsagent'), 
+            ('lib', 'libtscommon'), 
+            ('lib', 'libjson'), 
+            ('lib', 'libhostinfo'), 
+            ('lib', 'libtsload'))
+tsloadd = cmd.Program(cmd.Target('bin/tsloadd'), Glob("src/*.c"))
+
+cmd.Depends(tsloadd, 'tsload.cfg')
+cmd.InstallFile('etc', 'tsload.cfg')

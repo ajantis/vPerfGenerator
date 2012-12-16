@@ -1,0 +1,6 @@
+Import('env')
+
+lib = env.Clone(LIBS = ['stdc++'],
+                CXXFLAGS = ['-Os', '-ffast-math', '-DJSON_LESS_MEMORY'])
+
+lib.SharedLibrary(lib.Target('lib/libjson'), Glob("src/*.cpp"))
