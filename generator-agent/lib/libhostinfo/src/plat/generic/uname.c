@@ -1,46 +1,36 @@
 /*
  * uname.c
  *
- *  Created on: Dec 10, 2012
+ *  Created on: Dec 17, 2012
  *      Author: myaut
  */
 
-#include <defs.h>
 #include <uname.h>
 
-#include <sys/utsname.h>
-
-static int uname_read = FALSE;
-static struct utsname uname_data;
-
-static inline struct utsname* hi_get_uname() {
-	if(!uname_read)
-		uname(&uname_data);
-
-	return &uname_data;
-}
+PLATAPIDECL(hi_get_nodename) char nodename[64];
+PLATAPIDECL(hi_get_mach) char mach[64];
 
 /* Returns operating system name and version */
 PLATAPI const char* hi_get_os_name() {
-	return hi_get_uname()->sysname;
+	return "Generic OS";
 }
 
 PLATAPI const char* hi_get_os_release() {
-	return hi_get_uname()->release;
+	return "1.0";
 }
 
 /* Returns nodename and domain name of current host*/
 PLATAPI const char* hi_get_nodename() {
-	return hi_get_uname()->nodename;
+	/*NOTE: hostname should be set via config file*/
+	return nodename;
 }
 
 PLATAPI const char* hi_get_domainname() {
 	/*FIXME: solaris/bsd implementation*/
-	return hi_get_uname()->__domainname;
+	return "";
 }
 
 /* Returns machine architecture */
 PLATAPI const char* hi_get_mach() {
-	return hi_get_uname()->machine;
+	return mach;
 }
-

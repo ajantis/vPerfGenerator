@@ -24,4 +24,8 @@
 #define MS		1000 * US
 #define SEC		1000 * MS
 
+/* Platform API */
+#define PLATAPI
+#define PLATAPIDECL(...)
+
 #endif /* DEFS_H_ */

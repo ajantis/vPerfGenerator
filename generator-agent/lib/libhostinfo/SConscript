@@ -2,5 +2,7 @@ Import('env')
 
 lib = env.Clone()
 
+lib.PreparePlatform()
+
 lib.AddDeps(('lib', 'libjson'), ('lib', 'libtscommon'))
-lib.SharedLibrary(lib.Target('lib/libhostinfo'), Glob("src/plat/posix/*.c"))
+lib.SharedLibrary(lib.Target('lib/libhostinfo'), Glob("plat/*/*.c"))

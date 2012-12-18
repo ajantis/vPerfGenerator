@@ -1,8 +1,9 @@
 build
-client
 .cproject
 .project
 .pydevproject
 *.pyc
 *.pyo
 .sconsign.dblite
+.plat_cache
+.plat_cache.lck

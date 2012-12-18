@@ -1,6 +1,13 @@
 import os
+import sys
+
+from SCons.Errors import BuildError 
 
 PathJoin = os.path.join
+PathBaseName = os.path.basename
+PathExists = os.path.exists
+
+# Cross-platform generator
 
 def BuildDir(self, dir):
     return PathJoin('#build', 'build', dir)
@@ -23,6 +30,33 @@ def InstallFile(self, target, file_name):
     self.Command(PathJoin(self.Target(target), file_name),
                  file_name, Copy("$TARGET", "$SOURCE"))
 
+def PreparePlatform(self):
+    self.Append(ENV = {'PLATCACHE': PathJoin(Dir('.').path, self['PLATCACHE'])})
+    self.Append(ENV = {'PLATDEBUG': self['PLATDEBUG']})
+    
+    plat_chain = list(reversed(self['PLATCHAIN']))
+    plat_cache = self['PLATCACHE']
+    
+    self.PlatIncBuilder(plat_cache, Dir('include').glob('*.h'))
+    
+    for plat_name in plat_chain:        
+        for src_file in Dir('src').Dir('plat').Dir(plat_name).glob('*.c'):
+            tgt_file = File(str(src_file).replace('src/plat', 'plat'))            
+            
+            # Each source file depends on platform cache
+            # and all source that are more specific than this file
+            # Otherwise SCons will select generic implementation
+            base_name = PathBaseName(str(src_file))
+            
+            self.Depends(tgt_file, plat_cache)
+            
+            # List all dependent platforms and add dependencies
+            for dep_plat_name in plat_chain[plat_chain.index(plat_name) + 1:]:
+                self.Depends(tgt_file, PathJoin('plat', dep_plat_name, base_name))
+            
+            # Add builder 
+            self.PlatSrcBuilder(tgt_file, src_file)
+
 # Prepare build environment
 
 env = DefaultEnvironment()
@@ -32,6 +66,7 @@ env.AddMethod(BuildDir)
 env.AddMethod(Target)
 env.AddMethod(Module)
 env.AddMethod(InstallFile)
+env.AddMethod(PreparePlatform)
 
 env['CPPPATH'] = ['include']
 env['LIBPATH'] = [env.Target('lib')]
@@ -52,6 +87,20 @@ env['CCFLAGS'] += ['-DJSON_DEBUG', '-DJSON_MEMORY_CALLBACKS', '-DJSON_INT_TYPE=l
 # Supress "unused" warnings
 env['CCFLAGS'] += ['-Wno-unused-label', '-Wno-unused-variable', '-Wno-unused-function']
 
+# Cross-platform build
+env['PLATCHAIN'] = ['linux', 'posix', 'generic']
+env['PLATDEBUG'] = True
+env['PLATCACHE'] = 'plat_cache.pch'
+
+#
+PlatIncBuilder = Builder(action = '%s tools/plat/parse-include.py $SOURCES' % (sys.executable),
+                         src_suffix = '.h')
+PlatSrcBuilder = Builder(action = '%s tools/plat/proc-source.py $SOURCE > $TARGET' % (sys.executable),
+                         suffix = '.c',
+                         src_suffix = '.c')
+env.Append(BUILDERS = {'PlatIncBuilder': PlatIncBuilder, 
+                       'PlatSrcBuilder': PlatSrcBuilder})
+
 # Building shared libraries
 SConscript('lib/libjson/SConscript', 'env', 
            variant_dir = env.BuildDir('libjson'))
@@ -68,7 +117,6 @@ SConscript('lib/libtsload/SConscript', 'env',
 
 SConscript('cmd/tsloadd/SConscript', 'env', 
            variant_dir = env.BuildDir('cmd_tsloadd'))
-
 
 # Building modules
 
