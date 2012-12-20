@@ -35,10 +35,10 @@ class PlatFunction:
         self.impl = str(node)
         return True
     
-    re = re.compile('PLATAPI\s+(.*?)\s+([A-Za-z_0-9]+)\s*\((.*?)\)')
+    re = re.compile('PLATAPI\s+(.*?)\s+([A-Za-z_0-9]+)\s*\((.*?)\)', re.DOTALL)
 
 class PlatDeclaration:
-    re = re.compile('PLATAPIDECL\s*\((.*?)\)\s+(.*?);')
+    re = re.compile('PLATAPIDECL\s*\((.*?)\)\s+(.*?);', re.DOTALL)
 
 class PlatCacheDecorator:
     def __init__(self, mode):
@@ -96,22 +96,26 @@ class PlatCache:
     @classmethod
     @PlatCacheDecorator(READWRITE)
     def delete(self, defin):
+        '''Delete functions defined in source define from plat_cache'''
         func_names = []
         
         for func in self.shelve.values():
-            func_names.append(func.name)
+            if func.defin == defin:
+                func_names.append(func.name)
             
         for func_name in func_names:
-            del self.shelve[func]
+            del self.shelve[func_name]
     
     @classmethod
     @PlatCacheDecorator(READWRITE)
     def update_func(self, func):
+        '''Update function info in plat cache'''
         self.shelve[func.name] = func
 
     @classmethod
     @PlatCacheDecorator(READWRITE)
     def update(self, plat_funcs):
+        '''Update functions from plat_funcs dictionary'''
         for func_name in plat_funcs:
             self.shelve[func_name] = plat_funcs[func_name]
     

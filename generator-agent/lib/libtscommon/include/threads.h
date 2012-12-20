@@ -10,14 +10,17 @@
 
 #include <stdint.h>
 
+#include <plat/threads.h>
+
 #include <defs.h>
 #include <sys/time.h>
 #include <pthread.h>
 #include <unistd.h>
 
-#define TEVENTNAMELEN	16
-#define TMUTEXNAMELEN	16
-#define TNAMELEN		32
+#define TEVENTNAMELEN	32
+#define TMUTEXNAMELEN	32
+#define TKEYNAMELEN 	32
+#define TNAMELEN		48
 
 #define THASHSHIFT		4
 #define THASHSIZE		(1 << THASHSHIFT)
@@ -83,34 +86,38 @@ typedef enum {
 } thread_state_t;
 
 typedef struct {
+	plat_thread_event_t te_impl;
+
 	char			te_name[TEVENTNAMELEN];
-
-	pthread_mutex_t	te_mutex;
-	pthread_cond_t  te_cv;
-
 } thread_event_t;
 
 typedef struct {
+	plat_thread_mutex_t tm_impl;
+
 	char 			tm_name[TMUTEXNAMELEN];
-
-	pthread_mutex_t	tm_mutex;
-
 	int				tm_is_recursive;
 } thread_mutex_t;
 
+typedef struct {
+	plat_thread_key_t tk_impl;
+
+	char			tk_name[TKEYNAMELEN];
+} thread_key_t;
+
+typedef unsigned 	thread_id_t;
+
 typedef struct thread {
+	plat_thread_t	t_impl;
+
 	thread_state_t	t_state;
 
-	int				t_id;
+	thread_id_t  	t_id;
 	int				t_local_id;
 
 	/*FIXME: only for linux*/
 	pid_t			t_system_id;
 
 	char 			t_name[TNAMELEN];
-
-	pthread_attr_t 	t_attr;
-	pthread_t		t_thread;
 
 	/* When thread finishes, it notifies parent thread thru t_cv*/
 	thread_event_t*	t_event;
@@ -140,6 +147,12 @@ void event_notify_one(thread_event_t* event);
 void event_notify_all(thread_event_t* event);
 void event_destroy(thread_event_t* event);
 
+void tkey_init(thread_key_t* key, void (*destructor)(void* key),
+			   const char* namefmt, ...);
+void tkey_destroy(thread_key_t* key);
+void tkey_set(thread_key_t* key, void* value);
+void* tkey_get(thread_key_t* key);
+
 thread_t* t_self();
 
 void t_init(thread_t* thread, void* arg,
@@ -155,5 +168,27 @@ int threads_init(void);
 void threads_fini(void);
 
 void t_dump_threads();
+
+/* Platform-dependent functions */
+
+PLATAPI void plat_thread_init(plat_thread_t* thread, void* arg,
+							  void* (*start)(void*));
+PLATAPI void plat_thread_destroy(plat_thread_t* thread);
+
+PLATAPI void plat_mutex_init(plat_thread_mutex_t* mutex, int recursive);
+PLATAPI void plat_mutex_lock(plat_thread_mutex_t* mutex);
+PLATAPI void plat_mutex_unlock(plat_thread_mutex_t* mutex);
+PLATAPI void plat_mutex_destroy(plat_thread_mutex_t* mutex);
+
+PLATAPI void plat_event_init(plat_thread_event_t* event);
+PLATAPI void plat_event_wait_unlock(plat_thread_event_t* event, plat_thread_mutex_t* mutex);
+PLATAPI void plat_event_notify_one(plat_thread_event_t* event);
+PLATAPI void plat_event_notify_all(plat_thread_event_t* event);
+PLATAPI void plat_event_destroy(plat_thread_event_t* event);
+
+PLATAPI void plat_tkey_init(plat_thread_key_t* key, void (*destructor)(void* key));
+PLATAPI void plat_tkey_destroy(plat_thread_key_t* key);
+PLATAPI void plat_tkey_set(plat_thread_key_t* key, void* value);
+PLATAPI void* plat_tkey_get(plat_thread_key_t* key);
 
 #endif /* THREADPOOL_H_ */

@@ -70,7 +70,9 @@ void parse_options(int argc, char* argv[]) {
 }
 
 void sigusr1_handler(int sig) {
+#if 0
 	t_dump_threads();
+#endif
 }
 
 int main(int argc, char* argv[]) {

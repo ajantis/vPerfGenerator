@@ -14,11 +14,12 @@
 
 #include <errno.h>
 
+/* Events */
+
 void event_init(thread_event_t* event, const char* namefmt, ...) {
 	va_list va;
 
-	pthread_mutex_init(&event->te_mutex, NULL);
-	pthread_cond_init (&event->te_cv, NULL);
+	plat_event_init(&event->te_impl);
 
 	va_start(va, namefmt);
 	vsnprintf(event->te_name, TEVENTNAMELEN, namefmt, va);
@@ -36,14 +37,7 @@ void event_wait_unlock(thread_event_t* event, thread_mutex_t* mutex) {
 	}
 #endif
 
-	while(pthread_mutex_lock(&event->te_mutex) == EINVAL);
-
-	if(mutex) {
-		mutex_unlock(mutex);
-	}
-
-	pthread_cond_wait(&event->te_cv, &event->te_mutex);
-	pthread_mutex_unlock(&event->te_mutex);
+	plat_event_wait_unlock(&event->te_impl, &mutex->tm_impl);
 
 #ifdef TS_LOCK_DEBUG
 	if(t != NULL) {
@@ -58,27 +52,23 @@ void event_wait(thread_event_t* event) {
 }
 
 void event_notify_one(thread_event_t* event) {
-	while(pthread_mutex_lock(&event->te_mutex) == EINVAL);
-    pthread_cond_signal(&event->te_cv);
-    pthread_mutex_unlock(&event->te_mutex);
+	plat_event_notify_one(&event->te_impl);
 }
 
 void event_notify_all(thread_event_t* event) {
-	while(pthread_mutex_lock(&event->te_mutex) == EINVAL);
-
-    pthread_cond_broadcast(&event->te_cv);
-    pthread_mutex_unlock(&event->te_mutex);
+	plat_event_notify_all(&event->te_impl);
 }
 
 void event_destroy(thread_event_t* event) {
-	pthread_mutex_destroy(&event->te_mutex);
-	pthread_cond_destroy(&event->te_cv);
+	plat_event_destroy(&event->te_impl);
 }
 
+/* Mutexes */
+
 static void __mutex_init(thread_mutex_t* mutex,
-						 pthread_mutexattr_t* attr,
+						 int recursive,
 					     const char* namefmt, va_list va) {
-	pthread_mutex_init(&mutex->tm_mutex, attr);
+	plat_mutex_init(&mutex->tm_impl, recursive);
 
 	vsnprintf(mutex->tm_name, TMUTEXNAMELEN, namefmt, va);
 }
@@ -87,20 +77,15 @@ void mutex_init(thread_mutex_t* mutex, const char* namefmt, ...) {
 	va_list va;
 
 	va_start(va, namefmt);
-	__mutex_init(mutex, NULL, namefmt, va);
+	__mutex_init(mutex, FALSE, namefmt, va);
 	va_end(va);
-
-
 }
 
 void rmutex_init(thread_mutex_t* mutex, const char* namefmt, ...) {
 	va_list va;
-	pthread_mutexattr_t mta;
-
-	pthread_mutexattr_settype(&mta, PTHREAD_MUTEX_RECURSIVE);
 
 	va_start(va, namefmt);
-	__mutex_init(mutex, &mta, namefmt, va);
+	__mutex_init(mutex, TRUE, namefmt, va);
 	va_end(va);
 }
 
@@ -118,7 +103,7 @@ void mutex_lock(thread_mutex_t* mutex) {
 	}
 #endif
 
-	while(pthread_mutex_lock(&mutex->tm_mutex) == EINVAL);
+	plat_mutex_lock(&mutex->tm_impl);
 
 #ifdef TS_LOCK_DEBUG
 	if(t != NULL) {
@@ -129,10 +114,35 @@ void mutex_lock(thread_mutex_t* mutex) {
 }
 
 void mutex_unlock(thread_mutex_t* mutex) {
-	pthread_mutex_unlock(&mutex->tm_mutex);
+	plat_mutex_unlock(&mutex->tm_impl);
 }
 
 
 void mutex_destroy(thread_mutex_t* mutex) {
-	pthread_mutex_destroy(&mutex->tm_mutex);
+	plat_mutex_destroy(&mutex->tm_impl);
+}
+
+/* Keys */
+
+void tkey_init(thread_key_t* key, void (*destructor)(void* key),
+			   const char* namefmt, ...) {
+	va_list va;
+
+	plat_tkey_init(&key->tk_impl, destructor);
+
+	va_start(va, namefmt);
+	vsnprintf(key->tk_name, TKEYNAMELEN, namefmt, va);
+	va_end(va);
+}
+
+void tkey_destroy(thread_key_t* key) {
+	plat_tkey_destroy(&key->tk_impl);
+}
+
+void tkey_set(thread_key_t* key, void* value) {
+	plat_tkey_set(&key->tk_impl, value);
+}
+
+void* tkey_get(thread_key_t* key) {
+	return plat_tkey_get(&key->tk_impl);
 }

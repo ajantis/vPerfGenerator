@@ -3,6 +3,20 @@ import sys
 
 from plat import PlatFunction, PlatDeclaration, PlatCache
 
+class SourcePrinter:
+    line = 0
+    
+    @classmethod
+    def do_account(cls, s):
+        cls.line += sum(1 for c in s if c == '\n')
+    
+    @classmethod
+    def do_print(cls, s):
+        # Count line breaks
+        cls.do_account(s)
+        
+        print s
+
 debug = False
 
 if 'PLATDEBUG' in os.environ:
@@ -41,10 +55,10 @@ while True:
         func_pos = pos = source.index('PLATAPI', pos)
         
         # Write information data PLATAPI functions
-        print source[old_pos:pos]
+        SourcePrinter.do_print(source[old_pos:pos])
     except ValueError:
         # PLATAPI function was not found - Print last piece of file
-        print source[old_pos:len(source)]
+        SourcePrinter.do_print(source[old_pos:len(source)])
         break 
     
     # Process platform-dependent declarations
@@ -55,7 +69,7 @@ while True:
         decl = PlatDeclaration.re.match(decl_str)
         
         if decl is None:
-            print >> sys.stderr, 'Invalid PLATAPIDECL "%s" found!' % decl_str
+            print >> sys.stderr, '%s:%d > Invalid PLATAPIDECL "%s" found' % (source_fn, SourcePrinter.line, decl_str)
             sys.exit(1)
         
         func_names = [fname.strip() for fname in decl.group(1).split(',')]
@@ -64,7 +78,7 @@ while True:
         if any(func.may_impl(source_fn) 
                for func in plat_funcs.values() 
                if func.name in func_names):
-                   print decl_str
+                   SourcePrinter.do_print(decl_str)
         
         # Continue
         pos = decl_end_pos + 1
@@ -76,7 +90,7 @@ while True:
     func_list = PlatFunction.re.findall(source[pos:brace_pos])
     
     if len(func_list) != 1:
-        print >> sys.stderr, 'Found more than one PLATAPI function in declaration'
+        print >> sys.stderr, '%s:%d > Invalid PLATAPI function in declaration' % (source_fn, SourcePrinter.line)
         sys.exit(1)
     
     func_name = func_list[0][1]
@@ -90,13 +104,14 @@ while True:
         if not plat_func.set_impl(source_fn):
             # Function already implemented - remove implementation from source
             if debug:
-                print >> sys.stderr, 'REMOVE %s FROM %s IMPL %s' % (func_name, source_fn, plat_func.impl)
+                print >> sys.stderr, '%s:%d > REMOVE %s FROM %s IMPL %s' % (source_fn, 
+                                            SourcePrinter.line, func_name, source_fn, plat_func.impl)
             remove = True
         else:
             # Say platcache that we are implementing this function
             PlatCache.update_func(plat_func)
     except KeyError:
-        print >> sys.stderr, '%s is not platform-dependent function' % func_name
+        print >> sys.stderr, '%s:%d > %s is not platform-dependent function' % (source_fn, SourcePrinter.line, func_name)
         sys.exit(1)
     
     # Scan source for ending brace
@@ -115,10 +130,12 @@ while True:
         
         brace_pos += 1
     else:
-        print >> sys.stderr, 'Unfinished braces!'
+        print >> sys.stderr, '%s:%d > Unfinished braces at function %s!' % (source_fn, SourcePrinter.line, func_name)
         sys.exit(1)
     
     # Found ending of function body, print it, if
     pos = brace_pos + 1
     if not remove:
-        print source[func_pos:pos]
+        SourcePrinter.do_print(source[func_pos:pos])
+    else:
+        SourcePrinter.do_account(source[func_pos:pos])

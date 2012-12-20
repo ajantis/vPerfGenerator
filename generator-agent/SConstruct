@@ -7,17 +7,19 @@ PathJoin = os.path.join
 PathBaseName = os.path.basename
 PathExists = os.path.exists
 
-# Cross-platform generator
-
 def BuildDir(self, dir):
     return PathJoin('#build', 'build', dir)
 
 def Target(self, target):
+    self['CURTARGET'] = target
+    
     return PathJoin('#build', self['PLATFORM'], target)
 
 def AddDeps(self, *deps):
     for dir, dep in deps:
-        self['CPPPATH'] += ['#%s/%s/include' % (dir, dep)]
+        inc_dir = PathJoin(dep, 'include')
+        
+        self['CPPPATH'] += [self.BuildDir(inc_dir)]
         self['LIBS'] += [dep]
 
 def Module(self, mod_name):
@@ -37,10 +39,26 @@ def PreparePlatform(self):
     plat_chain = list(reversed(self['PLATCHAIN']))
     plat_cache = self['PLATCACHE']
     
+    plat_includes = []
+    
     self.PlatIncBuilder(plat_cache, Dir('include').glob('*.h'))
     
-    for plat_name in plat_chain:        
-        for src_file in Dir('src').Dir('plat').Dir(plat_name).glob('*.c'):
+    # Build platform-chained includes and sources
+    for plat_name in plat_chain:      
+        # For each platform-dependent include select best match and copy
+        # it from plat/<platform>/include.h to plat/include.h
+        for inc_file in Dir('include').Dir('plat').Dir(plat_name).glob('*.h'): 
+            base_name = PathBaseName(str(inc_file))
+            dest_file = PathJoin('include/plat', base_name)
+            
+            if base_name not in plat_includes:
+                self.Command(dest_file, inc_file, Copy("$TARGET", "$SOURCE"))
+                
+                plat_includes.append(base_name)
+        
+        # Parse source files for platform-api function implementation
+        # and select best match for it
+        for src_file in Dir('src').Dir('plat').Dir(plat_name).glob('*.c'):            
             tgt_file = File(str(src_file).replace('src/plat', 'plat'))            
             
             # Each source file depends on platform cache
@@ -50,9 +68,15 @@ def PreparePlatform(self):
             
             self.Depends(tgt_file, plat_cache)
             
-            # List all dependent platforms and add dependencies
+            # Add dependencies for all available platforms to ensure that
+            # most specific platform will be built earlier than "generic" platfrom
             for dep_plat_name in plat_chain[plat_chain.index(plat_name) + 1:]:
-                self.Depends(tgt_file, PathJoin('plat', dep_plat_name, base_name))
+                dep_plat_path = PathJoin('plat', dep_plat_name, base_name)
+                
+                if not PathExists(dep_plat_path):
+                    continue
+                
+                self.Depends(tgt_file, dep_plat_path)
             
             # Add builder 
             self.PlatSrcBuilder(tgt_file, src_file)
@@ -68,7 +92,10 @@ env.AddMethod(Module)
 env.AddMethod(InstallFile)
 env.AddMethod(PreparePlatform)
 
-env['CPPPATH'] = ['include']
+env['DEPTARGETS'] = {}
+env['CURTARGET'] = ''
+
+env['CPPPATH'] = ['#include', 'include']
 env['LIBPATH'] = [env.Target('lib')]
 env['LIBS'] = []
 
