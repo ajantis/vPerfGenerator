@@ -10,8 +10,8 @@ class TSHostInfo extends TSObject {
   var hostName: String = _
 }
 
-class TSHelloResponse(agentId: Long) extends TSObject {
-  val agent_id: Long = agentId 
+class TSHelloResponse(agentId: String) extends TSObject {
+  val agent_id: String = agentId
 }
 
 /* getModulesInfo() */

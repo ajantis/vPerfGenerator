@@ -4,7 +4,7 @@
 
     <groupId>com.vperflab</groupId>
     <artifactId>generator-server</artifactId>
-    <version>0.1</version>
+    <version>1.0.0-SNAPSHOT</version>
     <packaging>pom</packaging>
     <name>vPerfGenerator</name>
 
@@ -19,6 +19,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <org.springframework.version>3.1.0.RELEASE</org.springframework.version>
         <scala.version>2.9.1</scala.version>
+        <lift.version>2.4</lift.version>
         <akka.version>2.0</akka.version>
         <project.reporting.outputEncoding>${project.build.sourceEncoding}</project.reporting.outputEncoding>
     </properties>

@@ -10,11 +10,12 @@ import _root_.net.liftweb.mapper.{DB, Schemifier, DefaultConnectionIdentifier, S
 import _root_.net.liftweb.widgets.logchanger._
 import net.liftweb.widgets.flot._
 import net.liftweb.http.ResourceServer
-import com.vperflab.model.{Iteration, Experiment, 
-			IterationExecution, Execution, Agent}
+import com.vperflab.model.{Iteration, Experiment,
+IterationExecution, Execution, Agent}
 import model.User
 import snippet.LogLevel
 import net.liftweb.sitemap.Loc.Hidden
+import net.liftweb.mongodb.{MongoHost, MongoAddress, DefaultMongoIdentifier, MongoDB}
 
 /**
  * A class that's instantiated early and run.  It allows the application
@@ -23,25 +24,15 @@ import net.liftweb.sitemap.Loc.Hidden
 class Boot extends Bootable {
 
   def boot {
-    if (!DB.jndiJdbcConnAvailable_?) {
-      val vendor =
-        new StandardDBVendor(Props.get("db.driver") openOr "org.h2.Driver",
-          Props.get("db.url") openOr
-            "jdbc:h2:lift_proto.db;AUTO_SERVER=TRUE",
-          Props.get("db.user"), Props.get("db.password"))
-
-      LiftRules.unloadHooks.append(vendor.closeAllConnections_! _)
-
-      DB.defineConnectionManager(DefaultConnectionIdentifier, vendor)
-    }
+    MongoDB.defineDb(
+      DefaultMongoIdentifier,
+      MongoAddress(MongoHost( Props.get("mongodb.host") openOr "127.0.0.1"), Props.get("mongodb.name") openOr "lift_app")
+    )
 
     // where to search snippet
     val snippetPackages = List("com.vperflab.web")
 
     snippetPackages.foreach(LiftRules.addToPackages(_))
-
-    Schemifier.schemify(true, Schemifier.infoF _, User, Experiment, Iteration, 
-        IterationExecution, Execution, Agent)
 
     // Build SiteMap
     def sitemap() = SiteMap(
@@ -51,11 +42,11 @@ class Boot extends Bootable {
       Menu("Experiments") / "experiments" / "index" >> LocGroup("mainMenu"),
       Menu("Profiles") / "profiles" / "index" >> LocGroup("mainMenu"),
       Menu("Monitoring") / "monitoring" >> LocGroup("mainMenu"),
-      
+
       // Menus on top bar (helper menu)
       Menu("Help") / "help" >> LocGroup("topMenu"),
       Menu("About") / "about" >> LocGroup("topMenu"),
-      
+
       LogLevel.menu // adding a menu for log level changer snippet page. By default it's /loglevel/change
     )
 
@@ -76,7 +67,7 @@ class Boot extends Bootable {
     LiftRules.early.append(makeUtf8)
 
     LiftRules.loggedInTest = Full(() => User.loggedIn_?)
-    
+
     LiftRules.statelessRewrite.prepend(NamedPF("ParticularExperimentRewrite") {
       case RewriteRequest(
       ParsePath("experiments" :: experimentId :: Nil , _, _,_), _, _) if (isNumeric(experimentId)) =>
@@ -101,7 +92,6 @@ class Boot extends Bootable {
     // instantiating of loglevel changer widget
     LogLevelChanger.init
 
-    S.addAround(DB.buildLoanWrapper())
   }
 
   /**
