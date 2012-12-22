@@ -66,6 +66,9 @@ def PreparePlatform(self):
             # Otherwise SCons will select generic implementation
             base_name = PathBaseName(str(src_file))
             
+            # We need it for dependent platforms, because VariantDir was not processed yet
+            src_path = Dir('src').srcnode().abspath
+            
             self.Depends(tgt_file, plat_cache)
             
             # Add dependencies for all available platforms to ensure that
@@ -73,10 +76,12 @@ def PreparePlatform(self):
             for dep_plat_name in plat_chain[plat_chain.index(plat_name) + 1:]:
                 dep_plat_path = PathJoin('plat', dep_plat_name, base_name)
                 
-                if not PathExists(dep_plat_path):
+                # Cannot use SCons.Node here because it creates dependencies for unexistent files
+                dep_file = PathJoin(src_path, dep_plat_path)
+                if not PathExists(dep_file):
                     continue
                 
-                self.Depends(tgt_file, dep_plat_path)
+                self.Depends(tgt_file, File(dep_plat_path))
             
             # Add builder 
             self.PlatSrcBuilder(tgt_file, src_file)

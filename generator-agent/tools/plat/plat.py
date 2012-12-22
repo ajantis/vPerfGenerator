@@ -82,7 +82,7 @@ class PlatCache:
     def open(self):
         '''Open lock file than shelve'''
         self.lock_file = file(self.file_name + '.lck', self.lock_file_mode)
-        fcntl.flock(self.lock_file.fileno(), self.lock_mode | fcntl.LOCK_NB)
+        fcntl.flock(self.lock_file.fileno(), self.lock_mode)
         
         self.shelve = shelve.open(self.file_name, flag = self.shelve_mode)
     
