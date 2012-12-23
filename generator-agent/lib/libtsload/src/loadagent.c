@@ -45,7 +45,7 @@ void agent_configure_workloads(JSONNODE* argv[]) {
 		return agent_error_msg(AE_INTERNAL_ERROR, "workload_error!");
 	}
 
-	list_for_each_entry(wl, &wl_list, wl_chain) {
+	list_for_each_entry(workload_t, wl, &wl_list, wl_chain) {
 		wl_config(wl);
 	}
 
@@ -67,7 +67,7 @@ void agent_start_workload(JSONNODE* argv[]) {
 		return;
 	}
 
-	if(wl->wl_is_configured == FALSE) {
+	if(wl->wl_is_configured == B_FALSE) {
 		agent_error_msg(AE_INVALID_DATA, "Workload %s not yet configured", wl_name);
 		json_free(wl_name);
 		return;
@@ -141,40 +141,28 @@ void agent_requests_report(JSONNODE* j_rq_list) {
 }
 
 static agent_dispatch_t loadagent_table[] = {
-	{
-		.ad_name = "get_modules_info",
-		.ad_args = {
-			ADT_LAST_ARG()
-		},
-		.ad_method = agent_get_modules_info
-	},
-	{
-		.ad_name = "configure_workloads",
-		{
+	AGENT_METHOD("get_modules_info",
+		ADT_ARGS(),
+		agent_get_modules_info),
+	AGENT_METHOD("configure_workloads",
+		ADT_ARGS(
 			ADT_ARGUMENT("workloads", JSON_NODE),
-			ADT_LAST_ARG()
-		},
-		.ad_method = agent_configure_workloads
-	},
-	{
-		.ad_name = "start_workload",
-		{
+		),
+		agent_configure_workloads),
+	AGENT_METHOD("start_workload",
+		ADT_ARGS(
 			ADT_ARGUMENT("workload_name", JSON_STRING),
 			ADT_ARGUMENT("start_time", JSON_NUMBER),
-			ADT_LAST_ARG()
-		},
-		.ad_method = agent_start_workload
-	},
-	{
-	.ad_name = "provide_step",
-		{
+		),
+		agent_start_workload),
+	AGENT_METHOD("provide_step",
+		ADT_ARGS(
 			ADT_ARGUMENT("workload_name", JSON_STRING),
 			ADT_ARGUMENT("step_id", JSON_NUMBER),
 			ADT_ARGUMENT("num_requests", JSON_NUMBER),
-			ADT_LAST_ARG()
-		},
-		.ad_method = agent_provide_step
-	},
+		),
+		agent_provide_step),
+
 	ADT_LAST_METHOD()
 };
 

@@ -9,17 +9,12 @@
 #include <syncqueue.h>
 #include <client.h>
 #include <atomic.h>
+#include <tstime.h>
 
 #include <libjson.h>
 
 #include <stdlib.h>
 #include <assert.h>
-
-#include <poll.h>
-#include <unistd.h>
-#include <pthread.h>
-#include <netdb.h>
-#include <sys/socket.h>
 
 #define CLNT_CHUNK	1024
 
@@ -27,21 +22,17 @@ JSONNODE* json_clnt_command_format(const char* command, JSONNODE* msg_node, unsi
 void clnt_proc_set_msg(clnt_proc_msg_t* msg);
 
 /* Globals */
-int clnt_trace_decode = FALSE;
-
-int clnt_sockfd = -1;
+int clnt_trace_decode = B_FALSE;
 
 int clnt_port = 9090;
 char clnt_host[CLNTHOSTLEN] = "localhost";
-
-struct sockaddr_in clnt_sa;
 
 /* Message unique identifier */
 static atomic_t clnt_msg_id = 0;
 
 /* Threads and it's flags */
-int clnt_connected = FALSE;
-int clnt_finished = FALSE;
+int clnt_connected = B_FALSE;
+int clnt_finished = B_FALSE;
 
 thread_t t_client_receive;
 thread_t t_client_connect;
@@ -60,7 +51,7 @@ squeue_t proc_queue;
 DECLARE_HASH_MAP(hdl_hashmap, clnt_msg_handler_t, CLNTMHTABLESIZE, mh_msg_id, mh_next,
 	{
 		unsigned* msg_id = (unsigned*) key;
-		return *msg_id & CLNTMHTABLESIZE;
+		return *msg_id & CLNTMHTABLEMASK;
 	},
 	{
 		unsigned* msg_id1 = (unsigned*) key1;
@@ -243,11 +234,10 @@ void* clnt_proc_thread(void* arg) {
 }
 
 void clnt_on_disconnect() {
-	clnt_connected = FALSE;
+	clnt_connected = B_FALSE;
 	/*TODO: cleanup all client resources*/
 
-	shutdown(clnt_sockfd, SHUT_RDWR);
-	close(clnt_sockfd);
+	clnt_disconnect();
 
 	/*Notify connect thread*/
 	event_notify_all(&conn_event);
@@ -288,13 +278,7 @@ void clnt_recv_parse(void* buffer, size_t recvlen) {
 void* clnt_recv_thread(void* arg) {
 	THREAD_ENTRY(arg, void, unused);
 
-	struct pollfd sock_poll = {
-		.fd = clnt_sockfd,
-		.events = POLLIN | POLLNVAL | POLLHUP,
-		.revents = 0
-	};
-
-	void *buffer, *bufptr;
+	char *buffer, *bufptr;
 	size_t buflen;
 	size_t recvlen;
 
@@ -303,21 +287,18 @@ void* clnt_recv_thread(void* arg) {
 	int ret;
 
 	while(!clnt_finished && clnt_connected) {
-		poll(&sock_poll, 1, CLNT_RECV_TIMEOUT);
-
-		/*FIXME: poll return events on disconnect are platform-specific*/
-		if(!(sock_poll.revents & POLLIN))
+		switch(clnt_poll(CLNT_RECV_TIMEOUT)) {
+		case CLNT_POLL_OK:
+			/*No new data arrived*/
 			continue;
-
-		if(sock_poll.revents & POLLNVAL) {
-			logmsg(LOG_CRIT, "Invalid socket state fd: %d", clnt_sockfd);
-			break;
+		case CLNT_POLL_FAILURE:
+			logmsg(LOG_CRIT, "Failure while polling socket");
+			THREAD_EXIT();
+		case CLNT_POLL_DISCONNECT:
+			logmsg(LOG_CRIT, "Disconnected while polling socket");
+			THREAD_EXIT();
 		}
-
-		if(sock_poll.revents & POLLHUP) {
-			logmsg(LOG_CRIT, "Disconnected %d", clnt_sockfd);
-			break;
-		}
+		/*Everything ok - new data arrived*/
 
 		recvlen = 0;
 		remaining = buflen = CLNT_CHUNK_SIZE;
@@ -327,11 +308,10 @@ void* clnt_recv_thread(void* arg) {
 		/*Receive data from socket by chunks of data*/
 		while(1) {
 			/*Receive chunk of data*/
-			ret = recv(clnt_sockfd, bufptr, remaining, MSG_NOSIGNAL);
+			ret = clnt_sock_recv(bufptr, remaining);
 
 			if(ret <= 0) {
 				logmsg(LOG_WARN, "recv() was failed, disconnecting");
-
 				THREAD_EXIT();
 			}
 
@@ -339,9 +319,8 @@ void* clnt_recv_thread(void* arg) {
 			recvlen += ret;
 			remaining -= ret;
 
-			poll(&sock_poll, 1, 0);
 			/*No more data left in socket, break*/
-			if(!(sock_poll.revents & POLLIN))
+			if(clnt_poll(0l) != CLNT_POLL_NEW_DATA)
 				break;
 
 			/* We had filled buffer, reallocate it */
@@ -441,7 +420,7 @@ int clnt_send(JSONNODE* node) {
 	logmsg(LOG_TRACE, "OUT msg: %s", json_msg);
 
 	mutex_lock(&send_mutex);
-	ret = send(clnt_sockfd, json_msg, len, MSG_NOSIGNAL);
+	ret = clnt_sock_send(json_msg, len);
 	mutex_unlock(&send_mutex);
 
 	json_free(json_msg);
@@ -481,49 +460,17 @@ int clnt_invoke(const char* command, JSONNODE* msg_node, JSONNODE** p_response) 
 	return 0;
 }
 
-int clnt_connect() {
-	struct hostent*	he;
-
-	if((he = gethostbyname(clnt_host)) == NULL) {
-		logmsg(LOG_CRIT, "Failed to resolve host %s", clnt_host);
-		return CLNT_ERR_RESOLVE;
-	}
-
-	clnt_sockfd = socket(AF_INET, SOCK_STREAM, 0);
-
-	if(clnt_sockfd == -1) {
-		logmsg(LOG_CRIT, "Failed to open socket");
-		return CLNT_ERR_SOCKET;
-	}
-
-	clnt_sa.sin_family = AF_INET;
-	clnt_sa.sin_port = htons(clnt_port);
-	clnt_sa.sin_addr = *((struct in_addr*) he->h_addr);
-
-	memset(clnt_sa.sin_zero, 0, sizeof(clnt_sa.sin_zero));
-
-	if(connect(clnt_sockfd, (struct sockaddr*) & clnt_sa,
-			   sizeof(struct sockaddr)) == -1) {
-		logmsg(LOG_CRIT, "Failed to connect to %s:%d, retrying in %ds", clnt_host, clnt_port, CLNT_RETRY_TIMEOUT);
-		return CLNT_ERR_CONNECT;
-	}
-
-	logmsg(LOG_INFO, "Connected to %s:%d", clnt_host, clnt_port);
-
-	return CLNT_OK;
-}
-
 void* clnt_connect_thread(void* arg) {
 	THREAD_ENTRY(arg, void, unused);
 
 	while(!clnt_finished) {
 		if(!clnt_connected) {
-			if(clnt_connect() != CLNT_OK) {
-				sleep(CLNT_RETRY_TIMEOUT);
+			if(clnt_connect(clnt_host, clnt_port) != CLNT_OK) {
+				tm_sleep(CLNT_RETRY_TIMEOUT);
 				continue;
 			}
 
-			clnt_connected = TRUE;
+			clnt_connected = B_TRUE;
 
 			/*Restart receive thread*/
 			t_init(&t_client_receive, NULL, clnt_recv_thread, "clnt_recv_thread");
@@ -554,12 +501,11 @@ int clnt_init() {
 }
 
 void clnt_fini(void) {
-	clnt_finished = TRUE;
-	clnt_connected = FALSE;
+	clnt_finished = B_TRUE;
+	clnt_connected = B_FALSE;
 
 	/*This will finish conn_thread*/
-	shutdown(clnt_sockfd, SHUT_RDWR);
-	close(clnt_sockfd);
+	clnt_disconnect();
 
 	/*Delete all remaining messages and finish proc_thread*/
 	squeue_destroy(&proc_queue, json_delete);

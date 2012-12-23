@@ -12,6 +12,7 @@
 #include <defs.h>
 #include <modules.h>
 #include <libjson.h>
+#include <tsdirent.h>
 
 #include <assert.h>
 #include <stdarg.h>
@@ -19,13 +20,9 @@
 #include <string.h>
 #include <stdio.h>
 
-#include <sys/types.h>
-#include <dirent.h>
-#include <dlfcn.h>
-
 #define INFOCHUNKLEN	2048
 
-char mod_search_path[MODPATHLEN];
+LIBEXPORT char mod_search_path[MODPATHLEN];
 
 /*First module in modules linked list*/
 module_t* first_module = NULL;
@@ -37,8 +34,8 @@ module_t* mod_load(const char* path_name);
 void mod_destroy(module_t* mod);
 
 int load_modules() {
-	DIR* dir = opendir(mod_search_path);
-	struct dirent* d = NULL;
+	plat_dir_t* dir = plat_opendir(mod_search_path);
+	plat_dir_entry_t* d = NULL;
 	char path[MODPATHLEN];
 
 	if(!dir) {
@@ -48,7 +45,7 @@ int load_modules() {
 		return -1;
 	}
 
-	while((d = readdir(dir)) != NULL) {
+	while((d = plat_readdir(dir)) != NULL) {
 		if(d->d_name[0] == '.' || d->d_type != DT_REG)
 			continue;
 
@@ -60,7 +57,7 @@ int load_modules() {
 		mod_load(path);
 	}
 
-	closedir(dir);
+	plat_closedir(dir);
 	return 0;
 }
 
@@ -78,7 +75,6 @@ void unload_modules(void) {
 module_t* mod_create() {
 	module_t* mod = (module_t*) mp_malloc(sizeof(module_t));
 
-	mod->mod_library = NULL;
 	mod->mod_helper = NULL;
 	mod->mod_status = MOD_UNITIALIZED;
 
@@ -104,12 +100,13 @@ void mod_add(module_t* mod) {
 }
 
 void mod_destroy(module_t* mod) {
-	/*XXX: doesn't unlink module from linked list because this function is called during cleanup*/
+	int err;
+	/*It doesn't unlink module from linked list because this function is called during cleanup*/
 	/*TODO: cleanup other fields like mod_private*/
 
 	if(mod->mod_status != MOD_UNITIALIZED) {
-		if(dlclose(mod->mod_library) != 0) {
-			logmsg(LOG_WARN, "Failed to free dl-handle of module %s. Reason: %s", mod->mod_name, dlerror());
+		if((err = plat_mod_close(&mod->mod_library)) != 0) {
+			logmsg(LOG_WARN, "Failed to close module %s. platform-specific error code: %d", mod->mod_name, err);
 		}
 
 		if(mod->mod_helper)
@@ -134,26 +131,31 @@ module_t* mod_search(const char* name) {
 	return mod;
 }
 
+module_t* mod_get_first() {
+	return first_module;
+}
+
 void* mod_load_symbol(module_t* mod, const char* name) {
-	return dlsym(mod->mod_library, name);
+	return plat_mod_load_symbol(&mod->mod_library, name);
 }
 
 module_t* mod_load(const char* path_name) {
 	module_t* mod = mod_create();
 	int* api_version;
 	int* type;
+	int err = 0;
 
-	int flag = FALSE;
+	int flag = B_FALSE;
 
 	assert(mod_load_helper != NULL);
 	assert(mod != NULL);
 
-	mod->mod_library = dlopen(path_name, RTLD_NOW | RTLD_LOCAL);
-
 	logmsg(LOG_INFO, "Loading module %s ...", path_name);
 
-	if(!mod->mod_library) {
-		logmsg(LOG_WARN, "DL reason: %s", dlerror());
+	err = plat_mod_open(&mod->mod_library, path_name);
+
+	if(err != 0) {
+		logmsg(LOG_WARN, "Failed loading, platform-specific error code: %d", err);
 		logerror();
 
 		goto fail;
@@ -161,9 +163,9 @@ module_t* mod_load(const char* path_name) {
 
 	/*Load module api version and name*/
 
-	api_version = MOD_LOAD_SYMBOL(int*, mod, "mod_api_version", flag);
-	type = MOD_LOAD_SYMBOL(int*, mod, "mod_type", flag);
-	mod->mod_name = MOD_LOAD_SYMBOL(char*, mod, "mod_name", flag);
+	MOD_LOAD_SYMBOL(api_version, mod, "mod_api_version", flag);
+	MOD_LOAD_SYMBOL(type, mod, "mod_type", flag);
+	MOD_LOAD_SYMBOL(mod->mod_name, mod, "mod_name", flag);
 
 	if(flag)
 		goto fail;
@@ -186,8 +188,8 @@ module_t* mod_load(const char* path_name) {
 		goto fail;
 	}
 
-	mod->mod_config = MOD_LOAD_SYMBOL(mod_config_func, mod, "mod_config", flag);
-	mod->mod_unconfig = MOD_LOAD_SYMBOL(mod_config_func, mod, "mod_unconfig", flag);
+	MOD_LOAD_SYMBOL(mod->mod_config, mod, "mod_config", flag);
+	MOD_LOAD_SYMBOL(mod->mod_unconfig, mod, "mod_unconfig", flag);
 
 	/*Call helper*/
 	mod->mod_status = MOD_UNCONFIGURED;
@@ -203,8 +205,8 @@ module_t* mod_load(const char* path_name) {
 	return mod;
 
 fail:
-	if(mod->mod_library)
-		dlclose(mod->mod_library);
+	if(err != 0)
+		plat_mod_close(&mod->mod_library);
 
 	logmsg(LOG_WARN, "Failed to load module %s!", path_name);
 

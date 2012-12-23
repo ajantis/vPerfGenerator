@@ -8,14 +8,13 @@
 #include <log.h>
 #include <modules.h>
 
+#include <defs.h>
+
 #include <cfgfile.h>
 
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
-
-extern char log_filename[];
-extern char mod_search_path[];
 
 /**
  * config.c
@@ -32,6 +31,9 @@ extern char mod_search_path[];
  * NOTE: because config file is read before logging is configured
  * it writes all error messages directly to stderr
  */
+
+LIBIMPORT char log_filename[LOGFNMAXLEN];
+LIBIMPORT char mod_search_path[MODPATHLEN];
 
 /**
  * Process single config file's option:

@@ -17,15 +17,15 @@ int tsload_mod_helper(module_t* mod) {
 	tsload_module_t* tmod = mp_malloc(sizeof(tsload_module_t));
 	size_t* params_size;
 
-	int flag = FALSE;
+	int flag = B_FALSE;
 
-	tmod->mod_params = MOD_LOAD_SYMBOL(wlp_descr_t*, mod, "mod_params", flag);
-	params_size =  MOD_LOAD_SYMBOL(size_t*, mod, "mod_params_size", flag);
+	MOD_LOAD_SYMBOL(tmod->mod_params, mod, "mod_params", flag);
+	MOD_LOAD_SYMBOL(params_size, mod, "mod_params_size", flag);
 
-	tmod->mod_wl_config = MOD_LOAD_SYMBOL(mod_wl_config_func, mod, "mod_workload_config", flag);
-	tmod->mod_wl_unconfig = MOD_LOAD_SYMBOL(mod_wl_config_func, mod, "mod_workload_unconfig", flag);
+	MOD_LOAD_SYMBOL(tmod->mod_wl_config, mod, "mod_workload_config", flag);
+	MOD_LOAD_SYMBOL(tmod->mod_wl_unconfig , mod, "mod_workload_unconfig", flag);
 
-	tmod->mod_run_request = MOD_LOAD_SYMBOL(mod_run_request_func, mod, "mod_run_request", flag);
+	MOD_LOAD_SYMBOL(tmod->mod_run_request, mod, "mod_run_request", flag);
 
 	if(flag) {
 		mp_free(tmod);
@@ -57,7 +57,7 @@ JSONNODE* json_mod_params_name(const char* name) {
 JSONNODE* json_modules_info() {
 	JSONNODE* node = json_new(JSON_NODE);
 	JSONNODE* mod_node = NULL;
-	module_t* mod = first_module;
+	module_t* mod = mod_get_first();
 
 	while(mod != NULL) {
 		mod_node = json_new(JSON_NODE);

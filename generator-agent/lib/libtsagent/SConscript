@@ -1,8 +1,18 @@
-target = 'lib/libtsagent'
+tgtdir = 'lib'
+target = 'libtsagent'
 
 Import('env')
 
-lib = env.Clone(LIBS = ['c'])
+lib = env.Clone()
+
+if lib.SupportedPlatform('posix'):
+    lib.Append(LIBS = ['c'])
+
+if lib.SupportedPlatform('win'):
+    lib.Append(LIBS = ['Ws2_32'])
+
+
+lib.PreparePlatform()
 
 lib.AddDeps(('lib', 'libjson'), ('lib', 'libtscommon'), ('lib', 'libhostinfo'))
-env['DEPTARGETS'][target] = lib.SharedLibrary(lib.Target(target), Glob("src/*.c"))
+env['DEPTARGETS'][target] = lib.SharedLibrary(lib.Target(tgtdir, target), Glob("src/*.c") + Glob("plat/*/*.c"))

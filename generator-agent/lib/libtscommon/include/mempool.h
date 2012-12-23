@@ -10,11 +10,11 @@
 
 #include <stdlib.h>
 
-void* mp_malloc(size_t sz);
-void* mp_realloc(void* old, size_t sz);
-void mp_free(void* ptr);
+LIBEXPORT void* mp_malloc(size_t sz);
+LIBEXPORT void* mp_realloc(void* old, size_t sz);
+LIBEXPORT void mp_free(void* ptr);
 
-int mempool_init(void);
-void mempool_fini(void);
+LIBEXPORT int mempool_init(void);
+LIBEXPORT void mempool_fini(void);
 
 #endif /* MEMPOOL_H_ */

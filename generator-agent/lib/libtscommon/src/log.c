@@ -18,14 +18,13 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <unistd.h>
 
-char log_filename[LOGFNMAXLEN];
+LIBEXPORT char log_filename[LOGFNMAXLEN];
 
 /* By default, debug and tracing are disabled
  * */
-int log_debug 	= 0;
-int log_trace	= 0;
+LIBEXPORT int log_debug = 0;
+LIBEXPORT int log_trace	= 0;
 
 FILE* log_file;
 
@@ -46,6 +45,7 @@ static void json_error_callback(const char* msg) {
 int log_rotate() {
 	char old_log_filename[LOGFNMAXLEN + 4];
 	struct stat log_stat;
+	struct stat old_log_stat;
 
 	if(stat(log_filename, &log_stat) == -1) {
 		fprintf(stderr, "log_rotate -> stat error: %s\n", strerror(errno));
@@ -59,7 +59,7 @@ int log_rotate() {
 	strcpy(old_log_filename, log_filename);
 	strcat(old_log_filename, ".old");
 
-	if(access(old_log_filename, F_OK) != -1)
+	if(stat(old_log_filename, &old_log_stat) == 0)
 		remove(old_log_filename);
 
 	rename(log_filename, old_log_filename);

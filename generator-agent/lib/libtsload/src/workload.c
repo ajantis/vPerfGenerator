@@ -43,7 +43,7 @@ DECLARE_HASH_MAP(workload_hash_map, workload_t, WLHASHSIZE, wl_name, wl_hm_next,
 		return hash & WLHASHMASK;
 	},
 	{
-		return strcmp(key1, key2);
+		return strcmp((char*) key1, (char*) key2);
 	}
 )
 
@@ -80,9 +80,9 @@ workload_t* wl_create(const char* name, module_t* mod, thread_pool_t* tp) {
 
 	wl->wl_params = mp_malloc(tmod->mod_params_size);
 
-	wl->wl_is_configured = FALSE;
+	wl->wl_is_configured = B_FALSE;
 
-	wl->wl_is_started = FALSE;
+	wl->wl_is_started = B_FALSE;
 	wl->wl_start_time = TS_TIME_MAX;
 
 	mutex_init(&wl->wl_rq_mutex, "wl-%s-rq", name);
@@ -114,7 +114,7 @@ void wl_destroy(workload_t* wl) {
 void wl_destroy_all(list_head_t* wl_head) {
 	workload_t *wl, *wl_tmp;
 
-	list_for_each_entry_safe(wl, wl_tmp, wl_head, wl_chain) {
+	list_for_each_entry_safe(workload_t, wl, wl_tmp, wl_head, wl_chain) {
 		wl_destroy(wl);
 	}
 }
@@ -180,7 +180,7 @@ void* wl_config_thread(void* arg) {
 		THREAD_EXIT();
 	}
 
-	wl->wl_is_configured = TRUE;
+	wl->wl_is_configured = B_TRUE;
 
 	wl_notify(wl, WLS_SUCCESS, 100, "Successfully configured workload %s", wl->wl_name);
 
@@ -201,16 +201,16 @@ void wl_unconfig(workload_t* wl) {
 
 int wl_is_started(workload_t* wl) {
 	if(wl->wl_is_started)
-		return TRUE;
+		return B_TRUE;
 
 	if(tm_get_time() >= wl->wl_start_time) {
-		logmsg("Starting workload %s...", wl->wl_name);
+		logmsg(LOG_INFO, "Starting workload %s...", wl->wl_name);
 
-		wl->wl_is_started = TRUE;
-		return TRUE;
+		wl->wl_is_started = B_TRUE;
+		return B_TRUE;
 	}
 
-	return FALSE;
+	return B_FALSE;
 }
 
 /**
@@ -351,7 +351,7 @@ void wl_rq_chain_destroy(void *p_rq_chain) {
 	list_head_t* rq_chain = (list_head_t*) p_rq_chain;
 	request_t *rq, *rq_tmp;
 
-	list_for_each_entry_safe(rq, rq_tmp, rq_chain, rq_node) {
+	list_for_each_entry_safe(request_t, rq, rq_tmp, rq_chain, rq_node) {
 		wl_request_free(rq);
 	}
 
@@ -366,7 +366,7 @@ void* wl_requests_thread(void* arg) {
 
 	request_t *rq, *rq_tmp;
 
-	while(TRUE) {
+	while(B_TRUE) {
 		rq_chain =  (list_head_t*) squeue_pop(&wl_requests);
 
 		if(rq_chain == NULL)
@@ -392,7 +392,7 @@ JSONNODE* json_request_format_all(list_head_t* rq_list) {
 
 	request_t* rq;
 
-	list_for_each_entry(rq, rq_list, rq_node) {
+	list_for_each_entry(request_t, rq, rq_list, rq_node) {
 		jrq = json_new(JSON_NODE);
 
 		json_push_back(jrq, json_new_i("step", rq->rq_step));
@@ -435,7 +435,7 @@ void json_workload_proc_all(JSONNODE* node, list_head_t* wl_list) {
 
 
 #define JSON_GET_VALIDATE_PARAM(iter, name, req_type)	\
-	({											\
+	{											\
 		iter = json_find(node, name);			\
 		if(iter == i_end) {						\
 			agent_error_msg(AE_MESSAGE_FORMAT,	\
@@ -447,10 +447,10 @@ void json_workload_proc_all(JSONNODE* node, list_head_t* wl_list) {
 					"Expected that " name " is " #req_type );	\
 			goto fail;							\
 		}										\
-	})
+	}
 
-#define SEARCH_OBJ(iter, type, search) 		\
-	({										\
+#define SEARCH_OBJ(dest, iter, type, search) 		\
+	do {									\
 		type* obj = NULL;					\
 		char* name = json_as_string(*iter);	\
 		obj = search(name);					\
@@ -460,8 +460,8 @@ void json_workload_proc_all(JSONNODE* node, list_head_t* wl_list) {
 					"Invalid " #type " name %s", name);		\
 			goto fail;						\
 		}									\
-		obj;								\
-	});
+		dest = obj;							\
+	} while(0);
 
 
 /**
@@ -495,8 +495,8 @@ workload_t* json_workload_proc(JSONNODE* node) {
 	JSON_GET_VALIDATE_PARAM(i_tp, "threadpool", JSON_STRING);
 	JSON_GET_VALIDATE_PARAM(i_params, "params", JSON_NODE);
 
-	mod = SEARCH_OBJ(i_mod, module_t, mod_search);
-	tp = SEARCH_OBJ(i_tp, thread_pool_t, tp_search);
+	SEARCH_OBJ(mod, i_mod, module_t, mod_search);
+	SEARCH_OBJ(tp, i_tp, thread_pool_t, tp_search);
 
 	/* Save tmod interface */
 	assert(mod->mod_helper != NULL);

@@ -1,4 +1,5 @@
-target = 'lib/libhostinfo'
+tgtdir = 'lib'
+target = 'libhostinfo'
 
 Import('env')
 
@@ -7,4 +8,4 @@ lib = env.Clone()
 lib.PreparePlatform()
 
 lib.AddDeps(('lib', 'libjson'), ('lib', 'libtscommon'))
-env['DEPTARGETS'][target] = lib.SharedLibrary(lib.Target(target), Glob("plat/*/*.c"))
+env['DEPTARGETS'][target] = lib.SharedLibrary(lib.Target(tgtdir, target), Glob("plat/*/*.c"))

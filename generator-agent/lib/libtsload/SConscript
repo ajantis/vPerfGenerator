@@ -1,8 +1,12 @@
-target = 'lib/libtsload'
+tgtdir = 'lib'
+target = 'libtsload'
 
 Import('env')
 
-lib = env.Clone(LIBS = ['c'])
+lib = env.Clone()
+
+if lib.SupportedPlatform('posix'):
+    lib.Append(LIBS = ['c'])
 
 lib.AddDeps(('lib', 'libjson'), ('lib', 'libtscommon'), ('lib', 'libtsagent'))
-env['DEPTARGETS'][target] = lib.SharedLibrary(lib.Target(target), Glob("src/*.c") + Glob("src/disp/*.c"))
+env['DEPTARGETS'][target] = lib.SharedLibrary(lib.Target(tgtdir, target), Glob("src/*.c") + Glob("src/disp/*.c"))

@@ -197,7 +197,7 @@ int json_wlparam_proc_all(JSONNODE* node, wlp_descr_t* wlp, void* params) {
 			return WLPARAM_JSON_NOT_FOUND;
 		}
 
-		ret = json_wlparam_proc(*i_param, wlp, params + wlp->off);
+		ret = json_wlparam_proc(*i_param, wlp, ((char*) params) + wlp->off);
 
 		if(ret == WLPARAM_JSON_WRONG_TYPE) {
 			agent_error_msg(AE_INVALID_DATA, "Workload parameter %s has wrong type", wlp->name);
@@ -208,7 +208,6 @@ int json_wlparam_proc_all(JSONNODE* node, wlp_descr_t* wlp, void* params) {
 			agent_error_msg(AE_INVALID_DATA, "Workload parameter %s outside defined range", wlp->name);
 			return ret;
 		}
-
 
 		wlp++;
 	}

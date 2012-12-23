@@ -7,10 +7,28 @@ PathJoin = os.path.join
 PathBaseName = os.path.basename
 PathExists = os.path.exists
 
+def Macroses(self, *macroses):
+    prefix = '-D'
+    
+    if self['CC'] == 'cl':
+        prefix = '/D'
+        
+    for macro in macroses:
+        self.Append(CCFLAGS = prefix + macro)
+    
+def SupportedPlatform(self, platform):
+    return platform in self['PLATCHAIN']
+
 def BuildDir(self, dir):
     return PathJoin('#build', 'build', dir)
 
-def Target(self, target):
+def Target(self, tgtdir, target = ''):
+    if sys.platform == 'win32':
+        if tgtdir in ('bin', 'lib', 'etc'):
+            tgtdir = ''
+    
+    target = PathJoin(tgtdir, target)
+    
     self['CURTARGET'] = target
     
     return PathJoin('#build', self['PLATFORM'], target)
@@ -29,7 +47,7 @@ def Module(self, mod_name):
     mod.SharedLibrary(mod.Target(PathJoin('mod', mod_name)), Glob("src/*.c"))
 
 def InstallFile(self, target, file_name):
-    self.Command(PathJoin(self.Target(target), file_name),
+    self.Command(self.Target(target, file_name),
                  file_name, Copy("$TARGET", "$SOURCE"))
 
 def PreparePlatform(self):
@@ -59,7 +77,7 @@ def PreparePlatform(self):
         # Parse source files for platform-api function implementation
         # and select best match for it
         for src_file in Dir('src').Dir('plat').Dir(plat_name).glob('*.c'):            
-            tgt_file = File(str(src_file).replace('src/plat', 'plat'))            
+            tgt_file = File(str(src_file).replace(PathJoin('src', 'plat'), 'plat'))            
             
             # Each source file depends on platform cache
             # and all source that are more specific than this file
@@ -88,14 +106,16 @@ def PreparePlatform(self):
 
 # Prepare build environment
 
-env = DefaultEnvironment()
+env = DefaultEnvironment(ENV = {'PATH': os.environ['PATH']})
 
 env.AddMethod(AddDeps)
+env.AddMethod(Macroses)
 env.AddMethod(BuildDir)
 env.AddMethod(Target)
 env.AddMethod(Module)
 env.AddMethod(InstallFile)
 env.AddMethod(PreparePlatform)
+env.AddMethod(SupportedPlatform)
 
 env['DEPTARGETS'] = {}
 env['CURTARGET'] = ''
@@ -104,23 +124,44 @@ env['CPPPATH'] = ['#include', 'include']
 env['LIBPATH'] = [env.Target('lib')]
 env['LIBS'] = []
 
-env['CCFLAGS'] = ['-m64', '-Wall']
+env['CCFLAGS'] = []
 
-# env[] syntax not working here :(
-env.Append(LINKFLAGS = ['-z origin'])
-env.Append(RPATH = env.Literal(os.path.join('\\$$ORIGIN', os.pardir, 'lib')))
+if env['CC'] == 'gcc': 
+    env['CCFLAGS'] += ['-m64', '-Wall']
+
+if env['CC'] == 'gcc':
+    # env[] syntax not working here :( 
+    env.Append(LINKFLAGS = ['-z origin'])
+    env.Append(RPATH = env.Literal(os.path.join('\\$$ORIGIN', os.pardir, 'lib')))
 
 # For debugging
-env['CCFLAGS'] += ["-g"]
-env['CCFLAGS'] += ["-DTS_LOCK_DEBUG"]
+if env['CC'] == 'gcc':
+    env['CCFLAGS'] += ["-g"]
+elif env['CC'] == 'cl':
+    env['CCFLAGS'] += ["/Zi"]
+    env['LINKFLAGS'] += ["/debug"]
 
-env['CCFLAGS'] += ['-DJSON_DEBUG', '-DJSON_MEMORY_CALLBACKS', '-DJSON_INT_TYPE=long long']
+# For VS2010 Express we have to pass some env variables:
+if env['CC'] == 'cl':
+    env.Append(ENV = {'LIB' : os.environ.get('LIB')})
+    env.Append(ENV = {'INCLUDE' : os.environ.get('INCLUDE')})
 
-# Supress "unused" warnings
-env['CCFLAGS'] += ['-Wno-unused-label', '-Wno-unused-variable', '-Wno-unused-function']
+env.Macroses("TS_LOCK_DEBUG")
+
+env.Macroses('JSON_DEBUG', 'JSON_MEMORY_CALLBACKS', 'JSON_INT_TYPE=long long')
+
+if env['CC'] == 'gcc':
+    # Supress "unused" warnings
+    env['CCFLAGS'] += ['-Wno-unused-label', '-Wno-unused-variable', '-Wno-unused-function']
 
 # Cross-platform build
-env['PLATCHAIN'] = ['linux', 'posix', 'generic']
+if sys.platform == 'win32':
+    env['PLATCHAIN'] = ['win', 'generic']
+elif sys.platform == 'linux2':
+    env['PLATCHAIN'] = ['linux', 'posix', 'generic']
+else:
+    raise BuildError('Unsupported platform %s' % sys.platform)
+    
 env['PLATDEBUG'] = True
 env['PLATCACHE'] = 'plat_cache.pch'
 

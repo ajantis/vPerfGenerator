@@ -184,12 +184,20 @@ internalJSONNode::~internalJSONNode(void) json_nothrow {
 
 #endif
 
+#ifdef _MSC_VER
+#include <stdlib.h>
+#define ATOLL	_atoi64
+#else
+#include <cstdlib>
+#define ATOLL	std::atoll
+#endif
+
 //This one is used by as_int and as_float, so even non-readers need it
 void internalJSONNode::FetchNumber(void) const json_nothrow {
     #ifdef JSON_STRICT
 		_value._number = NumberToString::_atof(_string.c_str());
 		/*FIXME: should be JSON_STRICT implementation*/
-		_value._integer = (json_int_t) std::atoll(_string.c_str());
+		_value._integer = (json_int_t) ATOLL(_string.c_str());
     #else 
 	   #ifdef JSON_UNICODE
 		  const size_t len = _string.length();
@@ -216,10 +224,10 @@ void internalJSONNode::FetchNumber(void) const json_nothrow {
 		  #endif 
 		  temp.ptr[res] = '\0';
 		  _value._number = (json_number)std::atof(temp.ptr);
-		  _value._integer = (json_int_t) std::atoll(temp.ptr);
+		  _value._integer = (json_int_t) ATOLL(temp.ptr);
 	   #else
 		  _value._number = (json_number)std::atof(_string.c_str());
-		  _value._integer = (json_int_t) std::atoll(_string.c_str());
+		  _value._integer = (json_int_t) ATOLL(_string.c_str());
 	   #endif
     #endif
     #if((!defined(JSON_CASTABLE) && defined(JSON_LESS_MEMORY)) && !defined(JSON_WRITE_PRIORITY))

@@ -2,7 +2,7 @@ import os
 import re
 import shelve
 
-import fcntl
+import portalocker
 
 class PlatException(Exception):
     pass
@@ -68,11 +68,11 @@ class PlatCache:
         
         if mode == PlatCache.READWRITE:
             self.lock_file_mode = 'a'
-            self.lock_mode = fcntl.LOCK_EX
+            self.lock_mode = portalocker.LOCK_EX
             self.shelve_mode = 'c'
         else:
             self.lock_file_mode = 'r'
-            self.lock_mode = fcntl.LOCK_SH
+            self.lock_mode = portalocker.LOCK_SH
             self.shelve_mode = 'r'
         
         self.file_name = file_name
@@ -82,7 +82,7 @@ class PlatCache:
     def open(self):
         '''Open lock file than shelve'''
         self.lock_file = file(self.file_name + '.lck', self.lock_file_mode)
-        fcntl.flock(self.lock_file.fileno(), self.lock_mode)
+        portalocker.lock(self.lock_file, self.lock_mode)
         
         self.shelve = shelve.open(self.file_name, flag = self.shelve_mode)
     
@@ -90,7 +90,7 @@ class PlatCache:
         if self.shelve:
             self.shelve.close()
             
-            fcntl.flock(self.lock_file.fileno(), fcntl.LOCK_UN)
+            portalocker.unlock(self.lock_file)
             self.lock_file.close()
     
     @classmethod

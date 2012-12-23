@@ -16,12 +16,13 @@
 
 #include <dummy.h>
 
+#include <plat/posixdecl.h>
+
 #include <stdlib.h>
 #include <string.h>
 
 #include <errno.h>
 #include <fcntl.h>
-#include <unistd.h>
 
 int mod_api_version = MOD_API_VERSION;
 
@@ -30,12 +31,12 @@ static char* tests[] =  {"read", "write"};
 
 wlp_descr_t mod_params[] = {
 	{ WLP_SIZE,
-		WLP_SIZE_RANGE(1, 1 * TBYTE),
+		WLP_SIZE_RANGE(1, 1 * SZ_TB),
 		"filesize",
 		"Size of file which would be benchmarked",
 		offsetof(struct dummy_workload, file_size) },
 	{ WLP_SIZE,
-		WLP_SIZE_RANGE(1, 16 * MBYTE),
+		WLP_SIZE_RANGE(1, 16 * SZ_MB),
 		"blocksize",
 		"Size of block which would be used",
 		offsetof(struct dummy_workload, block_size)},

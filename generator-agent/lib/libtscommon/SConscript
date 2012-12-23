@@ -1,10 +1,14 @@
-target = 'lib/libtscommon'
+tgtdir = 'lib'
+target = 'libtscommon'
 
 Import('env')
 
-lib = env.Clone(LIBS = ['c', 'dl', 'pthread'])
+lib = env.Clone()
+
+if lib.SupportedPlatform('posix'):
+    lib.Append(LIBS = ['c', 'dl', 'pthread'])
 
 lib.PreparePlatform()
 
 lib.AddDeps(('lib', 'libjson'))
-env['DEPTARGETS'][target] = lib.SharedLibrary(lib.Target(target), Glob("src/*.c") + Glob("plat/*/*.c"))
+env['DEPTARGETS'][target] = lib.SharedLibrary(lib.Target(tgtdir, target), Glob("src/*.c") + Glob("plat/*/*.c"))

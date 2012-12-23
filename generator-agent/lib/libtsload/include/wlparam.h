@@ -47,7 +47,14 @@ typedef enum {
 typedef struct {
 	int range;		/*enabled flag*/
 
-	union {
+	/* Here should be union, but because of some smart people, who desided that
+	 * | ISO C++03 8.5.1[dcl.init.aggr]/15:
+	 * | When a union is initialized with a brace-enclosed initializer,
+	 * | the braces shall only contain an initializer for the first member of the union.
+	 * and another smart people from Microsoft who ignoring C99 compliance
+	 * we will waste memory to provide nice macros like WLP_STRING_LENGTH
+	 *  */
+	struct {
 		/*WLP_RAW_STRING*/
 		struct {
 			unsigned str_length;
@@ -75,15 +82,16 @@ typedef struct {
 	};
 } wlp_range_t;
 
-#define WLP_NO_RANGE()	{ .range = FALSE }
+#define WLP_NO_RANGE()				{ B_FALSE, { {0} } }
 
-#define WLP_STRING_LENGTH(length) { .range = TRUE, .str_length = length}
+#define WLP_STRING_LENGTH(length) 	{ B_TRUE, { {length}, {0, 0}, {0.0, 0.0}, {0, 0}, {0, NULL} } }
 
-#define WLP_INT_RANGE(min, max)  { .range = TRUE, .i_min = min, .i_max = max }
-#define WLP_FLOAT_RANGE(min, max)  { .range = TRUE, .d_min = min, .d_max = max }
-#define WLP_SIZE_RANGE(min, max)  { .range = TRUE, .sz_min = min, .sz_max = max }
+#define WLP_INT_RANGE(min, max)  	{ B_TRUE, { {0}, {min, max} } }
+#define WLP_FLOAT_RANGE(min, max) 	{ B_TRUE, { {0}, {0, 0}, {min, max} } }
+#define WLP_SIZE_RANGE(min, max) 	{ B_TRUE, { {0}, {0, 0}, {0.0, 0.0}, {min, max} } }
 
-#define WLP_STRING_SET_RANGE(set) { .range = TRUE, .ss_num = sizeof((set)) / sizeof(char*), .ss_strings = (set) }
+#define WLP_STRING_SET_RANGE(set) 	{ B_TRUE, { {0}, {0, 0}, {0.0, 0.0}, {0, 0}, 		\
+									    {sizeof((set)) / sizeof(char*), (set) } } }
 
 /*Description of param*/
 typedef struct {

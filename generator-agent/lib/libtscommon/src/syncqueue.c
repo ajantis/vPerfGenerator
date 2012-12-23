@@ -35,7 +35,7 @@ void squeue_init(squeue_t* sq, const char* namefmt, ...) {
 	sq->sq_head = NULL;
 	sq->sq_tail = NULL;
 
-	sq->sq_is_destroyed = FALSE;
+	sq->sq_is_destroyed = B_FALSE;
 }
 
 /**
@@ -145,7 +145,7 @@ void squeue_destroy(squeue_t* sq, void (*el_free)(void* obj)) {
 		el = next;
 	}
 
-	sq->sq_is_destroyed = TRUE;
+	sq->sq_is_destroyed = B_TRUE;
 	event_notify_one(&sq->sq_event);
 
 	mutex_unlock(&sq->sq_mutex);

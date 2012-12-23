@@ -13,9 +13,7 @@
 #include <plat/threads.h>
 
 #include <defs.h>
-#include <sys/time.h>
-#include <pthread.h>
-#include <unistd.h>
+#include <tstime.h>
 
 #define TEVENTNAMELEN	32
 #define TMUTEXNAMELEN	32
@@ -42,7 +40,7 @@
  * */
 #define THREAD_ENTRY(arg, arg_type, arg_name) 			\
 	thread_t* thread = t_post_init((thread_t*) arg);	\
-	arg_type* arg_name = (arg_type*) thread->t_arg;
+	arg_type* arg_name = (arg_type*) thread->t_arg
 
 /*
  * THREAD_END and THREAD_FINISH are used as thread's epilogue:
@@ -104,6 +102,19 @@ typedef struct {
 	char			tk_name[TKEYNAMELEN];
 } thread_key_t;
 
+#define THREAD_EVENT_INITIALIZER 							\
+	{ SM_INIT(.te_impl, PLAT_THREAD_EVENT_INITIALIZER),		\
+	  SM_INIT(.te_name, "\0") }
+
+#define THREAD_MUTEX_INITIALIZER 							\
+	{ SM_INIT(.tm_impl, PLAT_THREAD_MUTEX_INITIALIZER),		\
+	  SM_INIT(.tm_name, "\0"),								\
+	  SM_INIT(.tm_is_recursive, B_FALSE) }
+
+#define THREAD_KEY_INITIALIZER 								\
+	{ SM_INIT(.tk_impl, PLAT_THREAD_KEY_INITIALIZER),		\
+	  SM_INIT(.tk_name, "\0") }
+
 typedef unsigned 	thread_id_t;
 
 typedef struct thread {
@@ -114,8 +125,7 @@ typedef struct thread {
 	thread_id_t  	t_id;
 	int				t_local_id;
 
-	/*FIXME: only for linux*/
-	pid_t			t_system_id;
+	unsigned long   t_system_id;
 
 	char 			t_name[TNAMELEN];
 
@@ -125,7 +135,7 @@ typedef struct thread {
 	void*			t_arg;
 
 #ifdef TS_LOCK_DEBUG
-	struct timeval	t_block_time;
+	ts_time_t		t_block_time;
 	thread_event_t*	t_block_event;
 	thread_mutex_t* t_block_mutex;
 #endif
@@ -134,46 +144,47 @@ typedef struct thread {
 	struct thread*	t_pool_next;	/*< Next thread in pool*/
 } thread_t;
 
-void mutex_init(thread_mutex_t* mutex, const char* namefmt, ...);
-void rmutex_init(thread_mutex_t* mutex, const char* namefmt, ...);
-void mutex_lock(thread_mutex_t* mutex);
-void mutex_unlock(thread_mutex_t* mutex);
-void mutex_destroy(thread_mutex_t* mutex);
+LIBEXPORT void mutex_init(thread_mutex_t* mutex, const char* namefmt, ...);
+LIBEXPORT void rmutex_init(thread_mutex_t* mutex, const char* namefmt, ...);
+LIBEXPORT void mutex_lock(thread_mutex_t* mutex);
+LIBEXPORT void mutex_unlock(thread_mutex_t* mutex);
+LIBEXPORT void mutex_destroy(thread_mutex_t* mutex);
 
-void event_init(thread_event_t* event, const char* namefmt, ...);
-void event_wait_unlock(thread_event_t* event, thread_mutex_t* mutex);
-void event_wait(thread_event_t* event);
-void event_notify_one(thread_event_t* event);
-void event_notify_all(thread_event_t* event);
-void event_destroy(thread_event_t* event);
+LIBEXPORT void event_init(thread_event_t* event, const char* namefmt, ...);
+LIBEXPORT void event_wait_unlock(thread_event_t* event, thread_mutex_t* mutex);
+LIBEXPORT void event_wait(thread_event_t* event);
+LIBEXPORT void event_notify_one(thread_event_t* event);
+LIBEXPORT void event_notify_all(thread_event_t* event);
+LIBEXPORT void event_destroy(thread_event_t* event);
 
-void tkey_init(thread_key_t* key, void (*destructor)(void* key),
-			   const char* namefmt, ...);
-void tkey_destroy(thread_key_t* key);
-void tkey_set(thread_key_t* key, void* value);
-void* tkey_get(thread_key_t* key);
+LIBEXPORT void tkey_init(thread_key_t* key, void (*destructor)(void* key),
+			   	   	   	 const char* namefmt, ...);
+LIBEXPORT void tkey_destroy(thread_key_t* key);
+LIBEXPORT void tkey_set(thread_key_t* key, void* value);
+LIBEXPORT void* tkey_get(thread_key_t* key);
 
-thread_t* t_self();
+LIBEXPORT thread_t* t_self();
 
-void t_init(thread_t* thread, void* arg,
-		void* (*start)(void*),
-		const char* namefmt, ...);
-thread_t* t_post_init(thread_t* t);
-void t_exit(thread_t* t);
-void t_destroy(thread_t* thread);
+LIBEXPORT void t_init(thread_t* thread, void* arg,
+					  void* (*start)(void*),
+		              const char* namefmt, ...);
+LIBEXPORT thread_t* t_post_init(thread_t* t);
+LIBEXPORT void t_exit(thread_t* t);
+LIBEXPORT void t_destroy(thread_t* thread);
 
-void t_join(thread_t* thread, thread_event_t* event);
+LIBEXPORT void t_join(thread_t* thread, thread_event_t* event);
 
-int threads_init(void);
-void threads_fini(void);
+LIBEXPORT int threads_init(void);
+LIBEXPORT void threads_fini(void);
 
-void t_dump_threads();
+LIBEXPORT PLATAPI void t_eternal_wait(void);
 
 /* Platform-dependent functions */
 
 PLATAPI void plat_thread_init(plat_thread_t* thread, void* arg,
 							  void* (*start)(void*));
 PLATAPI void plat_thread_destroy(plat_thread_t* thread);
+PLATAPI unsigned long plat_gettid();
 
 PLATAPI void plat_mutex_init(plat_thread_mutex_t* mutex, int recursive);
 PLATAPI void plat_mutex_lock(plat_thread_mutex_t* mutex);

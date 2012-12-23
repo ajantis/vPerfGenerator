@@ -11,19 +11,19 @@
 #include <assert.h>
 
 /* Helper routines for hash map */
-static inline void* hm_next(hashmap_t* hm, void* obj) {
-	return *((void**) (obj + hm->hm_off_next));
+STATIC_INLINE hm_item_t* hm_next(hashmap_t* hm, hm_item_t* obj) {
+	return *((hm_item_t**) (obj + hm->hm_off_next));
 }
 
-static inline void hm_set_next(hashmap_t* hm, void* obj, void* next) {
-	*((void**) (obj + hm->hm_off_next)) = next;
+STATIC_INLINE void hm_set_next(hashmap_t* hm, hm_item_t* obj, hm_item_t* next) {
+	*((hm_item_t**) (obj + hm->hm_off_next)) = next;
 }
 
-static inline void* hm_get_key(hashmap_t* hm, void* obj) {
+STATIC_INLINE hm_key_t* hm_get_key(hashmap_t* hm, hm_item_t* obj) {
 	return (obj + hm->hm_off_key);
 }
 
-static inline unsigned hm_hash_object(hashmap_t* hm, void* obj) {
+STATIC_INLINE unsigned hm_hash_object(hashmap_t* hm, hm_item_t* obj) {
 	return hm->hm_hash_key(hm_get_key(hm, obj));
 }
 
@@ -62,13 +62,13 @@ void hash_map_destroy(hashmap_t* hm) {
  * @return HASH_MAP_OK if object was successfully inserted or HASH_MAP_DUPLICATE if \
  * object with same key (not hash!) already exists in hash map
  * */
-int hash_map_insert(hashmap_t* hm, void* object) {
+int hash_map_insert(hashmap_t* hm, hm_item_t* object) {
 	unsigned hash = hm_hash_object(hm, object);
 	int ret = HASH_MAP_OK;
 
-	void** head = hm->hm_heads + hash;
-	void* iter;
-	void* next;
+	hm_item_t** head = hm->hm_heads + hash;
+	hm_item_t* iter;
+	hm_item_t* next;
 
 	mutex_lock(&hm->hm_mutex);
 	if(*head == NULL) {
@@ -109,13 +109,13 @@ done:
  * @return HASH_MAP_OK if object was successfully remove or HASH_MAP_NOT_FOUND if \
  * object is not
  * */
-int hash_map_remove(hashmap_t* hm, void* object) {
+int hash_map_remove(hashmap_t* hm, hm_item_t* object) {
 	unsigned hash = hm_hash_object(hm, object);
 	int ret = HASH_MAP_OK;
 
-	void** head = hm->hm_heads + hash;
-	void* iter;
-	void* next;
+	hm_item_t** head = hm->hm_heads + hash;
+	hm_item_t* iter;
+	hm_item_t* next;
 
 	mutex_lock(&hm->hm_mutex);
 
@@ -153,9 +153,9 @@ done:
 /**
  * Find object in hash map by key
  */
-void* hash_map_find(hashmap_t* hm, const void* key) {
+void* hash_map_find(hashmap_t* hm, const hm_key_t* key) {
 	unsigned hash = hm->hm_hash_key(key);
-	void* iter = hm->hm_heads[hash];
+	hm_item_t* iter = hm->hm_heads[hash];
 
 	mutex_lock(&hm->hm_mutex);
 
@@ -188,9 +188,9 @@ void* hash_map_find(hashmap_t* hm, const void* key) {
  *
  * @return NULL or object where func returned STOP
  */
-void* hash_map_walk(hashmap_t* hm, int (*func)(void* object, void* arg), void* arg) {
+void* hash_map_walk(hashmap_t* hm, int (*func)(hm_item_t* object, void* arg), void* arg) {
 	int i = 0;
-	void* iter = NULL;
+	hm_item_t* iter = NULL;
 
 	mutex_lock(&hm->hm_mutex);
 	for(i = 0; i < hm->hm_size; ++i) {

@@ -8,10 +8,10 @@
 #define LOG_SOURCE "worker"
 #include <log.h>
 
-#include <util.h>
+#include <defs.h>
+
 #include <mempool.h>
 #include <workload.h>
-#include <defs.h>
 #include <tstime.h>
 #include <threads.h>
 #include <threadpool.h>
@@ -38,7 +38,7 @@ void* control_thread(void* arg) {
 	/* Synchronize all control-threads on all nodes to start
 	 * quantum at beginning of next second (real time synchronization
 	 * is provided by NTP) */
-	tm_sleep(tm_ceil_diff(tm, SEC));
+	tm_sleep(tm_ceil_diff(tm, T_SEC));
 
 	logmsg(LOG_DEBUG, "Started control thread (tpool: %s)", tp->tp_name);
 
@@ -63,14 +63,14 @@ void* control_thread(void* arg) {
 
 			/*Re-initialize step's workloads*/
 			wli = 0;
-			list_for_each_entry(wl, &tp->tp_wl_head, wl_tp_node) {
+			list_for_each_entry(workload_t, wl, &tp->tp_wl_head, wl_tp_node) {
 				step[wli].wls_workload = wl;
 				++wli;
 
 				assert(wli < wl_count);
 			}
 
-			tp->tp_wl_changed = FALSE;
+			tp->tp_wl_changed = B_FALSE;
 		}
 
 		wl_count_prev = wl_count;
@@ -156,7 +156,7 @@ void* worker_thread(void* arg) {
 			mutex_unlock(&worker->w_rq_mutex);
 
 			/*FIXME: quantum exhaustion*/
-			list_for_each_entry(rq, rq_chain, rq_node)  {
+			list_for_each_entry(request_t, rq, rq_chain, rq_node)  {
 				wl_run_request(rq);
 			}
 

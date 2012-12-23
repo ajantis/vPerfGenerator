@@ -8,6 +8,7 @@
 #define LOG_SOURCE ""
 #include <log.h>
 
+#include <defs.h>
 #include <threads.h>
 #include <mempool.h>
 #include <workload.h>
@@ -15,10 +16,10 @@
 #include <loadagent.h>
 #include <threadpool.h>
 
+#include <tsload.h>
+
 #include <stdlib.h>
 #include <stdio.h>
-
-#include <sys/select.h>
 
 typedef enum {
 	SS_UNINITIALIZED,
@@ -36,13 +37,13 @@ struct subsystem {
 	void (*s_fini)(void);
 };
 
-#define SUBSYSTEM(name, init, fini) \
-	{								\
-		.s_name = name,				\
-		.s_error_code = 0,			\
-		.s_state = SS_UNINITIALIZED,\
-		.s_init = init,				\
-		.s_fini = fini				\
+#define SUBSYSTEM(name, init, fini) 		\
+	{										\
+		SM_INIT(.s_name, name),				\
+		SM_INIT(.s_error_code, 0),			\
+		SM_INIT(.s_state, SS_UNINITIALIZED),\
+		SM_INIT(.s_init, init),				\
+		SM_INIT(.s_fini, fini)				\
 	}
 
 struct subsystem subsys[] = {
@@ -95,7 +96,7 @@ int tsload_start(const char* basename) {
 	logmsg(LOG_INFO, "Started %s...", basename);
 
 	/*Wait until universe collapses or we receive a signal :)*/
-	select(0, NULL, NULL, NULL, NULL);
+	t_eternal_wait();
 
 	/*NOTREACHED*/
 	return 0;

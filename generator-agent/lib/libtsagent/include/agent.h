@@ -8,6 +8,7 @@
 #ifndef AGENT_H_
 #define AGENT_H_
 
+#include <defs.h>
 #include <libjson.h>
 
 #define AGENTMAXARGC	16
@@ -25,9 +26,16 @@ typedef struct {
 	agent_method_func_t ad_method;
 } agent_dispatch_t;
 
-#define ADT_ARGUMENT(name, type) { .ada_name = name, .ada_type = type }
-#define ADT_LAST_ARG()  { .ada_name = NULL, .ada_type = JSON_NULL }
-#define ADT_LAST_METHOD() { .ad_name = NULL }
+#define AGENT_METHOD(name, args, method)	{	\
+	SM_INIT(.ad_name, name),					\
+	args,										\
+	SM_INIT(.ad_method, method)				}
+
+#define ADT_ARGUMENT(name, type) { SM_INIT(.ada_name, name), \
+								   SM_INIT(.ada_type, type) }
+#define ADT_ARGS(...)			 { __VA_ARGS__ ADT_ARGUMENT(NULL, JSON_NULL) }
+
+#define ADT_LAST_METHOD() 		 { NULL }
 
 typedef enum agent_errcode {
 	AE_COMMAND_NOT_FOUND = 100,
@@ -36,10 +44,10 @@ typedef enum agent_errcode {
 	AE_INTERNAL_ERROR	 = 200
 } agent_errcode_t;
 
-void agent_process_command(char* command, JSONNODE* msg);
-void agent_response_msg(JSONNODE* response);
-void agent_error_msg(agent_errcode_t code, const char* format, ...);
-void agent_register_methods(agent_dispatch_t* table);
+LIBEXPORT void agent_process_command(char* command, JSONNODE* msg);
+LIBEXPORT void agent_response_msg(JSONNODE* response);
+LIBEXPORT void agent_error_msg(agent_errcode_t code, const char* format, ...);
+LIBEXPORT void agent_register_methods(agent_dispatch_t* table);
 
 int agent_hello();
 

@@ -28,7 +28,7 @@ typedef struct {
 	mod_run_request_func mod_run_request;
 } tsload_module_t;
 
-int tsload_mod_helper(module_t* mod);
+LIBEXPORT int tsload_mod_helper(module_t* mod);
 
 #ifndef NO_JSON
 #include <libjson.h>

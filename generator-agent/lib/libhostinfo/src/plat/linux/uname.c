@@ -17,7 +17,7 @@
 #define OSNAMELEN 	64
 
 char lsb_os_name[64];
-int lsb_read = FALSE;
+int lsb_read = B_FALSE;
 
 /*Parses lsb_release output*/
 void read_lsb_release(void) {
@@ -57,7 +57,7 @@ PLATAPI const char* hi_get_os_name() {
 	if(!lsb_read) {
 		strcpy(lsb_os_name, "Linux");
 		read_lsb_release();
-		lsb_read = TRUE;
+		lsb_read = B_TRUE;
 	}
 
 	return lsb_os_name;

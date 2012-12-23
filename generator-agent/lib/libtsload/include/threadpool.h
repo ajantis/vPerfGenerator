@@ -57,16 +57,16 @@ typedef struct thread_pool {
 	int tp_wl_changed;
 } thread_pool_t;
 
-thread_pool_t* tp_create(unsigned num_threads, const char* name, uint64_t quantum);
+LIBEXPORT thread_pool_t* tp_create(unsigned num_threads, const char* name, uint64_t quantum);
 
-thread_pool_t* tp_search(const char* name);
+LIBEXPORT thread_pool_t* tp_search(const char* name);
 
 void tp_attach(thread_pool_t* tp, struct workload* wl);
 void tp_detach(thread_pool_t* tp, struct workload* wl);
 
 void tp_distribute_requests(struct workload_step* step, thread_pool_t* tp);
 
-int tp_init(void);
-void tp_fini(void);
+LIBEXPORT int tp_init(void);
+LIBEXPORT void tp_fini(void);
 
 #endif /* THREADPOOL_H_ */

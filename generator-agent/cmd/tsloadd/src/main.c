@@ -11,19 +11,16 @@
 #include <modtsload.h>
 #include <cfgfile.h>
 #include <tsload.h>
+#include <getopt.h>
 
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 
-#include <signal.h>
-#include <unistd.h>
+LIBIMPORT int log_debug;
+LIBIMPORT int log_trace;
 
 char config_file_name[CONFPATHLEN];
-
-extern int log_debug;
-extern int log_trace;
-
 
 void usage() {
 	fprintf(stderr, "command line: \n");
@@ -38,7 +35,7 @@ void parse_options(int argc, char* argv[]) {
 
 	int c;
 
-	while((c = getopt(argc, argv, "f:dt")) != -1) {
+	while((c = plat_getopt(argc, argv, "f:dt")) != -1) {
 		switch(c) {
 		case 'f':
 			fflag = 1;
@@ -69,19 +66,12 @@ void parse_options(int argc, char* argv[]) {
 	}
 }
 
-void sigusr1_handler(int sig) {
-#if 0
-	t_dump_threads();
-#endif
-}
 
 int main(int argc, char* argv[]) {
 	int err = 0;
 
 	set_mod_helper(MOD_TSLOAD, tsload_mod_helper);
 	parse_options(argc, argv);
-
-	sigset(SIGUSR1, sigusr1_handler);
 
 	if((err = cfg_init(config_file_name)) != CFG_OK) {
 		return 1;

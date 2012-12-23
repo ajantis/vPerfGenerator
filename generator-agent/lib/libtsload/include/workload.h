@@ -98,12 +98,12 @@ typedef struct workload {
 	list_node_t		 wl_tp_node;		/**< thread pool wl list*/
 } workload_t;
 
-void wl_notify(workload_t* wl, wl_status_t status, int done, char* format, ...) ;
+LIBEXPORT void wl_notify(workload_t* wl, wl_status_t status, int done, char* format, ...) ;
 
-workload_t* wl_search(const char* name);
+LIBEXPORT workload_t* wl_search(const char* name);
 
-void wl_config(workload_t* wl);
-void wl_unconfig(workload_t* wl);
+LIBEXPORT void wl_config(workload_t* wl);
+LIBEXPORT void wl_unconfig(workload_t* wl);
 
 int wl_is_started(workload_t* wl);
 int wl_provide_step(workload_t* wl, long step_id, unsigned num_rqs);
@@ -114,8 +114,8 @@ void wl_run_request(request_t* rq);
 void wl_request_free(request_t* rq);
 void wl_rq_chain_push(list_head_t* rq_chain);
 
-int wl_init(void);
-void wl_fini(void);
+LIBEXPORT int wl_init(void);
+LIBEXPORT void wl_fini(void);
 
 #define WL_STEP_OK				0
 #define WL_STEP_QUEUE_FULL		-1

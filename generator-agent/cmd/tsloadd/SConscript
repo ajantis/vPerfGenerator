@@ -1,15 +1,21 @@
 import os
 
+tgtdir = 'bin'
+target = 'tsloadd'
+
 Import('env')
 
-cmd = env.Clone(LIBS = ['c'])
+cmd = env.Clone()
+
+if cmd.SupportedPlatform('posix'):
+    cmd.Append(LIBS = ['c'])
 
 cmd.AddDeps(('lib', 'libtsagent'), 
             ('lib', 'libtscommon'), 
             ('lib', 'libjson'), 
             ('lib', 'libhostinfo'), 
             ('lib', 'libtsload'))
-tsloadd = cmd.Program(cmd.Target('bin/tsloadd'), Glob("src/*.c"))
+tsloadd = cmd.Program(cmd.Target(tgtdir, target), Glob("src/*.c"))
 
 cmd.Depends(tsloadd, 'tsload.cfg')
 cmd.InstallFile('etc', 'tsload.cfg')

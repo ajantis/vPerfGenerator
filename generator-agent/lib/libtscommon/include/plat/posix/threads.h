@@ -28,4 +28,15 @@ typedef struct {
 	pthread_key_t 	tk_key;
 } plat_thread_key_t;
 
+#define PLAT_THREAD_EVENT_INITIALIZER 					\
+	{ SM_INIT(.te_mutex, PTHREAD_MUTEX_INITIALIZER),	\
+	  SM_INIT(.te_cv, PTHREAD_COND_INITIALIZER)  }
+
+#define PLAT_THREAD_MUTEX_INITIALIZER 					\
+	{ SM_INIT(.tm_mutex, PTHREAD_MUTEX_INITIALIZER) }
+
+#define PLAT_THREAD_KEY_INITIALIZER 					\
+	{ SM_INIT(.tk_key, 0) }
+
+
 #endif /* PLAT_POSIX_THREADS_H_ */

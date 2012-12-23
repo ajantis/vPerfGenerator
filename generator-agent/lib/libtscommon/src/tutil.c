@@ -31,7 +31,7 @@ void event_wait_unlock(thread_event_t* event, thread_mutex_t* mutex) {
 	thread_t* t = t_self();
 
 	if(t != NULL) {
-		gettimeofday(&t->t_block_time, NULL);
+		t->t_block_time = tm_get_time();
 		t->t_state = TS_WAITING;
 		t->t_block_event = event;
 	}
@@ -77,7 +77,7 @@ void mutex_init(thread_mutex_t* mutex, const char* namefmt, ...) {
 	va_list va;
 
 	va_start(va, namefmt);
-	__mutex_init(mutex, FALSE, namefmt, va);
+	__mutex_init(mutex, B_FALSE, namefmt, va);
 	va_end(va);
 }
 
@@ -85,7 +85,7 @@ void rmutex_init(thread_mutex_t* mutex, const char* namefmt, ...) {
 	va_list va;
 
 	va_start(va, namefmt);
-	__mutex_init(mutex, TRUE, namefmt, va);
+	__mutex_init(mutex, B_TRUE, namefmt, va);
 	va_end(va);
 }
 
@@ -97,7 +97,7 @@ void mutex_lock(thread_mutex_t* mutex) {
 	t = t_self();
 
 	if(t != NULL) {
-		gettimeofday(&t->t_block_time, NULL);
+		t->t_block_time = tm_get_time();
 		t->t_state = TS_LOCKED;
 		t->t_block_mutex = mutex;
 	}

@@ -10,7 +10,7 @@
 
 #include <sys/utsname.h>
 
-static int uname_read = FALSE;
+static int uname_read = B_FALSE;
 static struct utsname uname_data;
 
 static inline struct utsname* hi_get_uname() {

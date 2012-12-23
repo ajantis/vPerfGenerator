@@ -15,11 +15,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
-
-#include <sys/types.h>
-#include <sys/syscall.h>
-#include <sys/time.h>
-
 #include <assert.h>
 
 /* Thread hash map. Maps pthread to our thread */
@@ -34,9 +29,9 @@ DECLARE_HASH_MAP(thread_hash_map, thread_t, THASHSIZE, t_id, t_next,
 		thread_id_t tid2 = * (int*) key2;
 
 		if(tid1 == tid2)
-			return FALSE;
+			return B_FALSE;
 
-		return TRUE;
+		return B_TRUE;
 	});
 
 /*End of thread_hash_map declaration*/
@@ -49,8 +44,7 @@ static void thread_key_destructor(void* key) {
 }
 
 /**
- * returns pointer to current thread
- *
+ * returns pointer to current thread *
  * Used to monitor mutex/event deadlock and starvation (see tutil.c)
  *  */
 thread_t* t_self() {
@@ -104,7 +98,7 @@ void t_init(thread_t* thread, void* arg,
  * @return t (for THREAD_ENTRY)
  * */
 thread_t* t_post_init(thread_t* t) {
-	t->t_system_id = syscall(__NR_gettid);
+	t->t_system_id = plat_gettid();
 	t->t_state = TS_RUNNABLE;
 
 	hash_map_insert(&thread_hash_map, t);

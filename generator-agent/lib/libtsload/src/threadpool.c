@@ -68,8 +68,8 @@ thread_pool_t* tp_create(unsigned num_threads, const char* name, uint64_t quantu
 	tp->tp_time	   = 0ll;	   /*Time is set by control thread*/
 	tp->tp_quantum = quantum;
 
-	tp->tp_is_dead = FALSE;
-	tp->tp_wl_changed = FALSE;
+	tp->tp_is_dead = B_FALSE;
+	tp->tp_wl_changed = B_FALSE;
 
 	tp->tp_wl_count = 0;
 
@@ -95,7 +95,7 @@ thread_pool_t* tp_create(unsigned num_threads, const char* name, uint64_t quantu
 void tp_destroy(thread_pool_t* tp) {
 	int tid;
 
-	tp->tp_is_dead = TRUE;
+	tp->tp_is_dead = B_TRUE;
 
 	/* Notify workers that we are done */
 	event_notify_all(&tp->tp_event);
@@ -130,7 +130,7 @@ void tp_attach(thread_pool_t* tp, struct workload* wl) {
 
 	list_add_tail(&wl->wl_tp_node, &tp->tp_wl_head);
 	++tp->tp_wl_count;
-	tp->tp_wl_changed = TRUE;
+	tp->tp_wl_changed = B_TRUE;
 
 	mutex_unlock(&tp->tp_mutex);
 }
@@ -138,7 +138,7 @@ void tp_attach(thread_pool_t* tp, struct workload* wl) {
 void tp_detach_nolock(thread_pool_t* tp, struct workload* wl) {
 	list_del(&wl->wl_tp_node);
 	--tp->tp_wl_count;
-	tp->tp_wl_changed = TRUE;
+	tp->tp_wl_changed = B_TRUE;
 }
 
 /**
@@ -224,7 +224,7 @@ void tp_distribute_requests(workload_step_t* step, thread_pool_t* tp) {
 
 int tp_init(void) {
 	/*FIXME: default pool should have threads number num_of_phys_cores*/
-	default_pool = tp_create(4, DEFAULT_TP_NAME, 250 * MS);
+	default_pool = tp_create(4, DEFAULT_TP_NAME, 250 * T_MS);
 
 	return 0;
 }
