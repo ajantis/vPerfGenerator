@@ -10,6 +10,8 @@
 #include <errno.h>
 #include <plat/posix/threads.h>
 
+#include <assert.h>
+
 /* Mutexes */
 
 PLATAPI void plat_mutex_init(plat_thread_mutex_t* mutex, int recursive) {
@@ -72,8 +74,8 @@ PLATAPI void plat_event_destroy(plat_thread_event_t* event) {
 }
 
 /* Keys */
-PLATAPI void plat_tkey_init(plat_thread_key_t* key, void (*destructor)(void* key)) {
-	pthread_key_create(&key->tk_key, destructor);
+PLATAPI void plat_tkey_init(plat_thread_key_t* key) {
+	pthread_key_create(&key->tk_key, NULL);
 }
 
 PLATAPI void plat_tkey_destroy(plat_thread_key_t* key) {

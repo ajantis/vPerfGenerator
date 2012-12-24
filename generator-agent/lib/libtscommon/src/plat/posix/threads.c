@@ -10,8 +10,10 @@
 
 #include <threads.h>
 
+#include <unistd.h>
+
 PLATAPI void plat_thread_init(plat_thread_t* thread, void* arg,
-		  	  	  	  	  	  void* (*start)(void*)) {
+		  	  	  	  	  	  thread_start_func start) {
 
 	pthread_attr_init(&thread->t_attr);
 	pthread_attr_setdetachstate(&thread->t_attr, PTHREAD_CREATE_JOINABLE);

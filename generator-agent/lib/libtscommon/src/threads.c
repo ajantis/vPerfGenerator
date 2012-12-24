@@ -38,11 +38,6 @@ DECLARE_HASH_MAP(thread_hash_map, thread_t, THASHSIZE, t_id, t_next,
 
 thread_key_t thread_key;
 
-static void thread_key_destructor(void* key) {
-	/* threads are freed by their spawners so simply
-	 * do nothing*/
-}
-
 /**
  * returns pointer to current thread *
  * Used to monitor mutex/event deadlock and starvation (see tutil.c)
@@ -64,7 +59,7 @@ thread_id_t t_assign_id() {
  * Initialize and run thread
  * */
 void t_init(thread_t* thread, void* arg,
-		void* (*start)(void*),
+		thread_start_func start,
 		const char* namefmt, ...) {
 	va_list va;
 
@@ -84,6 +79,8 @@ void t_init(thread_t* thread, void* arg,
 	thread->t_pool_next = NULL;
 
 	thread->t_system_id = 0;
+
+	thread->t_ret_code = 0;
 
 	logmsg(LOG_DEBUG, "Created thread #%d '%s'", thread->t_id, thread->t_name);
 
@@ -123,7 +120,7 @@ void t_exit(thread_t* t) {
 
 
 /*
- * Wait until thread finishes (should be called with t_attach)
+ * Wait until thread finishes
  * */
 void t_join(thread_t* thread, thread_event_t* event) {
 	if(thread->t_state != TS_DEAD) {
@@ -220,7 +217,7 @@ void t_dump_threads() {
 #endif
 
 int threads_init(void) {
-	tkey_init(&thread_key, thread_key_destructor, "thread_key");
+	tkey_init(&thread_key, "thread_key");
 
 	hash_map_init(&thread_hash_map, "thread_hash_map");
 

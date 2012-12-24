@@ -44,7 +44,7 @@ def Module(self, mod_name):
     mod = self.Clone(CFLAGS = ['-DNO_JSON'])
     
     mod.AddDeps(('lib', 'libtscommon'), ('lib', 'libtsload'))
-    mod.SharedLibrary(mod.Target(PathJoin('mod', mod_name)), Glob("src/*.c"))
+    mod.SharedLibrary(mod.Target('mod', mod_name), Glob("src/*.c"))
 
 def InstallFile(self, target, file_name):
     self.Command(self.Target(target, file_name),

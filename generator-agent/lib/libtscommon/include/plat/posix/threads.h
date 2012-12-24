@@ -38,5 +38,11 @@ typedef struct {
 #define PLAT_THREAD_KEY_INITIALIZER 					\
 	{ SM_INIT(.tk_key, 0) }
 
+typedef void* thread_result_t;
+typedef void* thread_arg_t;
+
+#define PLAT_THREAD_FINISH(arg, code) 		\
+	pthread_exit(&(code));					\
+	return arg;
 
 #endif /* PLAT_POSIX_THREADS_H_ */

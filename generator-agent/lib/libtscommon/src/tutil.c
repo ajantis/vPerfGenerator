@@ -124,11 +124,11 @@ void mutex_destroy(thread_mutex_t* mutex) {
 
 /* Keys */
 
-void tkey_init(thread_key_t* key, void (*destructor)(void* key),
+void tkey_init(thread_key_t* key,
 			   const char* namefmt, ...) {
 	va_list va;
 
-	plat_tkey_init(&key->tk_impl, destructor);
+	plat_tkey_init(&key->tk_impl);
 
 	va_start(va, namefmt);
 	vsnprintf(key->tk_name, TKEYNAMELEN, namefmt, va);

@@ -25,7 +25,7 @@ void tp_detach_nolock(thread_pool_t* tp, struct workload* wl);
  * Control thread notifies workers after on each quantum ending
  * and processes each step for each workload on thread pool
  * */
-void* control_thread(void* arg) {
+thread_result_t control_thread(thread_arg_t arg) {
 	THREAD_ENTRY(arg, thread_pool_t, tp);
 	ts_time_t tm = tm_get_time();
 	workload_t *wl;
@@ -130,7 +130,7 @@ THREAD_END:
 	THREAD_FINISH(arg);
 }
 
-void* worker_thread(void* arg) {
+thread_result_t worker_thread(thread_arg_t arg) {
 	THREAD_ENTRY(arg, tp_worker_t, worker);
 	list_head_t* rq_chain;
 	request_t* rq;

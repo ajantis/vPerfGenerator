@@ -51,15 +51,16 @@
  * }
  * */
 #define THREAD_END 		_l_thread_exit
-#define THREAD_FINISH(arg)			\
+#define THREAD_FINISH(arg)    		\
 	thread->t_state = TS_DEAD;		\
 	t_exit(thread);					\
-	return arg;
+	PLAT_THREAD_FINISH(arg, thread->t_ret_code)
 
 /*
  * THREAD_EXIT - prematurely exit from thread (works only in main function of thread)
  * */
-#define THREAD_EXIT()				\
+#define THREAD_EXIT(code)			\
+	thread->t_ret_code = code;		\
 	goto _l_thread_exit
 
 /*
@@ -117,6 +118,8 @@ typedef struct {
 
 typedef unsigned 	thread_id_t;
 
+typedef thread_result_t (*thread_start_func)(thread_arg_t arg);
+
 typedef struct thread {
 	plat_thread_t	t_impl;
 
@@ -133,6 +136,8 @@ typedef struct thread {
 	thread_event_t*	t_event;
 
 	void*			t_arg;
+
+	unsigned		t_ret_code;
 
 #ifdef TS_LOCK_DEBUG
 	ts_time_t		t_block_time;
@@ -157,7 +162,7 @@ LIBEXPORT void event_notify_one(thread_event_t* event);
 LIBEXPORT void event_notify_all(thread_event_t* event);
 LIBEXPORT void event_destroy(thread_event_t* event);
 
-LIBEXPORT void tkey_init(thread_key_t* key, void (*destructor)(void* key),
+LIBEXPORT void tkey_init(thread_key_t* key,
 			   	   	   	 const char* namefmt, ...);
 LIBEXPORT void tkey_destroy(thread_key_t* key);
 LIBEXPORT void tkey_set(thread_key_t* key, void* value);
@@ -166,7 +171,7 @@ LIBEXPORT void* tkey_get(thread_key_t* key);
 LIBEXPORT thread_t* t_self();
 
 LIBEXPORT void t_init(thread_t* thread, void* arg,
-					  void* (*start)(void*),
+					  thread_start_func start,
 		              const char* namefmt, ...);
 LIBEXPORT thread_t* t_post_init(thread_t* t);
 LIBEXPORT void t_exit(thread_t* t);
@@ -182,7 +187,7 @@ LIBEXPORT PLATAPI void t_eternal_wait(void);
 /* Platform-dependent functions */
 
 PLATAPI void plat_thread_init(plat_thread_t* thread, void* arg,
-							  void* (*start)(void*));
+							  thread_start_func start);
 PLATAPI void plat_thread_destroy(plat_thread_t* thread);
 PLATAPI unsigned long plat_gettid();
 
@@ -197,7 +202,7 @@ PLATAPI void plat_event_notify_one(plat_thread_event_t* event);
 PLATAPI void plat_event_notify_all(plat_thread_event_t* event);
 PLATAPI void plat_event_destroy(plat_thread_event_t* event);
 
-PLATAPI void plat_tkey_init(plat_thread_key_t* key, void (*destructor)(void* key));
+PLATAPI void plat_tkey_init(plat_thread_key_t* key);
 PLATAPI void plat_tkey_destroy(plat_thread_key_t* key);
 PLATAPI void plat_tkey_set(plat_thread_key_t* key, void* value);
 PLATAPI void* plat_tkey_get(plat_thread_key_t* key);

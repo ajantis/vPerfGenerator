@@ -11,28 +11,38 @@
 #include <windows.h>
 
 typedef struct {
-	HANDLE hEvent;
+	CRITICAL_SECTION te_crit_section;
+	CONDITION_VARIABLE te_cond_var;
 } plat_thread_event_t;
 
 typedef struct {
-	HANDLE hMutex;
+	CRITICAL_SECTION tm_crit_section;
+
+	int tm_is_recursive;
+	DWORD tm_owner;
 } plat_thread_mutex_t;
 
 typedef struct {
-	int _dummy;
+	HANDLE t_handle;
 } plat_thread_t;
 
 typedef struct {
-	int _dummy;
+	DWORD tk_tls;
 } plat_thread_key_t;
 
-#define PLAT_THREAD_EVENT_INITIALIZER 						\
-	{ SM_INIT(.hEvent, ((HANDLE) ERROR_INVALID_HANDLE))  }
+#define PLAT_THREAD_EVENT_INITIALIZER 	\
+	{ 0   }
 
-#define PLAT_THREAD_MUTEX_INITIALIZER 						\
-	{ SM_INIT(.hMutex, ((HANDLE) ERROR_INVALID_HANDLE)) }
+#define PLAT_THREAD_MUTEX_INITIALIZER 	\
+	{ 0 }
 
-#define PLAT_THREAD_KEY_INITIALIZER 					\
-	{ SM_INIT(.dummy, 0) }
+#define PLAT_THREAD_KEY_INITIALIZER 	\
+	{ 0 }
+
+typedef DWORD  thread_result_t;
+typedef LPVOID thread_arg_t;
+
+#define PLAT_THREAD_FINISH(arg, code) 	\
+	return (code);
 
 #endif /* PLAT_POSIX_THREADS_H_ */

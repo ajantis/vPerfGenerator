@@ -166,7 +166,7 @@ void wl_notify(workload_t* wl, wl_status_t status, int done, char* format, ...) 
 	agent_workload_status(wl->wl_name, status, done, config_msg);
 }
 
-void* wl_config_thread(void* arg) {
+thread_result_t wl_config_thread(thread_arg_t arg) {
 	THREAD_ENTRY(arg, workload_t, wl);
 	int ret;
 
@@ -177,7 +177,7 @@ void* wl_config_thread(void* arg) {
 	if(ret != 0) {
 		logmsg(LOG_WARN, "Failed to configure workload %s", wl->wl_name);
 
-		THREAD_EXIT();
+		THREAD_EXIT(ret);
 	}
 
 	wl->wl_is_configured = B_TRUE;
@@ -358,7 +358,7 @@ void wl_rq_chain_destroy(void *p_rq_chain) {
 	mp_free(p_rq_chain);
 }
 
-void* wl_requests_thread(void* arg) {
+thread_result_t wl_requests_thread(thread_arg_t arg) {
 	THREAD_ENTRY(arg, void, unused);
 	list_head_t* rq_chain;
 
@@ -370,7 +370,7 @@ void* wl_requests_thread(void* arg) {
 		rq_chain =  (list_head_t*) squeue_pop(&wl_requests);
 
 		if(rq_chain == NULL)
-			THREAD_EXIT();
+			THREAD_EXIT(0);
 
 		j_rq_chain = json_request_format_all(rq_chain);
 		agent_requests_report(j_rq_chain);

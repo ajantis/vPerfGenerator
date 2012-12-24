@@ -60,7 +60,7 @@
 
 #ifdef _MSC_VER
 #define LIBEXPORT			__declspec(dllexport)
-#define LIBIMPORT			__declspec(dllexport)
+#define LIBIMPORT			__declspec(dllimport)
 #else
 #define LIBEXPORT
 #define LIBIMPORT			extern

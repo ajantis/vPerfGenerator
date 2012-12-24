@@ -216,7 +216,7 @@ fail:
 	return -1;
 }
 
-void* clnt_proc_thread(void* arg) {
+thread_result_t clnt_proc_thread(thread_arg_t arg) {
 	THREAD_ENTRY(arg, void, unused);
 	JSONNODE* msg;
 
@@ -224,7 +224,7 @@ void* clnt_proc_thread(void* arg) {
 		msg = (JSONNODE*) squeue_pop(&proc_queue);
 
 		if(msg == NULL)
-			THREAD_EXIT();
+			THREAD_EXIT(0);
 
 		clnt_process_msg(msg);
 	}
@@ -275,7 +275,7 @@ void clnt_recv_parse(void* buffer, size_t recvlen) {
  * clnt_recv_thread - thread that receives data from socket,
  * parses it and sends to clnt_process_thread
  */
-void* clnt_recv_thread(void* arg) {
+thread_result_t clnt_recv_thread(thread_arg_t arg) {
 	THREAD_ENTRY(arg, void, unused);
 
 	char *buffer, *bufptr;
@@ -293,10 +293,10 @@ void* clnt_recv_thread(void* arg) {
 			continue;
 		case CLNT_POLL_FAILURE:
 			logmsg(LOG_CRIT, "Failure while polling socket");
-			THREAD_EXIT();
+			THREAD_EXIT(-1);
 		case CLNT_POLL_DISCONNECT:
 			logmsg(LOG_CRIT, "Disconnected while polling socket");
-			THREAD_EXIT();
+			THREAD_EXIT(-1);
 		}
 		/*Everything ok - new data arrived*/
 
@@ -312,7 +312,7 @@ void* clnt_recv_thread(void* arg) {
 
 			if(ret <= 0) {
 				logmsg(LOG_WARN, "recv() was failed, disconnecting");
-				THREAD_EXIT();
+				THREAD_EXIT(-1);
 			}
 
 			bufptr += ret;
@@ -460,7 +460,7 @@ int clnt_invoke(const char* command, JSONNODE* msg_node, JSONNODE** p_response) 
 	return 0;
 }
 
-void* clnt_connect_thread(void* arg) {
+thread_result_t clnt_connect_thread(thread_arg_t arg) {
 	THREAD_ENTRY(arg, void, unused);
 
 	while(!clnt_finished) {
