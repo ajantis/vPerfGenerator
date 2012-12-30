@@ -16,4 +16,4 @@
 #define read	_read
 #define write	_write
 
-#endif /* PLAT_POSIX_POSIXDECL_H_ */
+#endif /* PLAT_WIN_POSIXDECL_H_ */

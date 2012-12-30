@@ -48,8 +48,16 @@ void hash_map_init(hashmap_t* hm, const char* name) {
 
 /**
  * Destroy hash map
+ *
+ * It shouldn't contain objects (or assertion will rise)
  */
 void hash_map_destroy(hashmap_t* hm) {
+	int i = 0;
+
+	for(i = 0; i < hm->hm_size; ++i) {
+		assert(hm->hm_heads[i] == NULL);
+	}
+
 	mutex_destroy(&hm->hm_mutex);
 }
 
@@ -190,17 +198,45 @@ void* hash_map_find(hashmap_t* hm, const hm_key_t* key) {
  */
 void* hash_map_walk(hashmap_t* hm, int (*func)(hm_item_t* object, void* arg), void* arg) {
 	int i = 0;
+	int ret = 0;
 	hm_item_t* iter = NULL;
+	hm_item_t* next = NULL;
+	hm_item_t* prev = NULL;
 
 	mutex_lock(&hm->hm_mutex);
 	for(i = 0; i < hm->hm_size; ++i) {
+		prev = NULL;
+		next = NULL;
 		iter = hm->hm_heads[i];
 
 		while(iter != NULL) {
-			if(func(iter, arg) == HM_WALKER_STOP)
+			next = hm_next(hm, iter);
+
+			ret = func(iter, arg);
+
+			if(ret & HM_WALKER_REMOVE) {
+				if(prev == NULL) {
+					/* Entire chain before iter was removed, so this is head */
+					hm->hm_heads[i] = next;
+				}
+				else {
+					hm_set_next(hm, prev, next);
+				}
+			}
+			else {
+				/* Save prev pointer */
+				prev = iter;
+			}
+
+			if(ret & HM_WALKER_STOP)
 				goto done;
 
-			iter =  hm_next(hm, iter);
+			iter = next;
+		}
+
+		if(prev == NULL) {
+			/* Entire chain was removed */
+			hm->hm_heads[i] = NULL;
 		}
 	}
 

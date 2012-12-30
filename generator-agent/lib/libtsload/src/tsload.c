@@ -16,35 +16,8 @@
 #include <loadagent.h>
 #include <threadpool.h>
 
+#include <tsinit.h>
 #include <tsload.h>
-
-#include <stdlib.h>
-#include <stdio.h>
-
-typedef enum {
-	SS_UNINITIALIZED,
-	SS_OK,
-	SS_ERROR
-} subsystem_state_t;
-
-struct subsystem {
-	char* s_name;
-
-	int s_state;
-	int s_error_code;
-
-	int (*s_init)(void);
-	void (*s_fini)(void);
-};
-
-#define SUBSYSTEM(name, init, fini) 		\
-	{										\
-		SM_INIT(.s_name, name),				\
-		SM_INIT(.s_error_code, 0),			\
-		SM_INIT(.s_state, SS_UNINITIALIZED),\
-		SM_INIT(.s_init, init),				\
-		SM_INIT(.s_fini, fini)				\
-	}
 
 struct subsystem subsys[] = {
 	SUBSYSTEM("mempool", mempool_init, mempool_fini),
@@ -56,42 +29,9 @@ struct subsystem subsys[] = {
 	SUBSYSTEM("agent", agent_init, agent_fini)
 };
 
-int init(void) {
-	int i = 0;
-	int err = 0;
-	size_t s_count = sizeof(subsys) / sizeof(struct subsystem);
-
-	for(i = 0; i < s_count; ++i) {
-		err = subsys[i].s_init();
-
-		if(err != 0) {
-			subsys[i].s_state = SS_ERROR;
-			fprintf(stderr, "Failure initializing %s, exiting", subsys[i].s_name);
-			exit(err);
-
-			return err;
-		}
-
-		subsys[i].s_error_code = err;
-	}
-
-	return 0;
-}
-
-void finish(void) {
-	int i = 0;
-	size_t s_count = sizeof(subsys) / sizeof(struct subsystem);
-
-	for(i = s_count - 1; i >= 0; --i) {
-		if(subsys[i].s_state == SS_OK) {
-			subsys[i].s_fini();
-		}
-	}
-}
 
 int tsload_start(const char* basename) {
-	atexit(finish);
-	init();
+	init(subsys, sizeof(subsys) / sizeof(struct subsystem));
 
 	logmsg(LOG_INFO, "Started %s...", basename);
 

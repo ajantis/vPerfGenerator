@@ -26,7 +26,6 @@ PLATAPI const char* hi_get_nodename() {
 }
 
 PLATAPI const char* hi_get_domainname() {
-	/*FIXME: solaris/bsd implementation*/
 	return "";
 }
 

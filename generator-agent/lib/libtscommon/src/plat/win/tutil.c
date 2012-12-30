@@ -13,22 +13,15 @@
 
 /* Mutexes */
 
-PLATAPI void plat_mutex_init(plat_thread_mutex_t* mutex, int recursive) {
+PLATAPI void plat_mutex_init(plat_thread_mutex_t* mutex, boolean_t recursive) {
 	InitializeCriticalSection(&mutex->tm_crit_section);
 
-	mutex->tm_owner = 0;
-	mutex->tm_is_recursive = recursive;
+	/* Recursive mutexes are not supported*/
+	assert(!recursive);
 }
 
 PLATAPI void plat_mutex_lock(plat_thread_mutex_t* mutex) {
-	if(!TryEnterCriticalSection(&mutex->tm_crit_section)) {
-		if(!( mutex->tm_is_recursive &&
-			  mutex->tm_owner == GetCurrentThreadId())) {
-			EnterCriticalSection(&mutex->tm_crit_section);
-		}
-		/* That's ok, already holding critical section */
-	}
-	mutex->tm_owner = GetCurrentThreadId();
+	EnterCriticalSection(&mutex->tm_crit_section);
 }
 
 PLATAPI void plat_mutex_unlock(plat_thread_mutex_t* mutex) {

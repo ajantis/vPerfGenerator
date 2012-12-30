@@ -11,7 +11,18 @@
 #include <sys/types.h>
 #include <dirent.h>
 
-typedef DIR plat_dir_t;
-typedef struct dirent plat_dir_entry_t;
+typedef struct {
+	struct dirent* _d_entry;
+
+	char* 		  d_name;
+} plat_dir_entry_t;
+
+typedef struct {
+	plat_dir_entry_t d_entry;
+
+	DIR* d_dirp;
+
+	char 		  d_path[MAXNAMLEN];
+} plat_dir_t;
 
 #endif /* PLAT_POSIX_DIRENT_H_ */

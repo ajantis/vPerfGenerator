@@ -184,14 +184,6 @@ internalJSONNode::~internalJSONNode(void) json_nothrow {
 
 #endif
 
-#ifdef _MSC_VER
-#include <stdlib.h>
-#define ATOLL	_atoi64
-#else
-#include <cstdlib>
-#define ATOLL	std::atoll
-#endif
-
 //This one is used by as_int and as_float, so even non-readers need it
 void internalJSONNode::FetchNumber(void) const json_nothrow {
     #ifdef JSON_STRICT
@@ -275,6 +267,7 @@ void internalJSONNode::Set(const json_string & val) json_nothrow {
 	   makeNotContainer();
 	   _type = JSON_NUMBER;
 	   _value._number = (json_number)val;
+	   _value._integer = val;
 	   #if(defined(JSON_CASTABLE) || !defined(JSON_LESS_MEMORY) || defined(JSON_WRITE_PRIORITY))
 		  _string = NumberToString::_itoa<json_int_t>(val);
 	   #else

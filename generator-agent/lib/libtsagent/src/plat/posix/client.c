@@ -13,62 +13,78 @@
 
 #include <stdlib.h>
 
+#include <plat/posix/client.h>
+
 #include <poll.h>
 #include <unistd.h>
 #include <netdb.h>
 #include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
-int clnt_sockfd = -1;
+PLATAPI plat_host_entry* plat_clnt_resolve(const char* host) {
+	static struct hostent* he;
+	int err = 0;
+	struct in_addr addr;
 
-struct sockaddr_in clnt_sa;
+	he = gethostbyname(host);
 
-PLATAPI int clnt_connect(const char* clnt_host, const int clnt_port) {
-	struct hostent*	he;
+	if(he == NULL) {
+		/*Fall back to gethostbyaddr*/
+		if(inet_aton(host, &addr) == 0) {
+			return NULL;
+		}
 
-	if((he = gethostbyname(clnt_host)) == NULL) {
-		logmsg(LOG_CRIT, "Failed to resolve host %s", clnt_host);
+		/*FIXME: IPv6 support*/
+		he = gethostbyaddr(&addr, sizeof(addr), AF_INET);
+	}
+
+	return he;
+}
+
+PLATAPI int plat_clnt_setaddr(plat_clnt_addr* clnt_sa, plat_host_entry* he, int clnt_port) {
+	if(he == NULL) {
 		return CLNT_ERR_RESOLVE;
 	}
 
-	clnt_sockfd = socket(AF_INET, SOCK_STREAM, 0);
+	clnt_sa->sin_family = AF_INET;
+	clnt_sa->sin_port = htons(clnt_port);
+	clnt_sa->sin_addr = *((struct in_addr*) he->h_addr_list[0]);
 
-	if(clnt_sockfd == -1) {
-		logmsg(LOG_CRIT, "Failed to open socket");
+	memset(clnt_sa->sin_zero, 0, sizeof(clnt_sa->sin_zero));
+
+	return CLNT_OK;
+}
+
+PLATAPI int plat_clnt_connect(plat_clnt_socket* clnt_socket, plat_clnt_addr* clnt_sa) {
+	*clnt_socket = socket(AF_INET, SOCK_STREAM, 0);
+
+	if(*clnt_socket == -1)
 		return CLNT_ERR_SOCKET;
-	}
 
-	clnt_sa.sin_family = AF_INET;
-	clnt_sa.sin_port = htons(clnt_port);
-	clnt_sa.sin_addr = *((struct in_addr*) he->h_addr);
-
-	memset(clnt_sa.sin_zero, 0, sizeof(clnt_sa.sin_zero));
-
-	if(connect(clnt_sockfd, (struct sockaddr*) & clnt_sa,
-			   sizeof(struct sockaddr)) == -1) {
-		logmsg(LOG_CRIT, "Failed to connect to %s:%d, retrying in %ds", clnt_host, clnt_port, CLNT_RETRY_TIMEOUT);
+	if(connect(*clnt_socket, (struct sockaddr*) clnt_sa,
+			   sizeof(struct sockaddr)) == -1)
 		return CLNT_ERR_CONNECT;
-	}
 
-	logmsg(LOG_INFO, "Connected to %s:%d", clnt_host, clnt_port);
 
 	return CLNT_OK;
 }
 
-PLATAPI int clnt_disconnect() {
-	shutdown(clnt_sockfd, SHUT_RDWR);
-	close(clnt_sockfd);
+PLATAPI int plat_clnt_disconnect(plat_clnt_socket* clnt_socket) {
+	shutdown(*clnt_socket, SHUT_RDWR);
+	close(*clnt_socket);
 
 	return CLNT_OK;
 }
 
-PLATAPI int clnt_poll(long timeout) {
+PLATAPI int plat_clnt_poll(plat_clnt_socket* clnt_socket, ts_time_t timeout) {
 	struct pollfd sock_poll = {
-		.fd = clnt_sockfd,
+		.fd = *clnt_socket,
 		.events = POLLIN | POLLNVAL | POLLHUP,
 		.revents = 0
 	};
 
-	poll(&sock_poll, 1, timeout);
+	poll(&sock_poll, 1, timeout / T_MS);
 
 	if(sock_poll.revents & POLLNVAL)
 		return CLNT_POLL_FAILURE;
@@ -82,10 +98,10 @@ PLATAPI int clnt_poll(long timeout) {
 	return CLNT_POLL_OK;
 }
 
-PLATAPI int clnt_sock_send(void* data, size_t len) {
-	return send(clnt_sockfd, data, len, MSG_NOSIGNAL);
+PLATAPI int plat_clnt_send(plat_clnt_socket* clnt_socket, void* data, size_t len) {
+	return send(*clnt_socket, data, len, 0);
 }
 
-PLATAPI int clnt_sock_recv(void* data, size_t len) {
-	return recv(clnt_sockfd, data, len, MSG_NOSIGNAL);
+PLATAPI int plat_clnt_recv(plat_clnt_socket* clnt_socket, void* data, size_t len) {
+	return recv(*clnt_socket, data, len, 0);
 }

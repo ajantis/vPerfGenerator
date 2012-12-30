@@ -24,12 +24,13 @@
 #include <errno.h>
 #include <fcntl.h>
 
-int mod_api_version = MOD_API_VERSION;
+DECLARE_MODAPI_VERSION(MOD_API_VERSION);
+DECLARE_MOD_NAME("dummy");
+DECLARE_MOD_TYPE(MOD_TSLOAD);
 
-char mod_name[MODNAMELEN] = "dummy";
 static char* tests[] =  {"read", "write"};
 
-wlp_descr_t mod_params[] = {
+MODEXPORT wlp_descr_t mod_params[] = {
 	{ WLP_SIZE,
 		WLP_SIZE_RANGE(1, 1 * SZ_TB),
 		"filesize",
@@ -61,7 +62,7 @@ wlp_descr_t mod_params[] = {
 	{ WLP_NULL }
 };
 
-size_t mod_params_size = sizeof(struct dummy_workload);
+MODEXPORT size_t mod_params_size = sizeof(struct dummy_workload);
 
 module_t* self = NULL;
 
@@ -89,7 +90,7 @@ int dummy_create_file(workload_t* wl, int fd, struct dummy_workload* dummy) {
 	return 0;
 }
 
-int mod_config(module_t* mod) {
+MODEXPORT int mod_config(module_t* mod) {
 	logmsg(LOG_INFO, "Dummy module is loaded");
 
 	self = mod;
@@ -97,15 +98,15 @@ int mod_config(module_t* mod) {
 	return 0;
 }
 
-int mod_unconfig(module_t* mod) {
+MODEXPORT int mod_unconfig(module_t* mod) {
 	return 0;
 }
 
-int mod_workload_config(workload_t* wl) {
+MODEXPORT int mod_workload_config(workload_t* wl) {
 	struct dummy_workload* dummy = (struct dummy_workload*) wl->wl_params;
 	int fd = 0;
 
-	logmsg(LOG_INFO, "Creating file %s with size %ld", dummy->path, dummy->file_size);
+	logmsg(LOG_INFO, "Creating file %s with size %lld", dummy->path, dummy->file_size);
 
 	fd = open(dummy->path, O_WRONLY | O_CREAT, 0660);
 
@@ -123,12 +124,14 @@ int mod_workload_config(workload_t* wl) {
 		dummy_create_file(wl, fd, dummy);
 	}
 
-	dummy->fd = fd;
+	close(fd);
+
+	dummy->fd = open(dummy->path, (dummy->test == DUMMY_WRITE) ? O_WRONLY : O_RDONLY, 0660);
 
 	return 0;
 }
 
-int mod_workload_unconfig(workload_t* wl) {
+MODEXPORT int mod_workload_unconfig(workload_t* wl) {
 	struct dummy_workload* dummy = (struct dummy_workload*) wl->wl_params;
 
 	close(dummy->fd);
@@ -138,9 +141,14 @@ int mod_workload_unconfig(workload_t* wl) {
 	return 0;
 }
 
-int mod_run_request(request_t* rq) {
+MODEXPORT int mod_run_request(request_t* rq) {
 	struct dummy_workload* dummy = (struct dummy_workload*) rq->rq_workload->wl_params;
 	int ret;
+
+	unsigned block = rand() % (dummy->file_size / dummy->block_size);
+
+	/* Select random block */
+	lseek(dummy->fd, block * dummy->block_size, SEEK_SET);
 
 	/* FIXME: read/writes to same buffer: need request context */
 	switch(dummy->test) {

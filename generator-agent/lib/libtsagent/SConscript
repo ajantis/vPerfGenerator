@@ -11,6 +11,9 @@ if lib.SupportedPlatform('posix'):
 if lib.SupportedPlatform('win'):
     lib.Append(LIBS = ['Ws2_32'])
 
+if lib.SupportedPlatform('solaris'):
+    lib.Append(LIBS = ['socket', 'nsl'])
+
 
 lib.PreparePlatform()
 

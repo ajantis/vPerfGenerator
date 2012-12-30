@@ -5,8 +5,6 @@
  *      Author: myaut
  */
 
-#define _WINSOCKAPI_
-
 #define LOG_SOURCE "client"
 #include <log.h>
 
@@ -17,74 +15,113 @@
 
 #include <winsock2.h>
 
-SOCKET clnt_sockfd;
+PLATAPI plat_host_entry* plat_clnt_resolve(const char* host) {
+	struct hostent* he;
+	struct sockaddr_in sa;
 
-struct sockaddr_in clnt_sa;
+	int err = 0;
 
-PLATAPI int clnt_connect(const char* clnt_host, const int clnt_port) {
-	struct hostent*	he;
+	size_t sa_size = sizeof(sa);
 
-	if((he = gethostbyname(clnt_host)) == NULL) {
-		logmsg(LOG_CRIT, "Failed to resolve host %s", clnt_host);
+	he = gethostbyname(host);
+
+	if(he == NULL) {
+		/* InetPton is supported only in Windows > 2008 or Vista,
+		 * so we use WSAStringToAddress*/
+
+		if(WSAStringToAddress(host, AF_INET, NULL, &sa, &sa_size) == SOCKET_ERROR)
+			return NULL;
+
+		return gethostbyaddr((const char*) &sa.sin_addr, sizeof(sa.sin_addr), AF_INET);
+	}
+
+	return he;
+}
+
+PLATAPI int plat_clnt_setaddr(plat_clnt_addr* clnt_sa, plat_host_entry* he, int clnt_port) {
+	if(he == NULL) {
 		return CLNT_ERR_RESOLVE;
 	}
 
-	clnt_sockfd = socket(AF_INET, SOCK_STREAM, 0);
+	clnt_sa->sin_family = AF_INET;
+	clnt_sa->sin_port = htons(clnt_port);
+	clnt_sa->sin_addr = *((struct in_addr*) he->h_addr_list[0]);
 
-	if(clnt_sockfd == -1) {
-		logmsg(LOG_CRIT, "Failed to open socket");
+	memset(clnt_sa->sin_zero, 0, sizeof(clnt_sa->sin_zero));
+
+	return CLNT_OK;
+}
+
+PLATAPI int plat_clnt_connect(plat_clnt_socket* clnt_socket, plat_clnt_addr* clnt_sa, int clnt_port) {
+	*clnt_socket = socket(AF_INET, SOCK_STREAM, 0);
+
+	if(*clnt_socket == -1)
 		return CLNT_ERR_SOCKET;
-	}
 
-	clnt_sa.sin_family = AF_INET;
-	clnt_sa.sin_port = htons(clnt_port);
-	clnt_sa.sin_addr = *((struct in_addr*) he->h_addr);
-
-	memset(clnt_sa.sin_zero, 0, sizeof(clnt_sa.sin_zero));
-
-	if(connect(clnt_sockfd, (struct sockaddr*) & clnt_sa,
-			   sizeof(struct sockaddr)) == -1) {
-		logmsg(LOG_CRIT, "Failed to connect to %s:%d, retrying in %ds", clnt_host, clnt_port, CLNT_RETRY_TIMEOUT);
+	if(connect(*clnt_socket, (struct sockaddr*) clnt_sa,
+			   sizeof(struct sockaddr)) == -1)
 		return CLNT_ERR_CONNECT;
-	}
-
-	logmsg(LOG_INFO, "Connected to %s:%d", clnt_host, clnt_port);
 
 	return CLNT_OK;
 }
 
-PLATAPI int clnt_disconnect() {
-	shutdown(clnt_sockfd, SD_BOTH);
-	closesocket(clnt_sockfd);
+PLATAPI int plat_clnt_disconnect(plat_clnt_socket* clnt_socket) {
+	shutdown(*clnt_socket, SD_BOTH);
+	closesocket(*clnt_socket);
 
 	return CLNT_OK;
 }
 
-PLATAPI int clnt_poll(long timeout) {
-	struct pollfd sock_poll;
+PLATAPI int plat_clnt_poll(plat_clnt_socket* clnt_socket, ts_time_t timeout) {
+	fd_set readfds;
+	int ret;
 
-	sock_poll.fd = clnt_sockfd;
-	sock_poll.events = POLLRDNORM | POLLNVAL | POLLHUP;
-	sock_poll.revents = 0;
+	struct timeval tv_timeout;
 
-	WSAPoll(&sock_poll, 1, timeout);
+	FD_ZERO(&readfds);
+	FD_SET(*clnt_socket, &readfds);
 
-	if(sock_poll.revents & POLLRDNORM)
+	tv_timeout.tv_sec = timeout / T_SEC;
+	tv_timeout.tv_usec = (timeout - tv_timeout.tv_sec * T_SEC) / T_US;
+
+	if((ret = select(0, &readfds, NULL, NULL, &tv_timeout)) == SOCKET_ERROR)
 		return CLNT_POLL_FAILURE;
 
-	if(sock_poll.revents & POLLHUP)
-		return CLNT_POLL_DISCONNECT;
+	if(ret > 0) {
+		if(FD_ISSET(*clnt_socket, &readfds))
+			return CLNT_POLL_NEW_DATA;
 
-	if(sock_poll.revents & POLLIN)
-		return CLNT_POLL_NEW_DATA;
+		return CLNT_POLL_DISCONNECT;
+	}
 
 	return CLNT_POLL_OK;
 }
 
-PLATAPI int clnt_sock_send(void* data, size_t len) {
-	return send(clnt_sockfd, data, len, 0);
+PLATAPI int plat_clnt_send(plat_clnt_socket* clnt_socket, void* data, size_t len) {
+	return send(*clnt_socket, data, len, 0);
 }
 
-PLATAPI int clnt_sock_recv(void* data, size_t len) {
-	return recv(clnt_sockfd, data, len, 0);
+PLATAPI int plat_clnt_recv(plat_clnt_socket* clnt_socket, void* data, size_t len) {
+	return recv(*clnt_socket, data, len, 0);
+}
+
+PLATAPI	int plat_clnt_init(void) {
+	WORD requested_ver;
+	WSADATA wsa_data;
+	int err;
+
+	requested_ver = MAKEWORD(2, 0);
+
+	err = WSAStartup(requested_ver, &wsa_data);
+
+	if (LOBYTE(wsa_data.wVersion) != 2 || HIBYTE(wsa_data.wVersion) != 0) {
+		WSACleanup();
+		return -1;
+	}
+
+	return 0;
+}
+
+PLATAPI	void plat_clnt_fini(void) {
+	WSACleanup();
 }

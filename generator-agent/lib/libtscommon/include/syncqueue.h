@@ -27,7 +27,7 @@ typedef struct squeue {
 
 	char sq_name[SQUEUENAMELEN];
 
-	int sq_is_destroyed;
+	boolean_t sq_is_destroyed;
 } squeue_t;
 
 LIBEXPORT void squeue_init(squeue_t* sq, const char* namefmt, ...);

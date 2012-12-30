@@ -82,6 +82,7 @@ LIBEXPORT void hash_map_destroy(hashmap_t* hm);
 #define HASH_MAP_NOT_FOUND		-2
 
 #define HM_WALKER_CONTINUE		0
-#define HM_WALKER_STOP			1
+#define HM_WALKER_STOP			0x01
+#define HM_WALKER_REMOVE		0x02
 
 #endif

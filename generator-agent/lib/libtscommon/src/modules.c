@@ -13,14 +13,13 @@
 #include <modules.h>
 #include <libjson.h>
 #include <tsdirent.h>
+#include <pathutil.h>
 
 #include <assert.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-
-#define INFOCHUNKLEN	2048
 
 LIBEXPORT char mod_search_path[MODPATHLEN];
 
@@ -46,13 +45,11 @@ int load_modules() {
 	}
 
 	while((d = plat_readdir(dir)) != NULL) {
-		if(d->d_name[0] == '.' || d->d_type != DT_REG)
+		if( plat_dirent_hidden(d) ||
+			plat_dirent_type(d) != DET_REG)
 			continue;
 
-		/* May be optimized (do strcpy once, move pointer to end of
-		 * path, then do strcpy again and again)*/
-		strcpy(path, mod_search_path);
-		strncat(path, d->d_name, MODPATHLEN);
+		path_join(path, MODPATHLEN, mod_search_path, d->d_name, NULL);
 
 		mod_load(path);
 	}
@@ -145,7 +142,7 @@ module_t* mod_load(const char* path_name) {
 	int* type;
 	int err = 0;
 
-	int flag = B_FALSE;
+	boolean_t flag = B_FALSE;
 
 	assert(mod_load_helper != NULL);
 	assert(mod != NULL);

@@ -17,6 +17,8 @@
 #include <modtsload.h>
 #include <tstime.h>
 
+#define WL_NOTIFICATIONS_PER_SEC	20
+
 #define WLHASHSIZE	8
 #define WLHASHMASK	(WLHASHSIZE - 1)
 #define WLNAMELEN	64
@@ -76,12 +78,14 @@ typedef struct workload {
 
 	thread_t		 wl_cfg_thread;		/**< Thread responsible for configuration*/
 
-	int 			 wl_is_configured;
+	boolean_t		 wl_is_configured;
 
 	int				 wl_current_rq;
 
 	ts_time_t		 wl_start_time;
-	int 			 wl_is_started;
+	boolean_t		 wl_is_started;
+
+	ts_time_t		 wl_notify_time;
 
 	/* Requests queue */
 	thread_mutex_t	 wl_rq_mutex;		/**< Mutex that protects wl_requests*/
@@ -97,6 +101,14 @@ typedef struct workload {
 	list_node_t  	 wl_chain;			/**workload chain*/
 	list_node_t		 wl_tp_node;		/**< thread pool wl list*/
 } workload_t;
+
+typedef struct {
+	workload_t* wl;
+	wl_status_t status;
+	int done;
+
+	char msg[256];
+} wl_notify_msg_t;
 
 LIBEXPORT void wl_notify(workload_t* wl, wl_status_t status, int done, char* format, ...) ;
 

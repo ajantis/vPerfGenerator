@@ -1,7 +1,7 @@
 import os
 import sys
 
-from SCons.Errors import BuildError 
+from SCons.Errors import StopError 
 
 PathJoin = os.path.join
 PathBaseName = os.path.basename
@@ -27,8 +27,7 @@ def Target(self, tgtdir, target = ''):
         if tgtdir in ('bin', 'lib', 'etc'):
             tgtdir = ''
     
-    target = PathJoin(tgtdir, target)
-    
+    target = PathJoin(tgtdir, target)    
     self['CURTARGET'] = target
     
     return PathJoin('#build', self['PLATFORM'], target)
@@ -54,14 +53,16 @@ def PreparePlatform(self):
     self.Append(ENV = {'PLATCACHE': PathJoin(Dir('.').path, self['PLATCACHE'])})
     self.Append(ENV = {'PLATDEBUG': self['PLATDEBUG']})
     
-    plat_chain = list(reversed(self['PLATCHAIN']))
-    plat_cache = self['PLATCACHE']
+    plat_chain = self['PLATCHAIN']
+    rev_plat_chain = list(reversed(plat_chain))
     
+    plat_cache = self['PLATCACHE']
     plat_includes = []
     
     self.PlatIncBuilder(plat_cache, Dir('include').glob('*.h'))
     
     # Build platform-chained includes and sources
+    
     for plat_name in plat_chain:      
         # For each platform-dependent include select best match and copy
         # it from plat/<platform>/include.h to plat/include.h
@@ -73,7 +74,8 @@ def PreparePlatform(self):
                 self.Command(dest_file, inc_file, Copy("$TARGET", "$SOURCE"))
                 
                 plat_includes.append(base_name)
-        
+    
+    for plat_name in rev_plat_chain:
         # Parse source files for platform-api function implementation
         # and select best match for it
         for src_file in Dir('src').Dir('plat').Dir(plat_name).glob('*.c'):            
@@ -90,11 +92,11 @@ def PreparePlatform(self):
             self.Depends(tgt_file, plat_cache)
             
             # Add dependencies for all available platforms to ensure that
-            # most specific platform will be built earlier than "generic" platfrom
-            for dep_plat_name in plat_chain[plat_chain.index(plat_name) + 1:]:
+            # most specific platform will be built earlier than "generic" platform
+            for dep_plat_name in rev_plat_chain[rev_plat_chain.index(plat_name) + 1:]:
                 dep_plat_path = PathJoin('plat', dep_plat_name, base_name)
                 
-                # Cannot use SCons.Node here because it creates dependencies for unexistent files
+                # Cannot use SCons.Node here because it creates dependencies for non-existent files
                 dep_file = PathJoin(src_path, dep_plat_path)
                 if not PathExists(dep_file):
                     continue
@@ -121,13 +123,13 @@ env['DEPTARGETS'] = {}
 env['CURTARGET'] = ''
 
 env['CPPPATH'] = ['#include', 'include']
-env['LIBPATH'] = [env.Target('lib')]
+env['LIBPATH'] = []
 env['LIBS'] = []
 
 env['CCFLAGS'] = []
 
 if env['CC'] == 'gcc': 
-    env['CCFLAGS'] += ['-m64', '-Wall']
+    env['CCFLAGS'] += ['-Wall']
 
 if env['CC'] == 'gcc':
     # env[] syntax not working here :( 
@@ -155,13 +157,26 @@ if env['CC'] == 'gcc':
     env['CCFLAGS'] += ['-Wno-unused-label', '-Wno-unused-variable', '-Wno-unused-function']
 
 # Cross-platform build
+PLATFORM_CHAIN = {'win32': ['win', 'generic'],
+                  'linux2': ['linux', 'posix', 'generic'],
+                  'sunos5': ['solaris', 'posix', 'generic']
+                  }
+
+env['PLATFORM'] = sys.platform
+
+try:
+    env['PLATCHAIN'] = PLATFORM_CHAIN[env['PLATFORM']]
+except KeyError:
+    raise StopError('Unsupported platform %s' % sys.platform)
+
 if sys.platform == 'win32':
-    env['PLATCHAIN'] = ['win', 'generic']
-elif sys.platform == 'linux2':
-    env['PLATCHAIN'] = ['linux', 'posix', 'generic']
-else:
-    raise BuildError('Unsupported platform %s' % sys.platform)
-    
+    env.Macroses('_WINSOCKAPI_')
+
+# Create definitions like PLAT_SOLARIS
+env.Macroses(*('PLAT_' + plat.upper() for plat in env['PLATCHAIN']))
+
+env.Append(LIBPATH = env.Target('lib'))   
+
 env['PLATDEBUG'] = True
 env['PLATCACHE'] = 'plat_cache.pch'
 

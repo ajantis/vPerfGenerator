@@ -17,7 +17,7 @@ int tsload_mod_helper(module_t* mod) {
 	tsload_module_t* tmod = mp_malloc(sizeof(tsload_module_t));
 	size_t* params_size;
 
-	int flag = B_FALSE;
+	boolean_t flag = B_FALSE;
 
 	MOD_LOAD_SYMBOL(tmod->mod_params, mod, "mod_params", flag);
 	MOD_LOAD_SYMBOL(params_size, mod, "mod_params_size", flag);

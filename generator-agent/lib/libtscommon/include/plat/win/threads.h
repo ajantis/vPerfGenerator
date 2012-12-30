@@ -5,8 +5,8 @@
  *      Author: myaut
  */
 
-#ifndef PLAT_POSIX_THREADS_H_
-#define PLAT_POSIX_THREADS_H_
+#ifndef PLAT_WIN_THREADS_H_
+#define PLAT_WIN_THREADS_H_
 
 #include <windows.h>
 
@@ -17,9 +17,6 @@ typedef struct {
 
 typedef struct {
 	CRITICAL_SECTION tm_crit_section;
-
-	int tm_is_recursive;
-	DWORD tm_owner;
 } plat_thread_mutex_t;
 
 typedef struct {
@@ -45,4 +42,4 @@ typedef LPVOID thread_arg_t;
 #define PLAT_THREAD_FINISH(arg, code) 	\
 	return (code);
 
-#endif /* PLAT_POSIX_THREADS_H_ */
+#endif /* PLAT_WIN_THREADS_H_ */

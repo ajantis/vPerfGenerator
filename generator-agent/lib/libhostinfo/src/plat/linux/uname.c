@@ -10,6 +10,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <sys/utsname.h>
+
 #ifndef LSB_RELEASE_CMD
 #define LSB_RELEASE_CMD "/usr/bin/lsb_release"
 #endif
@@ -17,7 +19,10 @@
 #define OSNAMELEN 	64
 
 char lsb_os_name[64];
-int lsb_read = B_FALSE;
+boolean_t lsb_read = B_FALSE;
+
+/* From posix implementation */
+struct utsname* hi_get_uname();
 
 /*Parses lsb_release output*/
 void read_lsb_release(void) {
@@ -61,4 +66,8 @@ PLATAPI const char* hi_get_os_name() {
 	}
 
 	return lsb_os_name;
+}
+
+PLATAPI const char* hi_get_domainname() {
+	return hi_get_uname()->__domainname;
 }

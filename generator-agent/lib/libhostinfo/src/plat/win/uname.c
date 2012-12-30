@@ -10,7 +10,7 @@
 
 #include <windows.h>
 
-PLATAPIDECL(hi_get_nodename) const char nodename[64];
+LIBEXPORT PLATAPIDECL(hi_get_nodename) char nodename[MAX_COMPUTERNAME_LENGTH + 1];
 
 /*TODO: implement uname for MS Windows*/
 
@@ -25,7 +25,8 @@ PLATAPI const char* hi_get_os_release() {
 
 /* Returns nodename and domain name of current host*/
 PLATAPI const char* hi_get_nodename() {
-	GetComputerName(nodename, 64);
+	DWORD size = 64;
+	GetComputerName(nodename, &size);
 
 	return nodename;
 }

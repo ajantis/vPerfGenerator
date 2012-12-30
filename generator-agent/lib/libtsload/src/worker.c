@@ -64,10 +64,10 @@ thread_result_t control_thread(thread_arg_t arg) {
 			/*Re-initialize step's workloads*/
 			wli = 0;
 			list_for_each_entry(workload_t, wl, &tp->tp_wl_head, wl_tp_node) {
+				assert(wli < wl_count);
+
 				step[wli].wls_workload = wl;
 				++wli;
-
-				assert(wli < wl_count);
 			}
 
 			tp->tp_wl_changed = B_FALSE;

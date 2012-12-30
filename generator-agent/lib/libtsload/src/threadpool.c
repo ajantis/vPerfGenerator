@@ -47,7 +47,14 @@ static void tp_destroy_worker(thread_pool_t* tp, int tid) {
 	mutex_destroy(&worker->w_rq_mutex);
 }
 
-thread_pool_t* tp_create(unsigned num_threads, const char* name, uint64_t quantum) {
+/**
+ * Create new thread pool
+ *
+ * @param num_threads Numbber of worker threads in this pool
+ * @param name Name of thread pool
+ * @param quantum Worker's quantum
+ * */
+thread_pool_t* tp_create(unsigned num_threads, const char* name, ts_time_t quantum) {
 	thread_pool_t* tp = NULL;
 	int tid;
 

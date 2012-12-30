@@ -26,6 +26,14 @@ struct workload;
 struct thread_pool;
 struct workload_step;
 
+/**
+ * Thread pools are set of threads for executing load requests.
+ *
+ * It consists of two type of threads:
+ * - Control thread which processes step data and distribute requests across workers
+ * - Worker thread whose are running requests for execution
+ * */
+
 typedef struct tp_worker {
 	struct thread_pool* w_tp;
 
@@ -40,7 +48,7 @@ typedef struct thread_pool {
 	unsigned tp_num_threads;
 	char tp_name[TPNAMELEN];
 
-	int tp_is_dead;
+	boolean_t tp_is_dead;
 
 	ts_time_t tp_quantum;			/**< Dispatcher's quantum duration (in ns)*/
 	ts_time_t tp_time;				/**< Last time dispatcher had woken up (in ns)*/
@@ -54,10 +62,10 @@ typedef struct thread_pool {
 
 	list_head_t	   tp_wl_head;
 	int tp_wl_count;
-	int tp_wl_changed;
+	boolean_t tp_wl_changed;
 } thread_pool_t;
 
-LIBEXPORT thread_pool_t* tp_create(unsigned num_threads, const char* name, uint64_t quantum);
+LIBEXPORT thread_pool_t* tp_create(unsigned num_threads, const char* name, ts_time_t quantum);
 
 LIBEXPORT thread_pool_t* tp_search(const char* name);
 

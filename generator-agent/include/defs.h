@@ -10,19 +10,25 @@
 #ifndef DEFS_H_
 #define DEFS_H_
 
-#define B_TRUE	1
-#define B_FALSE	0
+#include <stddef.h>
 
-#define SZ_KB	1024l
-#define SZ_MB 	1024l * SZ_KB
-#define SZ_GB	1024l * SZ_MB
-#define SZ_TB	1024l * SZ_GB
+#ifndef PLAT_SOLARIS
+typedef enum { B_FALSE, B_TRUE } boolean_t;
+#else
+/* In Solaris boolean defined in <sys/types.h> */
+#include <sys/types.h>
+#endif
+
+#define SZ_KB	(1024ll)
+#define SZ_MB 	(1024ll * SZ_KB)
+#define SZ_GB	(1024ll * SZ_MB)
+#define SZ_TB	(1024ll * SZ_GB)
 
 /*All time periods measured in ns*/
-#define T_NS 		1
-#define T_US		1000 * T_NS
-#define T_MS		1000 * T_US
-#define T_SEC		1000 * T_MS
+#define T_NS 		1ll
+#define T_US		(1000ll * T_NS)
+#define T_MS		(1000ll * T_US)
+#define T_SEC		(1000ll * T_MS)
 
 /* Platform API */
 #define PLATAPI

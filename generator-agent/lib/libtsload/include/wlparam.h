@@ -9,6 +9,7 @@
 #define WLPARAM_H_
 
 #include <stddef.h>
+#include <stdint.h>
 #include <defs.h>
 
 /* Workload parameter declaration
@@ -28,7 +29,7 @@
 typedef long	wlp_integer_t;
 typedef double	wlp_float_t;
 typedef char	wlp_string_t;
-typedef size_t	wlp_size_t;
+typedef uint64_t	wlp_size_t;
 typedef int  	wlp_bool_t;
 typedef int  	wlp_strset_t;
 
@@ -45,7 +46,7 @@ typedef enum {
 } wlp_type_t;
 
 typedef struct {
-	int range;		/*enabled flag*/
+	boolean_t range;		/*enabled flag*/
 
 	/* Here should be union, but because of some smart people, who desided that
 	 * | ISO C++03 8.5.1[dcl.init.aggr]/15:
@@ -61,18 +62,18 @@ typedef struct {
 		};
 		/*WLP_INTEGER*/
 		struct {
-			long i_min;
-			long i_max;
+			wlp_integer_t i_min;
+			wlp_integer_t i_max;
 		};
 		/*WLP_FLOAT*/
 		struct {
-			double d_min;
-			double d_max;
+			wlp_float_t d_min;
+			wlp_float_t d_max;
 		};
 		/*WLP_SIZE*/
 		struct {
-			size_t sz_min;
-			size_t sz_max;
+			wlp_size_t sz_min;
+			wlp_size_t sz_max;
 		};
 		/*WLP_STRING_SET*/
 		struct {
@@ -88,7 +89,7 @@ typedef struct {
 
 #define WLP_INT_RANGE(min, max)  	{ B_TRUE, { {0}, {min, max} } }
 #define WLP_FLOAT_RANGE(min, max) 	{ B_TRUE, { {0}, {0, 0}, {min, max} } }
-#define WLP_SIZE_RANGE(min, max) 	{ B_TRUE, { {0}, {0, 0}, {0.0, 0.0}, {min, max} } }
+#define WLP_SIZE_RANGE(min, max) 	{ B_TRUE, { {0}, {0, 0}, {0.0, 0.0}, {min,  max} } }
 
 #define WLP_STRING_SET_RANGE(set) 	{ B_TRUE, { {0}, {0, 0}, {0.0, 0.0}, {0, 0}, 		\
 									    {sizeof((set)) / sizeof(char*), (set) } } }

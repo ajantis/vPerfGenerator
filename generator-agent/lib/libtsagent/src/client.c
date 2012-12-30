@@ -11,6 +11,8 @@
 #include <atomic.h>
 #include <tstime.h>
 
+#include <plat/client.h>
+
 #include <libjson.h>
 
 #include <stdlib.h>
@@ -20,19 +22,25 @@
 
 JSONNODE* json_clnt_command_format(const char* command, JSONNODE* msg_node, unsigned msg_id);
 void clnt_proc_set_msg(clnt_proc_msg_t* msg);
+void clnt_on_disconnect(void);
 
 /* Globals */
-int clnt_trace_decode = B_FALSE;
+plat_clnt_socket clnt_socket;
+plat_clnt_addr	 clnt_addr;
 
-int clnt_port = 9090;
-char clnt_host[CLNTHOSTLEN] = "localhost";
+LIBEXPORT int clnt_port = 9090;
+LIBEXPORT char clnt_host[CLNTHOSTLEN] = "localhost";
+
+boolean_t clnt_trace_decode = B_FALSE;
 
 /* Message unique identifier */
 static atomic_t clnt_msg_id = 0;
 
 /* Threads and it's flags */
-int clnt_connected = B_FALSE;
-int clnt_finished = B_FALSE;
+boolean_t clnt_connected = B_FALSE;
+boolean_t clnt_finished = B_FALSE;
+
+int clnt_disconnects = 0;
 
 thread_t t_client_receive;
 thread_t t_client_connect;
@@ -168,10 +176,11 @@ int clnt_process_command(unsigned msg_id, JSONNODE* n_cmd, JSONNODE* n_msg) {
 int clnt_process_msg(JSONNODE* msg) {
 	JSONNODE_ITERATOR i_id, i_response, i_command, i_msg, i_error, i_code, i_end;
 	unsigned msg_id;
-	int ret;
+	int ret = 0;
 
 	if(msg == NULL) {
 		logmsg(LOG_WARN, "Failed to process incoming message: not JSON");
+		ret = -1;
 		goto fail;
 	}
 
@@ -180,6 +189,7 @@ int clnt_process_msg(JSONNODE* msg) {
 
 	if(i_id == i_end || json_type(*i_id) != JSON_NUMBER) {
 		logmsg(LOG_WARN, "Failed to process incoming message: unknown 'id'");
+		ret = -1;
 		goto fail;
 	}
 
@@ -200,20 +210,14 @@ int clnt_process_msg(JSONNODE* msg) {
 	}
 	else {
 		logmsg(LOG_WARN, "Failed to process incoming message: invalid format");
-		goto fail;
+		ret = -1;
 	}
-
-	json_delete(msg);
-
-	if(ret == -1)
-		goto fail;
-
-	return 0;
 
 fail:
 	if(msg)
 		json_delete(msg);
-	return -1;
+
+	return ret;
 }
 
 thread_result_t clnt_proc_thread(thread_arg_t arg) {
@@ -223,24 +227,16 @@ thread_result_t clnt_proc_thread(thread_arg_t arg) {
 	while(!clnt_finished) {
 		msg = (JSONNODE*) squeue_pop(&proc_queue);
 
-		if(msg == NULL)
+		if(msg == NULL) {
 			THREAD_EXIT(0);
+		}
 
 		clnt_process_msg(msg);
 	}
 
 	THREAD_END:
+		logmsg(LOG_WARN, "clnt_proc_thread thread is dead!");
 		THREAD_FINISH(arg);
-}
-
-void clnt_on_disconnect() {
-	clnt_connected = B_FALSE;
-	/*TODO: cleanup all client resources*/
-
-	clnt_disconnect();
-
-	/*Notify connect thread*/
-	event_notify_all(&conn_event);
 }
 
 void clnt_recv_parse(void* buffer, size_t recvlen) {
@@ -251,15 +247,16 @@ void clnt_recv_parse(void* buffer, size_t recvlen) {
 
 	while(off < recvlen) {
 		/*Process data in buffer*/
+		len = strlen(msg) + 1;
+
 		if(clnt_trace_decode)
 			logmsg(LOG_TRACE, "Processing %lu bytes off: %lu", len, off);
 
-		len = strlen(msg) + 1;
 		node = json_parse(msg);
 
 		logmsg(LOG_TRACE, "IN msg: %s", msg);
 
-		if(node) {
+		if(node != NULL) {
 			squeue_push(&proc_queue, node);
 		}
 		else {
@@ -287,7 +284,7 @@ thread_result_t clnt_recv_thread(thread_arg_t arg) {
 	int ret;
 
 	while(!clnt_finished && clnt_connected) {
-		switch(clnt_poll(CLNT_RECV_TIMEOUT)) {
+		switch(plat_clnt_poll(&clnt_socket, CLNT_RECV_TIMEOUT)) {
 		case CLNT_POLL_OK:
 			/*No new data arrived*/
 			continue;
@@ -308,7 +305,7 @@ thread_result_t clnt_recv_thread(thread_arg_t arg) {
 		/*Receive data from socket by chunks of data*/
 		while(1) {
 			/*Receive chunk of data*/
-			ret = clnt_sock_recv(bufptr, remaining);
+			ret = plat_clnt_recv(&clnt_socket, bufptr, remaining);
 
 			if(ret <= 0) {
 				logmsg(LOG_WARN, "recv() was failed, disconnecting");
@@ -320,7 +317,7 @@ thread_result_t clnt_recv_thread(thread_arg_t arg) {
 			remaining -= ret;
 
 			/*No more data left in socket, break*/
-			if(clnt_poll(0l) != CLNT_POLL_NEW_DATA)
+			if(plat_clnt_poll(&clnt_socket, 0l) != CLNT_POLL_NEW_DATA)
 				break;
 
 			/* We had filled buffer, reallocate it */
@@ -420,7 +417,7 @@ int clnt_send(JSONNODE* node) {
 	logmsg(LOG_TRACE, "OUT msg: %s", json_msg);
 
 	mutex_lock(&send_mutex);
-	ret = clnt_sock_send(json_msg, len);
+	ret = plat_clnt_send(&clnt_socket, json_msg, len);
 	mutex_unlock(&send_mutex);
 
 	json_free(json_msg);
@@ -437,13 +434,14 @@ int clnt_send(JSONNODE* node) {
  *
  * NOTE: deletes msg_node in any case
  * */
-int clnt_invoke(const char* command, JSONNODE* msg_node, JSONNODE** p_response) {
+clnt_response_type_t clnt_invoke(const char* command, JSONNODE* msg_node, JSONNODE** p_response) {
 	clnt_msg_handler_t* hdl = clnt_create_msg();
+	clnt_response_type_t response_type = RT_NOTHING;
 	JSONNODE* node = json_clnt_command_format(command, msg_node, hdl->mh_msg_id);
 
 	if(hdl == NULL) {
 		json_delete(msg_node);
-		return -1;
+		return RT_NOTHING;
 	}
 
 	clnt_send(node);
@@ -452,12 +450,33 @@ int clnt_invoke(const char* command, JSONNODE* msg_node, JSONNODE** p_response) 
 	event_wait(&hdl->mh_event);
 
 	*p_response = hdl->mh_response;
+	response_type = hdl->mh_response_type;
 
 	/*Delete handler because it is not needed anymore*/
 	clnt_delete_handler(hdl);
 	json_delete(node);
 
-	return 0;
+	return response_type;
+}
+
+PLATAPI int clnt_connect() {
+	int err;
+
+	err = plat_clnt_connect(&clnt_socket, &clnt_addr);
+
+	switch(err) {
+		case CLNT_ERR_SOCKET:
+			logmsg(LOG_CRIT, "Failed to open socket");
+			return err;
+		case CLNT_ERR_CONNECT:
+			logmsg(LOG_CRIT, "Failed to connect to %s:%d, retrying in %lds", clnt_host, clnt_port,
+						(long) (CLNT_RETRY_TIMEOUT / T_SEC));
+			return err;
+	}
+
+	logmsg(LOG_INFO, "Connected to %s:%d", clnt_host, clnt_port);
+
+	return CLNT_OK;
 }
 
 thread_result_t clnt_connect_thread(thread_arg_t arg) {
@@ -465,7 +484,7 @@ thread_result_t clnt_connect_thread(thread_arg_t arg) {
 
 	while(!clnt_finished) {
 		if(!clnt_connected) {
-			if(clnt_connect(clnt_host, clnt_port) != CLNT_OK) {
+			if(clnt_connect() != CLNT_OK) {
 				tm_sleep(CLNT_RETRY_TIMEOUT);
 				continue;
 			}
@@ -479,15 +498,63 @@ thread_result_t clnt_connect_thread(thread_arg_t arg) {
 		}
 
 		/*Wait until socket will be disconnected*/
-		event_wait(&conn_event);
+		if(clnt_connected)
+			event_wait(&conn_event);
 	}
 
 THREAD_END:
 	THREAD_FINISH(arg);
 }
 
+int clnt_handler_disconnect(hm_item_t* object, void* arg) {
+	clnt_msg_handler_t* hdl = (clnt_msg_handler_t*) object;
+
+	logmsg(LOG_WARN, "Failed to send message #%u", hdl->mh_msg_id);
+
+	hdl->mh_response_type = RT_DISCONNECT;
+	event_notify_one(&hdl->mh_event);
+
+	return HM_WALKER_CONTINUE;
+}
+
+int clnt_handler_cleanup(hm_item_t* object, void* arg) {
+	clnt_msg_handler_t* hdl = (clnt_msg_handler_t*) object;
+
+	hdl->mh_response_type = RT_NOTHING;
+	event_notify_one(&hdl->mh_event);
+
+	return HM_WALKER_CONTINUE | HM_WALKER_REMOVE;
+}
+
+void clnt_on_disconnect(void) {
+	clnt_connected = B_FALSE;
+
+	hash_map_walk(&hdl_hashmap, clnt_handler_disconnect, NULL);
+
+	plat_clnt_disconnect(&clnt_socket);
+
+	/*Notify connect thread*/
+	event_notify_all(&conn_event);
+
+	if(++clnt_disconnects > CLNT_MAX_DISCONNECTS) {
+		logmsg(LOG_CRIT, "Too much client disconnections; abort");
+		abort();
+	}
+}
 
 int clnt_init() {
+	if(plat_clnt_init() != 0) {
+		logmsg(LOG_CRIT, "Client platform-specific initialization failure!");
+		return -1;
+	}
+
+	if(plat_clnt_setaddr(&clnt_addr,
+						 plat_clnt_resolve(clnt_host),
+						 clnt_port) == CLNT_ERR_RESOLVE) {
+		logmsg(LOG_CRIT, "Failed to resolve host %s", clnt_host);
+		return -1;
+	}
+
 	hash_map_init(&hdl_hashmap, "hdl_hashmap");
 	mutex_init(&send_mutex, "send_mutex");
 	event_init(&conn_event, "conn_event");
@@ -505,7 +572,7 @@ void clnt_fini(void) {
 	clnt_connected = B_FALSE;
 
 	/*This will finish conn_thread*/
-	clnt_disconnect();
+	clnt_on_disconnect();
 
 	/*Delete all remaining messages and finish proc_thread*/
 	squeue_destroy(&proc_queue, json_delete);
@@ -519,7 +586,11 @@ void clnt_fini(void) {
 
 	event_destroy(&conn_event);
 	mutex_destroy(&send_mutex);
+
+	hash_map_walk(&hdl_hashmap, clnt_handler_cleanup, NULL);
 	hash_map_destroy(&hdl_hashmap);
+
+	plat_clnt_fini();
 }
 
 JSONNODE* json_clnt_command_format(const char* command, JSONNODE* msg_node, unsigned msg_id) {

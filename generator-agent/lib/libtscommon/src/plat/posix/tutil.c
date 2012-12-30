@@ -8,6 +8,7 @@
 #include <defs.h>
 
 #include <errno.h>
+#include <pthread.h>
 #include <plat/posix/threads.h>
 
 #include <assert.h>
@@ -16,6 +17,8 @@
 
 PLATAPI void plat_mutex_init(plat_thread_mutex_t* mutex, int recursive) {
 	pthread_mutexattr_t mta;
+
+	pthread_mutexattr_init(&mta);
 
 	if(recursive)
 		pthread_mutexattr_settype(&mta, PTHREAD_MUTEX_RECURSIVE);

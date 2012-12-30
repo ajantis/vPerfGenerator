@@ -94,7 +94,7 @@ typedef struct {
 	plat_thread_mutex_t tm_impl;
 
 	char 			tm_name[TMUTEXNAMELEN];
-	int				tm_is_recursive;
+	boolean_t		tm_is_recursive;
 } thread_mutex_t;
 
 typedef struct {
@@ -191,7 +191,7 @@ PLATAPI void plat_thread_init(plat_thread_t* thread, void* arg,
 PLATAPI void plat_thread_destroy(plat_thread_t* thread);
 PLATAPI unsigned long plat_gettid();
 
-PLATAPI void plat_mutex_init(plat_thread_mutex_t* mutex, int recursive);
+PLATAPI void plat_mutex_init(plat_thread_mutex_t* mutex, boolean_t recursive);
 PLATAPI void plat_mutex_lock(plat_thread_mutex_t* mutex);
 PLATAPI void plat_mutex_unlock(plat_thread_mutex_t* mutex);
 PLATAPI void plat_mutex_destroy(plat_thread_mutex_t* mutex);

@@ -8,6 +8,10 @@
 		#define json_deprecated(method, warning) method
 	#endif
 
+	#include <stdlib.h>
+	#define ATOLL	_atoi64
+	#define LLTOA	_i64toa
+
     #define json_nothrow
     #define json_throws(x)
     #define json_pure json_nothrow

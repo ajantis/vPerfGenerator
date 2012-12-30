@@ -112,6 +112,8 @@ thread_t* t_post_init(thread_t* t) {
 void t_exit(thread_t* t) {
 	t->t_state = TS_DEAD;
 
+	logmsg(LOG_DEBUG, "Thread #%d '%s' exited", t->t_id, t->t_name);
+
 	hash_map_remove(&thread_hash_map, t);
 
 	if(t->t_event)
@@ -153,22 +155,6 @@ void t_destroy(thread_t* thread) {
  * @param tv - time interwal
  * */
 #if 0
-void t_get_wait_time(thread_t* t, struct timeval* tv) {
-	/*FIXME: Use tstime*/
-	gettimeofday(tv, NULL);
-
-	if (t->t_block_time.tv_usec < tv->tv_usec) {
-		int nsec = (tv->tv_usec - t->t_block_time.tv_usec) / 1000000 + 1;
-		tv->tv_usec -= 1000000 * nsec;
-		tv->tv_sec += nsec;
-	}
-	if (t->t_block_time.tv_usec - tv->tv_usec > 1000000) {
-		int nsec = (tv->tv_usec - t->t_block_time.tv_usec) / 1000000;
-		tv->tv_usec += 1000000 * nsec;
-		tv->tv_sec -= nsec;
-	}
-}
-
 static int t_dump_thread(void* object, void* arg) {
 	const char* t_state_name[] = {
 			"INIT",

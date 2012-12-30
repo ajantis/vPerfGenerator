@@ -28,18 +28,12 @@ void agent_get_modules_info(JSONNODE* argv[]) {
 
 void agent_configure_workloads(JSONNODE* argv[]) {
 	workload_t* wl;
-	JSONNODE* j_wl_head = argv[0];
+	JSONNODE* j_wl_list = argv[0];
 	list_head_t wl_list;
-	JSONNODE_ITERATOR i_list = json_find(j_wl_head, "workloads"),
-					  i_end = json_end(j_wl_head);
-
-	if(i_list == i_end) {
-		return agent_error_msg(AE_INVALID_DATA, "Not found workloads");
-	}
 
 	list_head_init(&wl_list, "wl_list");
 
-	json_workload_proc_all(*i_list, &wl_list);
+	json_workload_proc_all(j_wl_list, &wl_list);
 
 	if(list_empty(&wl_list)) {
 		return agent_error_msg(AE_INTERNAL_ERROR, "workload_error!");

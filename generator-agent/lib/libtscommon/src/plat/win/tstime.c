@@ -12,7 +12,17 @@
 
 /*FIXME: should be ns-precise time source*/
 PLATAPI ts_time_t tm_get_time() {
-	return GetTickCount() * T_MS;
+	FILETIME time;
+	ts_time_t now;
+
+	/*See http://support.microsoft.com/kb/167296 */
+
+	GetSystemTimeAsFileTime(&time);
+
+	now = ((LONGLONG) time.dwHighDateTime) << 32 | time.dwLowDateTime;
+	now = (now - 116444736000000000) * 100;
+
+	return now;
 }
 
 PLATAPI void tm_sleep(ts_time_t t) {

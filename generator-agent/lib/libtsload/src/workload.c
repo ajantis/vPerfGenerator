@@ -29,8 +29,10 @@
 #include <stdarg.h>
 
 squeue_t	wl_requests;
+squeue_t	wl_notifications;
 
 thread_t	t_wl_requests;
+thread_t	t_wl_notify;
 
 DECLARE_HASH_MAP(workload_hash_map, workload_t, WLHASHSIZE, wl_name, wl_hm_next,
 	{
@@ -85,11 +87,11 @@ workload_t* wl_create(const char* name, module_t* mod, thread_pool_t* tp) {
 	wl->wl_is_started = B_FALSE;
 	wl->wl_start_time = TS_TIME_MAX;
 
+	wl->wl_notify_time = 0;
+
 	mutex_init(&wl->wl_rq_mutex, "wl-%s-rq", name);
 
 	hash_map_insert(&workload_hash_map, wl);
-
-	tp_attach(tp, wl);
 
 	return wl;
 }
@@ -135,8 +137,18 @@ workload_t* wl_search(const char* name) {
  * @param format message format string
  */
 void wl_notify(workload_t* wl, wl_status_t status, int done, char* format, ...) {
-	char config_msg[512];
+	wl_notify_msg_t* msg = mp_malloc(sizeof(wl_notify_msg_t));
 	va_list args;
+
+	ts_time_t now = tm_get_time();
+
+	if( status == WLS_CONFIGURING &&
+		(now - wl->wl_notify_time) < (T_SEC / WL_NOTIFICATIONS_PER_SEC)) {
+		/* Don not send notifications more than WL_NOTIFICATIONS_PER_SEC per second*/
+		return;
+	}
+
+	wl->wl_notify_time = now;
 
 	switch(status) {
 	case WLS_CONFIGURING:
@@ -157,13 +169,38 @@ void wl_notify(workload_t* wl, wl_status_t status, int done, char* format, ...) 
 	}
 
 	va_start(args, format);
-	vsnprintf(config_msg, 512, format, args);
+	vsnprintf(msg->msg, 512, format, args);
 	va_end(args);
 
 	logmsg((status == WLS_FAIL)? LOG_WARN : LOG_INFO,
-			"Workload %s status: %s", wl->wl_name, config_msg);
+			"Workload %s status: %s", wl->wl_name, msg->msg);
 
-	agent_workload_status(wl->wl_name, status, done, config_msg);
+	msg->wl = wl;
+	msg->status = status;
+	msg->done = done;
+
+	squeue_push(&wl_notifications, msg);
+}
+
+thread_result_t wl_notification_thread(thread_arg_t arg) {
+	THREAD_ENTRY(arg, void, unused);
+
+	wl_notify_msg_t* msg = NULL;
+
+	while(B_TRUE) {
+		msg = (wl_notify_msg_t*) squeue_pop(&wl_notifications);
+
+		if(msg == NULL) {
+			THREAD_EXIT(0);
+		}
+
+		agent_workload_status(msg->wl->wl_name, msg->status, msg->done, msg->msg);
+
+		mp_free(msg);
+	}
+
+THREAD_END:
+	THREAD_FINISH(arg);
 }
 
 thread_result_t wl_config_thread(thread_arg_t arg) {
@@ -180,10 +217,10 @@ thread_result_t wl_config_thread(thread_arg_t arg) {
 		THREAD_EXIT(ret);
 	}
 
+	tp_attach(wl->wl_tp, wl);
 	wl->wl_is_configured = B_TRUE;
 
 	wl_notify(wl, WLS_SUCCESS, 100, "Successfully configured workload %s", wl->wl_name);
-
 
 
 THREAD_END:
@@ -369,8 +406,9 @@ thread_result_t wl_requests_thread(thread_arg_t arg) {
 	while(B_TRUE) {
 		rq_chain =  (list_head_t*) squeue_pop(&wl_requests);
 
-		if(rq_chain == NULL)
+		if(rq_chain == NULL) {
 			THREAD_EXIT(0);
+		}
 
 		j_rq_chain = json_request_format_all(rq_chain);
 		agent_requests_report(j_rq_chain);
@@ -545,12 +583,18 @@ int wl_init(void) {
 	squeue_init(&wl_requests, "wl-requests");
 	t_init(&t_wl_requests, NULL, wl_requests_thread, "wl_requests");
 
+	squeue_init(&wl_notifications, "wl-notify");
+	t_init(&t_wl_notify, NULL, wl_notification_thread, "wl_notification");
+
 	return 0;
 }
 
 void wl_fini(void) {
 	squeue_destroy(&wl_requests, wl_rq_chain_destroy);
 	t_destroy(&t_wl_requests);
+
+	squeue_destroy(&wl_notifications, mp_free);
+	t_destroy(&t_wl_notify);
 
 	hash_map_destroy(&workload_hash_map);
 }
