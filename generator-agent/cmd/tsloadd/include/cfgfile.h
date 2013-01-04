@@ -5,8 +5,8 @@
  *      Author: myaut
  */
 
-#ifndef CONFIG_H_
-#define CONFIG_H_
+#ifndef CFGFILE_H_
+#define CFGFILE_H_
 
 #define CONFPATHLEN		512
 #define CONFLINELEN		1024
@@ -18,4 +18,4 @@
 
 int cfg_init(const char* cfg_file_name);
 
-#endif /* CONFIG_H_ */
+#endif /* CFGFILE_H_ */

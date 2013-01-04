@@ -213,3 +213,6 @@ for mod in Dir('mod').glob('*'):
         
     SConscript(PathJoin(str(mod), 'SConscript'), 'env', 
            variant_dir = env.BuildDir('mod_' + mod_name))
+
+SConscript('test/mempool/SConscript', 'env', 
+           variant_dir = env.BuildDir('cmd_mpbench'))

@@ -24,6 +24,10 @@ PLATAPI void plat_mutex_lock(plat_thread_mutex_t* mutex) {
 	EnterCriticalSection(&mutex->tm_crit_section);
 }
 
+PLATAPI boolean_t plat_mutex_try_lock(plat_thread_mutex_t* mutex) {
+	return TryEnterCriticalSection(&mutex->tm_crit_section) != 0;
+}
+
 PLATAPI void plat_mutex_unlock(plat_thread_mutex_t* mutex) {
 	LeaveCriticalSection(&mutex->tm_crit_section);
 }
@@ -84,4 +88,42 @@ PLATAPI void plat_tkey_set(plat_thread_key_t* key, void* value) {
 
 PLATAPI void* plat_tkey_get(plat_thread_key_t* key) {
 	return TlsGetValue(key->tk_tls);
+}
+
+/* RW locks */
+
+PLATAPI void plat_rwlock_init(plat_thread_rwlock_t* rwlock) {
+	InitializeSRWLock(&rwlock->tl_slim_rwlock);
+
+	/* Because WinAPI provides two functions to release lock,
+	 * save mode of lock acquiring */
+	rwlock->tl_mode_key = TlsAlloc();
+	assert(rwlock->tl_mode_key != TLS_OUT_OF_INDEXES);
+}
+
+PLATAPI void plat_rwlock_lock_read(plat_thread_rwlock_t* rwlock) {
+	AcquireSRWLockShared(&rwlock->tl_slim_rwlock);
+
+	TlsSetValue(rwlock->tl_mode_key, TL_MODE_SHARED);
+}
+
+PLATAPI void plat_rwlock_lock_write(plat_thread_rwlock_t* rwlock) {
+	AcquireSRWLockExclusive(&rwlock->tl_slim_rwlock);
+
+	TlsSetValue(rwlock->tl_mode_key, TL_MODE_EXCLUSIVE);
+}
+
+PLATAPI void plat_rwlock_unlock(plat_thread_rwlock_t* rwlock) {
+	switch(TlsGetValue(rwlock->tl_mode_key)) {
+	case TL_MODE_SHARED:
+		ReleaseSRWLockShared(&rwlock->tl_slim_rwlock);
+	case TL_MODE_EXCLUSIVE:
+		ReleaseSRWLockExclusive(&rwlock->tl_slim_rwlock);
+	default:
+		abort();
+	}
+}
+
+PLATAPI void plat_rwlock_destroy(plat_thread_rwlock_t* rwlock) {
+	TlsFree(rwlock->tl_mode_key);
 }

@@ -5,6 +5,7 @@
  *      Author: myaut
  */
 
+#include <defs.h>
 #include <log.h>
 
 #include <libjson.h>
@@ -28,6 +29,9 @@ LIBEXPORT int log_trace	= 0;
 
 FILE* log_file;
 
+/* Allows to dump backtraces with messages */
+boolean_t log_trace_callers = B_FALSE;
+
 thread_mutex_t	log_mutex;
 
 const char* log_severity[] =
@@ -48,9 +52,8 @@ int log_rotate() {
 	struct stat old_log_stat;
 
 	if(stat(log_filename, &log_stat) == -1) {
-		fprintf(stderr, "log_rotate -> stat error: %s\n", strerror(errno));
-
-		return errno;
+		/* Log doesn't exist, so we will create new file */
+		return 0;
 	}
 
 	if(log_stat.st_size < LOGMAXSIZE)
@@ -133,6 +136,14 @@ int logmsg_src(int severity, const char* source, const char* format, ...)
 	va_start(args, format);
 	ret += vfprintf(log_file, format, args);
 	va_end(args);
+
+	if(log_trace_callers) {
+		char* callers = malloc(512);
+		plat_get_callers(callers, 512);
+
+		fputs(callers, log_file);
+		free(callers);
+	}
 
 	fputc('\n', log_file);
 	fflush(log_file);

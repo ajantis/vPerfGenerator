@@ -405,8 +405,8 @@ STATIC_INLINE void list_splice_tail_init(list_head_t *list,
  *
  * Note, that list is expected to be not empty.
  */
-#define list_first_entry(ptr, type, member) \
-	list_entry((ptr)->next, type, member)
+#define list_first_entry(type, head, member) \
+	list_entry((head)->l_head.next, type, member)
 
 /**
  * list_for_each	-	iterate over a list

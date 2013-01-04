@@ -19,6 +19,14 @@ typedef struct {
 	CRITICAL_SECTION tm_crit_section;
 } plat_thread_mutex_t;
 
+#define TL_MODE_EXCLUSIVE		1
+#define TL_MODE_SHARED			2
+
+typedef struct {
+	SRWLOCK tl_slim_rwlock;
+	DWORD tl_mode_key;
+} plat_thread_rwlock_t;
+
 typedef struct {
 	HANDLE t_handle;
 } plat_thread_t;

@@ -8,40 +8,71 @@
 #ifndef ATOMIC_H_
 #define ATOMIC_H_
 
+#include <defs.h>
+
 #if defined(__GNUC__)
 
 typedef volatile long atomic_t;
 
-static long atomic_read(atomic_t* atom) {
+STATIC_INLINE long atomic_read(atomic_t* atom) {
 	return __sync_fetch_and_add(atom, 0);
 }
 
-static void atomic_set(atomic_t* atom, long value) {
+STATIC_INLINE void atomic_set(atomic_t* atom, long value) {
 	 (void) __sync_lock_test_and_set(atom, value);
 }
 
-static long atomic_inc_ret(atomic_t* atom) {
+STATIC_INLINE long atomic_exchange(atomic_t* atom, long value) {
+	 return __sync_lock_test_and_set(atom, value);
+}
+
+STATIC_INLINE long atomic_inc_ret(atomic_t* atom) {
 	return __sync_fetch_and_add(atom, 1);
 }
 
-#elif defined(_MSC_VER)
+STATIC_INLINE long atomic_or(atomic_t* atom, long value) {
+	return __sync_fetch_and_or(atom, value);
+}
+
+STATIC_INLINE long atomic_and(atomic_t* atom, long value) {
+	return __sync_fetch_and_and(atom, value);
+}
+
+
+#elif defined(PLAT_WINDOWS)
 
 #include <windows.h>
 
 typedef volatile long atomic_t;
 
-static long atomic_read(atomic_t* atom) {
+STATIC_INLINE long atomic_read(atomic_t* atom) {
 	return InterlockedAdd(atom, 0);
 }
 
-static void atomic_set(atomic_t* atom, long value) {
+STATIC_INLINE void atomic_set(atomic_t* atom, long value) {
 	(void) InterlockedExchange(atom, value);
 }
 
-static long atomic_inc_ret(atomic_t* atom) {
+STATIC_INLINE long atomic_exchange(atomic_t* atom, long value) {
+	return InterlockedExchange(atom, value);
+}
+
+STATIC_INLINE long atomic_inc_ret(atomic_t* atom) {
 	return InterlockedIncrement(atom);
 }
 
+STATIC_INLINE long atomic_or(atomic_t* atom, long value) {
+	return InterlockedOr(atom, value);
+}
+
+STATIC_INLINE long atomic_and(atomic_t* atom, long value) {
+	return InterlockedAnd(atom, value);
+}
+
+
+#else
+
+#error "Atomic operations are not supported for your platform"
 
 #endif /* __GNUC__*/
 

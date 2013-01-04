@@ -72,4 +72,6 @@ typedef enum { B_FALSE, B_TRUE } boolean_t;
 #define LIBIMPORT			extern
 #endif
 
+#include <config.h>
+
 #endif /* DEFS_H_ */

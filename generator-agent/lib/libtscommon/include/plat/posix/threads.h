@@ -20,6 +20,10 @@ typedef struct {
 } plat_thread_mutex_t;
 
 typedef struct {
+	pthread_rwlock_t	tl_rwlock;
+} plat_thread_rwlock_t;
+
+typedef struct {
 	pthread_attr_t 	t_attr;
 	pthread_t		t_thread;
 } plat_thread_t;

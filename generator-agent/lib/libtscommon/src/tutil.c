@@ -14,7 +14,27 @@
 
 #include <errno.h>
 
-/* Events */
+#ifdef TS_LOCK_DEBUG
+#define THREAD_ENTER_LOCK(state, objname, obj) 	\
+	thread_t* t = t_self();						\
+	if(t != NULL) {								\
+		t->t_block_time = tm_get_time();		\
+		t->t_state = state;						\
+		t->t_block_##objname = obj;				\
+	}
+
+#define THREAD_LEAVE_LOCK(objname)				\
+	if(t != NULL) {								\
+		t->t_state = TS_RUNNABLE;				\
+		t->t_block_##objname = NULL;			\
+	}
+#else
+#define THREAD_ENTER_LOCK(state, objname, obj)
+#define THREAD_LEAVE_LOCK(objname)
+#endif
+
+/* Events
+ * ------ */
 
 void event_init(thread_event_t* event, const char* namefmt, ...) {
 	va_list va;
@@ -27,24 +47,11 @@ void event_init(thread_event_t* event, const char* namefmt, ...) {
 }
 
 void event_wait_unlock(thread_event_t* event, thread_mutex_t* mutex) {
-#ifdef TS_LOCK_DEBUG
-	thread_t* t = t_self();
-
-	if(t != NULL) {
-		t->t_block_time = tm_get_time();
-		t->t_state = TS_WAITING;
-		t->t_block_event = event;
-	}
-#endif
+	THREAD_ENTER_LOCK(TS_WAITING, event, event);
 
 	plat_event_wait_unlock(&event->te_impl, &mutex->tm_impl);
 
-#ifdef TS_LOCK_DEBUG
-	if(t != NULL) {
-		t->t_state = TS_RUNNABLE;
-		t->t_block_event = NULL;
-	}
-#endif
+	THREAD_LEAVE_LOCK(event);
 }
 
 void event_wait(thread_event_t* event) {
@@ -63,7 +70,8 @@ void event_destroy(thread_event_t* event) {
 	plat_event_destroy(&event->te_impl);
 }
 
-/* Mutexes */
+/* Mutexes
+ * ------- */
 
 static void __mutex_init(thread_mutex_t* mutex,
 						 int recursive,
@@ -91,38 +99,27 @@ void rmutex_init(thread_mutex_t* mutex, const char* namefmt, ...) {
 
 
 void mutex_lock(thread_mutex_t* mutex) {
-#ifdef TS_LOCK_DEBUG
-	thread_t* t = NULL;
-
-	t = t_self();
-
-	if(t != NULL) {
-		t->t_block_time = tm_get_time();
-		t->t_state = TS_LOCKED;
-		t->t_block_mutex = mutex;
-	}
-#endif
+	THREAD_ENTER_LOCK(TS_LOCKED, mutex, mutex);
 
 	plat_mutex_lock(&mutex->tm_impl);
 
-#ifdef TS_LOCK_DEBUG
-	if(t != NULL) {
-		t->t_state = TS_RUNNABLE;
-		t->t_block_mutex = NULL;
-	}
-#endif
+	THREAD_LEAVE_LOCK(mutex);
+}
+
+boolean_t mutex_try_lock(thread_mutex_t* mutex) {
+	return plat_mutex_try_lock(&mutex->tm_impl);
 }
 
 void mutex_unlock(thread_mutex_t* mutex) {
 	plat_mutex_unlock(&mutex->tm_impl);
 }
 
-
 void mutex_destroy(thread_mutex_t* mutex) {
 	plat_mutex_destroy(&mutex->tm_impl);
 }
 
-/* Keys */
+/* Keys
+ * ---- */
 
 void tkey_init(thread_key_t* key,
 			   const char* namefmt, ...) {
@@ -145,4 +142,41 @@ void tkey_set(thread_key_t* key, void* value) {
 
 void* tkey_get(thread_key_t* key) {
 	return plat_tkey_get(&key->tk_impl);
+}
+
+/* Reader-writer locks
+ * ------------------- */
+
+void rwlock_init(thread_rwlock_t* rwlock, const char* namefmt, ...) {
+	va_list va;
+
+	plat_rwlock_init(&rwlock->tl_impl);
+
+	va_start(va, namefmt);
+	vsnprintf(rwlock->tl_name, TRWLOCKNAMELEN, namefmt, va);
+	va_end(va);
+}
+
+void rwlock_lock_read(thread_rwlock_t* rwlock) {
+	THREAD_ENTER_LOCK(TS_LOCKED, rwlock, rwlock);
+
+	plat_rwlock_lock_read(&rwlock->tl_impl);
+
+	THREAD_LEAVE_LOCK(rwlock);
+}
+
+void rwlock_lock_write(thread_rwlock_t* rwlock) {
+	THREAD_ENTER_LOCK(TS_LOCKED, rwlock, rwlock);
+
+	plat_rwlock_lock_write(&rwlock->tl_impl);
+
+	THREAD_LEAVE_LOCK(rwlock);
+}
+
+void rwlock_unlock(thread_rwlock_t* rwlock) {
+	plat_rwlock_unlock(&rwlock->tl_impl);
+}
+
+void rwlock_destroy(thread_rwlock_t* rwlock) {
+	plat_rwlock_destroy(&rwlock->tl_impl);
 }

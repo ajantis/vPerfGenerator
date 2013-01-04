@@ -25,7 +25,7 @@ int init(struct subsystem* subsys, int count) {
 	atexit(finish);
 
 	if(plat_init() == -1) {
-		fprintf(stderr, "Platform-depenent initialization failure!\n");
+		fprintf(stderr, "Platform-dependent initialization failure!\n");
 		exit(-1);
 	}
 

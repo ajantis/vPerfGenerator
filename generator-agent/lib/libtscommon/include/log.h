@@ -25,12 +25,16 @@
 #define LOG_DEBUG	3
 #define LOG_TRACE	4
 
+#define LOG_MAX_BACKTRACE	12
+
 LIBEXPORT int log_init();
 LIBEXPORT void log_fini();
 
 LIBEXPORT int logerror();
 LIBEXPORT int logmsg_src(int severity, const char* source, const char* format, ...)
 		CHECKFORMAT(printf, 3, 4);		/*For GCC printf warnings*/;
+
+LIBEXPORT PLATAPI int plat_get_callers(char* callers, size_t size);
 
 #define logmsg(severity, ...) \
 	logmsg_src((severity), LOG_SOURCE, __VA_ARGS__)

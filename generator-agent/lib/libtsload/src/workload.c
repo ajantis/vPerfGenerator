@@ -137,7 +137,7 @@ workload_t* wl_search(const char* name) {
  * @param format message format string
  */
 void wl_notify(workload_t* wl, wl_status_t status, int done, char* format, ...) {
-	wl_notify_msg_t* msg = mp_malloc(sizeof(wl_notify_msg_t));
+	wl_notify_msg_t* msg = NULL;
 	va_list args;
 
 	ts_time_t now = tm_get_time();
@@ -167,6 +167,8 @@ void wl_notify(workload_t* wl, wl_status_t status, int done, char* format, ...) 
 		assert(status == WLS_CONFIGURING);
 	break;
 	}
+
+	msg = mp_malloc(sizeof(wl_notify_msg_t));
 
 	va_start(args, format);
 	vsnprintf(msg->msg, 512, format, args);

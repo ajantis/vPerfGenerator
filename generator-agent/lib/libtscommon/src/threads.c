@@ -11,6 +11,7 @@
 #include <threads.h>
 #include <hashmap.h>
 #include <defs.h>
+#include <atomic.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -22,7 +23,7 @@ DECLARE_HASH_MAP(thread_hash_map, thread_t, THASHSIZE, t_id, t_next,
 	/*hash*/ {
 		int id = * (int*) key;
 
-		return id % THASHSIZE;
+		return id % THASHMASK;
 	},
 	/*compare*/ {
 		thread_id_t tid1 = * (int*) key1;
@@ -82,7 +83,7 @@ void t_init(thread_t* thread, void* arg,
 
 	thread->t_ret_code = 0;
 
-	logmsg(LOG_DEBUG, "Created thread #%d '%s'", thread->t_id, thread->t_name);
+	logmsg(LOG_DEBUG, "Created thread %d '%s'", thread->t_id, thread->t_name);
 
 	plat_thread_init(&thread->t_impl, (void*) thread, start);
 }
@@ -96,11 +97,16 @@ void t_init(thread_t* thread, void* arg,
  * */
 thread_t* t_post_init(thread_t* t) {
 	t->t_system_id = plat_gettid();
-	t->t_state = TS_RUNNABLE;
+	atomic_set(&t->t_state_atomic, TS_RUNNABLE);
 
 	hash_map_insert(&thread_hash_map, t);
 
 	tkey_set(&thread_key, (void*) t);
+
+	if(t->t_event) {
+		event_notify_all(t->t_event);
+		t->t_event = NULL;
+	}
 
 	return t;
 }
@@ -110,23 +116,38 @@ thread_t* t_post_init(thread_t* t) {
  * and remove thread from hash_map
  * */
 void t_exit(thread_t* t) {
-	t->t_state = TS_DEAD;
+	atomic_set(&t->t_state_atomic, TS_DEAD);
 
-	logmsg(LOG_DEBUG, "Thread #%d '%s' exited", t->t_id, t->t_name);
-
-	hash_map_remove(&thread_hash_map, t);
+	logmsg(LOG_DEBUG, "Thread %d '%s' exited", t->t_id, t->t_name);
 
 	if(t->t_event)
 		event_notify_all(t->t_event);
 }
 
+/*
+ * Wait until thread starts
+ * */
+void t_wait_start(thread_t* thread) {
+	thread_event_t event;
+	event_init(&event, "(t_wait_start)");
+
+	thread->t_event = &event;
+
+	if(atomic_read(&thread->t_state_atomic) != TS_RUNNABLE) {
+		event_wait(&event);
+	}
+
+	event_destroy(&event);
+	thread->t_event = NULL;
+}
 
 /*
  * Wait until thread finishes
  * */
 void t_join(thread_t* thread, thread_event_t* event) {
-	if(thread->t_state != TS_DEAD) {
-		thread->t_event = event;
+	thread->t_event = event;
+
+	if(atomic_read(&thread->t_state_atomic) != TS_DEAD) {
 		event_wait(thread->t_event);
 	}
 }
@@ -136,12 +157,13 @@ void t_join(thread_t* thread, thread_event_t* event) {
  * @note blocks until thread exits from itself!
  * */
 void t_destroy(thread_t* thread) {
-	if(thread->t_state != TS_DEAD) {
-		/*XXX: shouldn't this cause race condition with t_exit?*/
+	if(atomic_read(&thread->t_state_atomic) != TS_DEAD) {
 		thread_event_t event;
 		event_init(&event, "(t_destroy)");
 
 		t_join(thread, &event);
+
+		event_destroy(&event);
 	}
 
 	hash_map_remove(&thread_hash_map, thread);
