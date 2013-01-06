@@ -23,6 +23,8 @@
 
 LIBEXPORT char mod_search_path[MODPATHLEN];
 
+mp_cache_t mod_cache;
+
 /*First module in modules linked list*/
 module_t* first_module = NULL;
 
@@ -232,4 +234,18 @@ int mod_error(module_t* mod, char* fmtstr, ...) {
 void set_mod_helper(int type, int (*helper)(module_t* mod)) {
 	mod_type = type;
 	mod_load_helper = helper;
+}
+
+int mod_init(void) {
+	mp_cache_init(&mod_cache, module_t);
+
+	load_modules();
+
+	return 0;
+}
+
+void mod_fini(void) {
+	mp_cache_destroy(&mod_cache);
+
+	unload_modules();
 }

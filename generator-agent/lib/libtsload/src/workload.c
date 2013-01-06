@@ -34,6 +34,9 @@ squeue_t	wl_notifications;
 thread_t	t_wl_requests;
 thread_t	t_wl_notify;
 
+mp_cache_t	wl_cache;
+mp_cache_t	wl_rq_cache;
+
 DECLARE_HASH_MAP(workload_hash_map, workload_t, WLHASHSIZE, wl_name, wl_hm_next,
 	{
 		char* p = (char*) key;
@@ -55,7 +58,7 @@ DECLARE_HASH_MAP(workload_hash_map, workload_t, WLHASHSIZE, wl_name, wl_hm_next,
  * @return NULL if malloc had failed or new workload object
  */
 workload_t* wl_create(const char* name, module_t* mod, thread_pool_t* tp) {
-	workload_t* wl = (workload_t*) mp_malloc(sizeof(workload_t));
+	workload_t* wl = (workload_t*) mp_cache_alloc(&wl_cache);
 	tsload_module_t* tmod = NULL;
 
 	assert(mod->mod_helper != NULL);
@@ -107,7 +110,7 @@ void wl_destroy(workload_t* wl) {
 	mutex_destroy(&wl->wl_rq_mutex);
 
 	mp_free(wl->wl_params);
-	mp_free(wl);
+	mp_cache_free(&wl_cache, wl);
 }
 
 /**
@@ -340,7 +343,7 @@ done:
  * @param thread_id id of thread that will execute thread
  * */
 request_t* wl_create_request(workload_t* wl, int thread_id) {
-	request_t* rq = (request_t*) mp_malloc(sizeof(request_t));
+	request_t* rq = (request_t*) mp_cache_alloc(&wl_rq_cache);
 
 	rq->rq_step = wl->wl_current_step;
 	rq->rq_id = wl->wl_current_rq++;
@@ -357,6 +360,12 @@ request_t* wl_create_request(workload_t* wl, int thread_id) {
 	list_node_init(&rq->rq_node);
 
 	return rq;
+}
+
+/**
+ * Free request's memory */
+void wl_request_free(request_t* rq) {
+	mp_cache_free(&wl_rq_cache, rq);
 }
 
 /**
@@ -420,10 +429,6 @@ thread_result_t wl_requests_thread(thread_arg_t arg) {
 
 THREAD_END:
 	THREAD_FINISH(arg);
-}
-
-void wl_request_free(request_t* rq) {
-	mp_free(rq);
 }
 
 JSONNODE* json_request_format_all(list_head_t* rq_list) {
@@ -552,7 +557,7 @@ workload_t* json_workload_proc(JSONNODE* node) {
 	}
 
 	if(wl_search(wl_name) != NULL) {
-		agent_error_msg(AE_INVALID_DATA, "Workload %s already exists %s", wl_name);
+		agent_error_msg(AE_INVALID_DATA, "Workload %s already exists", wl_name);
 		goto fail;
 	}
 
@@ -588,6 +593,9 @@ int wl_init(void) {
 	squeue_init(&wl_notifications, "wl-notify");
 	t_init(&t_wl_notify, NULL, wl_notification_thread, "wl_notification");
 
+	mp_cache_init(&wl_rq_cache, request_t);
+	mp_cache_init(&wl_cache, workload_t);
+
 	return 0;
 }
 
@@ -599,4 +607,7 @@ void wl_fini(void) {
 	t_destroy(&t_wl_notify);
 
 	hash_map_destroy(&workload_hash_map);
+
+	mp_cache_destroy(&wl_rq_cache);
+	mp_cache_destroy(&wl_cache);
 }

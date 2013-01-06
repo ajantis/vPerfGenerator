@@ -53,9 +53,6 @@ typedef struct module {
 	struct module* mod_next;
 } module_t;
 
-LIBEXPORT int load_modules();
-LIBEXPORT void unload_modules(void);
-
 LIBEXPORT module_t* mod_search(const char* name);
 LIBEXPORT int mod_error(module_t* mod, char* fmtstr, ...);
 
@@ -77,5 +74,8 @@ LIBEXPORT void set_mod_helper(int type, int (*helper)(module_t* mod));
 PLATAPI int plat_mod_open(plat_mod_library_t* lib, const char* path);
 PLATAPI int plat_mod_close(plat_mod_library_t* lib);
 PLATAPI void* plat_mod_load_symbol(plat_mod_library_t* lib, const char* name);
+
+LIBEXPORT int mod_init(void);
+LIBEXPORT void mod_fini(void);
 
 #endif /* MODULES_H_ */

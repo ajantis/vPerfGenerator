@@ -8,6 +8,7 @@
 #define LOG_SOURCE		"mempool"
 #include <log.h>
 
+#include <defs.h>
 #include <threads.h>
 #include <mempool.h>
 #include <atomic.h>
@@ -18,6 +19,8 @@
 
 #include <stdlib.h>
 #include <assert.h>
+
+#ifndef MEMPOOL_USE_LIBC_HEAP
 
 void* 	mp_segment = NULL;
 LIBEXPORT size_t	mp_segment_size = MPSEGMENTSIZE;
@@ -33,8 +36,9 @@ mp_heap_page_t* last_heap_page;
 #ifdef MEMPOOL_TRACE
 boolean_t		mp_trace_allocator = B_FALSE;
 boolean_t		mp_trace_bitmaps = B_FALSE;
-boolean_t		mp_trace_heap = B_TRUE;
-boolean_t		mp_trace_heap_btree = B_TRUE;
+boolean_t		mp_trace_heap = B_FALSE;
+boolean_t		mp_trace_heap_btree = B_FALSE;
+boolean_t		mp_trace_slab = B_TRUE;
 #endif
 
 /* Valgrind integration */
@@ -167,7 +171,7 @@ int mp_bitmap_cell_alloc(atomic_t* cell, int num, int max_items) {
 			mask = MPREGMASK(num, bidx);
 		}
 
-		if((bidx + num) >= max_items) {
+		if((bidx + num) > max_items) {
 			/* bidx too large */
 			bidx = -1;
 		}
@@ -502,7 +506,16 @@ size_t mp_frag_get_size(mp_frag_descr_t* descr) {
 }
 
 /* Traditional heap
- * ---------------- */
+ * ----------------
+ *
+ * In traditional heap all objects allocated in fragments of varying size. However it has
+ * several predefined limitations:
+ * 	- All allocations are aligned to unit size MPHEAPUNIT
+ * 	- At least MPHEAPMINUNITS should be allocated, and maximum is MPHEAPMAXUNITS
+ *
+ * 	Heap consists of list of heap pages heap_page_list that is protected by rwlock heap_list_lock
+ * 	Each page has page header, and fragment headers. Fragment headers for free areas form
+ * 	binary search tree (free BST), so mempool heap uses best fit policy for allocating chunks */
 
 void mp_heap_allocator_init() {
 	list_head_init(&heap_page_list, "heap_page_list");
@@ -516,6 +529,11 @@ void mp_heap_allocator_destroy() {
 	mutex_destroy(&heap_page_mutex);
 }
 
+/**
+ * Allocate new heap page, initialize it. If somebody already allocating page,
+ * it will wait until it's done than return  last_heap_page
+ *
+ * @return allocated page */
 mp_heap_page_t* mp_heap_page_alloc() {
 	void* raw_page = NULL;
 	mp_heap_page_t* page = NULL;
@@ -523,39 +541,45 @@ mp_heap_page_t* mp_heap_page_alloc() {
 
 	size_t free;
 
-	if(mutex_try_lock(&heap_page_mutex)) {
-		raw_page = mp_frag_alloc(MPHEAPPAGESIZE, FRAG_HEAP);
+	while(page == NULL) {
+		if(mutex_try_lock(&heap_page_mutex)) {
+			raw_page = mp_frag_alloc(MPHEAPPAGESIZE, FRAG_HEAP);
 
-		/* Initalize heap's page */
-		page = (mp_heap_page_t*) raw_page;
-		header = (mp_heap_header_t*) &(page->hp_data);
+			/* Initalize heap's page */
+			page = (mp_heap_page_t*) raw_page;
+			header = (mp_heap_header_t*) &(page->hp_data);
 
-		free = (MPHEAPPAGESIZE - sizeof(mp_heap_page_t) - MPHEAPHHSIZE) / MPHEAPUNIT;
+			free = (MPHEAPPAGESIZE - sizeof(mp_heap_page_t) - MPHEAPHHSIZE) / MPHEAPUNIT;
 
-		last_heap_page = page;
+			last_heap_page = page;
 
-		mutex_init(&page->hp_mutex, "hp-mutex-%p", (void*) raw_page);
+			mutex_init(&page->hp_mutex, "hp-mutex-%p", (void*) raw_page);
 
-		page->hp_free = free;
-		page->hp_root_free = header;
-		page->hp_free_count = 1;
-		page->hp_defrag_period = 1;
+			page->hp_free = free;
+			page->hp_root_free = header;
+			page->hp_allocated_count = 0;
+			page->hp_free_count = 1;
+			page->hp_defrag_period = 1;
 
-		/* Initialize header */
-		MP_HEAP_HEADER_INIT(header, free);
+			page->hp_birth = tm_get_time();
 
-		rwlock_lock_write(&heap_list_lock);
-		list_add(&page->hp_node, &heap_page_list);
-		rwlock_unlock(&heap_list_lock);
+			/* Initialize header */
+			MP_HEAP_HEADER_INIT(header, free);
 
-		mutex_unlock(&heap_page_mutex);
-	}
-	else {
-		/* Somebody allocating or freeing page now, wait on mutex than return
-		 * last allocated heap page */
-		mutex_lock(&heap_page_mutex);
-		page = last_heap_page;
-		mutex_unlock(&heap_page_mutex);
+			rwlock_lock_write(&heap_list_lock);
+			list_add(&page->hp_node, &heap_page_list);
+			rwlock_unlock(&heap_list_lock);
+
+			mutex_unlock(&heap_page_mutex);
+		}
+		else {
+			/* Somebody allocating or freeing page now, wait on mutex than return
+			 * last allocated heap page. If last_heap_page will be freed, page
+			 * would be set to NULL, and we loop again */
+			mutex_lock(&heap_page_mutex);
+			page = last_heap_page;
+			mutex_unlock(&heap_page_mutex);
+		}
 	}
 
 #	ifdef MEMPOOL_TRACE
@@ -567,7 +591,15 @@ mp_heap_page_t* mp_heap_page_alloc() {
 	return page;
 }
 
+/**
+ * Free heap page
+ */
 void mp_heap_page_free(mp_heap_page_t* page) {
+	/* Do not free page if it was nearly allocated */
+	if((tm_get_time() - page->hp_birth) < MP_HEAP_PAGE_LIFETIME)
+		return;
+
+	mutex_lock(&heap_page_mutex);
 	rwlock_lock_write(&heap_list_lock);
 
 	if(last_heap_page == page)
@@ -576,16 +608,23 @@ void mp_heap_page_free(mp_heap_page_t* page) {
 	list_del(&page->hp_node);
 
 	rwlock_unlock(&heap_list_lock);
+	mutex_unlock(&heap_page_mutex);
 
 #	ifdef MEMPOOL_TRACE
 	if(mp_trace_heap) {
 		logmsg(LOG_TRACE, "FREE HEAP PAGE %p", page);
 	}
 #	endif
+
+	mp_frag_free(page);
 }
 
 /**
- * Linearize free BST from root into free starting from index */
+ * Linearize free BST from root into free starting from index recursively
+ *
+ * @param free Free list
+ * @param root Root entry of free BST (may be subtree root for recursive calls)
+ * @param index Index from which linearization should come (for recursive calls)*/
 static int mp_heap_btree_linearize(mp_heap_header_t** free, mp_heap_header_t* root, int index) {
 	mp_heap_header_t* left = MP_HH_LEFT(root);
 	mp_heap_header_t* right = MP_HH_RIGHT(root);
@@ -601,7 +640,7 @@ static int mp_heap_btree_linearize(mp_heap_header_t** free, mp_heap_header_t* ro
 	return index;
 }
 
-int mp_heap_header_lcmp(const void* hh1, const void* hh2) {
+static int mp_heap_header_lcmp(const void* hh1, const void* hh2) {
 	/* hh is mp_heap_header_t**, but we cast pointer to unsigned long*/
 
 	unsigned long* ptr1 = (unsigned long*) hh1;
@@ -613,7 +652,10 @@ int mp_heap_header_lcmp(const void* hh1, const void* hh2) {
 void mp_heap_btree_insert(mp_heap_header_t** root, mp_heap_header_t* hh);
 
 /**
- * Defragment free BST */
+ * Defragment free BST.
+ *
+ * Linearizes free BST, finds sibling free fragments and enlarges them.
+ * Uses mp_heap_btree_insert to form new free BST */
 void mp_heap_page_defrag(mp_heap_page_t* page) {
 	mp_heap_header_t** free = NULL;
 	unsigned free_count = page->hp_free_count;
@@ -718,6 +760,14 @@ void mp_heap_btree_print(mp_heap_header_t* root) {
 }
 #endif
 
+/**
+ * Insert entry hh to free BST
+ *
+ * TODO: According to mpbench measurments it's hotspot, should be optimized
+ *
+ * @param root Pointer to root of tree (May be altered only if NULL)
+ * @param hh Entry to be inserted
+ * */
 void mp_heap_btree_insert(mp_heap_header_t** root, mp_heap_header_t* hh) {
 	mp_heap_header_t *parent = *root;
 	mp_heap_header_t *left = NULL;
@@ -788,9 +838,9 @@ void mp_heap_btree_insert(mp_heap_header_t** root, mp_heap_header_t* hh) {
 }
 
 /**
- * Removes element from mp_heap_header binary tree
+ * Removes element from free BST
  *
- * @param root Root of tree
+ * @param root Pointer to root of tree (may be altered)
  * @param parent Parent of hh
  * @param hh Header to remove
  * @param direction Direction from parent to hh:
@@ -923,6 +973,13 @@ mp_heap_header_t* mp_heap_btree_find_delete(mp_heap_header_t** root, size_t unit
 	return best;
 }
 
+/**
+ * Allocate area from heap
+ *
+ * @param size Size of allocation area
+ *
+ * @return allocated area
+ * */
 void* mp_heap_alloc(size_t size) {
 	/* Align size to heap units */
 	size_t units = size / MPHEAPUNIT +
@@ -962,6 +1019,7 @@ void* mp_heap_alloc(size_t size) {
 			 * or no free space on it - allocate new one */
 			page = mp_heap_page_alloc();
 			mutex_lock(&page->hp_mutex);
+
 			found_page = B_TRUE;
 		}
 
@@ -984,6 +1042,7 @@ void* mp_heap_alloc(size_t size) {
 		MP_HH_MARK_ALLOCATED(hh);
 
 		diff = hh->hh_size - units;
+		++page->hp_allocated_count;
 		--page->hp_free_count;
 
 		if(diff > MPHEAPMINUNITS) {
@@ -1013,6 +1072,11 @@ void* mp_heap_alloc(size_t size) {
 	return MP_HH_TO_FRAGMENT(hh);
 }
 
+/**
+ * Free area allocated by heap
+ *
+ * @param ptr Allocated area
+ * */
 void mp_heap_free(void* ptr) {
 	mp_heap_header_t* hh = MP_HH_FROM_FRAGMENT(ptr);
 
@@ -1040,8 +1104,13 @@ void mp_heap_free(void* ptr) {
 	++page->hp_free_count;
 	page->hp_free += hh->hh_size;
 
-	if(page->hp_free_count > MPHHDEFRAGFREE)
-		mp_heap_page_defrag(page);
+	if(--page->hp_allocated_count == 0) {
+		mp_heap_page_free(page);
+	}
+	else {
+		if(page->hp_free_count > MPHHDEFRAGFREE)
+			mp_heap_page_defrag(page);
+	}
 
 	mutex_unlock(&page->hp_mutex);
 
@@ -1053,14 +1122,264 @@ void mp_heap_free(void* ptr) {
 #	endif
 }
 
-size_t mp_heap_get_size(void* ptr) {
+/**
+ * Get size of allocated area from heap
+ * */
+static size_t mp_heap_get_size(void* ptr) {
 	mp_heap_header_t* hh = MP_HH_FROM_FRAGMENT(ptr);
 
 	return hh->hh_size * MPHEAPUNIT;
 }
 
-#ifndef MEMPOOL_USE_LIBC_HEAP
+/**
+ * SLAB allocator
+ * */
 
+mp_cache_page_t* mp_cache_page_alloc(mp_cache_t* cache) {
+	mp_cache_page_t* page;
+	void* raw_page;
+
+	int i;
+	int bitmap_cells;
+
+	/* Same logic as inthread mp_heap_page_alloc */
+	if(mutex_try_lock(&cache->c_page_lock)) {
+		raw_page = mp_frag_alloc(MPCACHEPAGESIZE, FRAG_SLAB);
+
+		page = (mp_cache_page_t*) raw_page;
+
+		page->cp_cache = cache;
+		atomic_set(&page->cp_free_items, cache->c_items_per_page);
+
+		page->cp_first_item = ((char*) raw_page) + cache->c_first_item_off;
+
+		/* Initialize bitmap */
+		bitmap_cells = cache->c_items_per_page / MP_BITMAP_BITS +
+					   ((cache->c_items_per_page % MP_BITMAP_BITS) != 0);
+		for(i = 0; i < bitmap_cells; ++i)
+			page->cp_bitmap[i] = 0l;
+
+		rwlock_lock_write(&cache->c_list_lock);
+		list_add(&page->cp_node, &cache->c_page_list);
+		cache->c_last_page = page;
+		rwlock_unlock(&cache->c_list_lock);
+
+		mutex_unlock(&cache->c_page_lock);
+	}
+	else {
+		mutex_lock(&cache->c_page_lock);
+		page = cache->c_last_page;
+		mutex_unlock(&cache->c_page_lock);
+	}
+
+#	ifdef MEMPOOL_TRACE
+	if(mp_trace_slab) {
+		logmsg(LOG_TRACE, "ALLOC SLAB PAGE %s %p", cache->c_name, page);
+	}
+#	endif
+
+	return page;
+}
+
+void mp_cache_page_free_nolock(mp_cache_page_t* page) {
+	mp_cache_t* cache = page->cp_cache;
+
+	list_del(&page->cp_node);
+
+	if(cache->c_last_page == page) {
+		cache->c_last_page = NULL;
+	}
+
+#	ifdef MEMPOOL_TRACE
+	if(mp_trace_slab) {
+		logmsg(LOG_TRACE, "FREE SLAB PAGE %s %p", cache->c_name, page);
+	}
+#	endif
+}
+
+void mp_cache_page_free(mp_cache_page_t* page) {
+	rwlock_lock_write(&page->cp_cache->c_list_lock);
+	mp_cache_page_free_nolock(page);
+	rwlock_unlock(&page->cp_cache->c_list_lock);
+}
+
+void mp_cache_init_impl(mp_cache_t* cache, const char* name, size_t item_size) {
+	unsigned items_per_page;
+	size_t  bitmap_size;
+	size_t  svc_size;
+
+	list_head_init(&cache->c_page_list, "cache-%s", name);
+
+	mutex_init(&cache->c_page_lock, "cache-%s", name);
+	rwlock_init(&cache->c_list_lock, "cache-%s", name);
+
+	cache->c_item_size = item_size;
+
+	items_per_page = MPCACHEPAGESIZE / item_size;
+
+	bitmap_size = max(sizeof(atomic_t), sizeof(atomic_t) * items_per_page / MP_BITMAP_BITS);
+	svc_size = sizeof(mp_cache_page_t) + bitmap_size;
+
+	cache->c_items_per_page = items_per_page;
+	cache->c_first_item_off = svc_size;
+
+	while((cache->c_items_per_page * item_size) > (MPCACHEPAGESIZE - svc_size)) {
+		--cache->c_items_per_page;
+	}
+
+	strncpy(cache->c_name, name, MPCACHENAMELEN);
+
+#	ifdef MEMPOOL_TRACE
+	if(mp_trace_slab) {
+		logmsg(LOG_TRACE, "NEW SLAB CACHE %s %p ipp: %u",
+				cache->c_name, cache, cache->c_items_per_page);
+	}
+#	endif
+}
+
+void mp_cache_destroy(mp_cache_t* cache) {
+	mp_cache_page_t *page, *temp;
+
+	rwlock_lock_write(&cache->c_list_lock);
+	list_for_each_entry_safe(mp_cache_page_t, page, temp, &cache->c_page_list, cp_node) {
+		mp_cache_page_free_nolock(page);
+	}
+	rwlock_unlock(&cache->c_list_lock);
+
+	mutex_destroy(&cache->c_page_lock);
+	rwlock_destroy(&cache->c_list_lock);
+}
+
+STATIC_INLINE boolean_t mp_cache_reserve(mp_cache_page_t* page, unsigned num) {
+	if(atomic_sub(&page->cp_free_items, num) >= 0) {
+		return B_TRUE;
+	}
+
+	/* Oops - not enough free items on this page, return it */
+	atomic_add(&page->cp_free_items, num);
+
+	return B_FALSE;
+}
+
+void* mp_cache_alloc_array(mp_cache_t* cache, unsigned num) {
+	boolean_t found_page = B_FALSE;
+	mp_cache_page_t *page = NULL;
+
+	void* item = NULL;
+
+	int idx;
+
+	/* Align num */
+	if(num > MP_BITMAP_BITS)
+		num += MP_BITMAP_BITS - (num % MP_BITMAP_BITS);
+
+	assert(num < cache->c_items_per_page);
+
+	while(!found_page) {
+		rwlock_lock_read(&cache->c_list_lock);
+
+		if(page == NULL)
+			page = list_first_entry(mp_cache_page_t, &cache->c_page_list, cp_node);
+
+		list_for_each_entry_continue(mp_cache_page_t, page, &cache->c_page_list, cp_node) {
+			found_page = mp_cache_reserve(page, num);
+
+			if(found_page)
+				break;
+		}
+		rwlock_unlock(&cache->c_list_lock);
+
+		if(!found_page) {
+			page = mp_cache_page_alloc(cache);
+			found_page = mp_cache_reserve(page, num);
+
+			/* Coundn't alloc on new page - try again */
+			if(!found_page)
+				continue;
+		}
+
+		if(num <= MP_BITMAP_BITS) {
+			idx = mp_bitmap_alloc(page->cp_bitmap, cache->c_items_per_page, num);
+		}
+		else {
+			idx = mp_bitmap_alloc_cells(page->cp_bitmap, cache->c_items_per_page, num / MP_BITMAP_BITS);
+		}
+
+		if(idx == -1) {
+			/* Failed to alloc array, possibly fragmented page */
+			atomic_add(&page->cp_free_items, num);
+			found_page = B_FALSE;
+			continue;
+		}
+
+		item = MP_CACHE_ITEM(cache, page, idx);
+	}
+
+#	ifdef MEMPOOL_TRACE
+	if(mp_trace_slab) {
+		logmsg(LOG_TRACE, "ALLOC SLAB %s %p @page: %p num %d idx: %d <- %p",
+				cache->c_name, cache, page, num, idx, item);
+	}
+#	endif
+
+	return item;
+}
+
+void mp_cache_free_array(mp_cache_t* cache, void* array, unsigned num) {
+	mp_cache_page_t *page = NULL;
+	int idx = 0;
+	boolean_t found_page = B_FALSE;
+
+	/* Align num */
+	if(num > MP_BITMAP_BITS)
+		num += MP_BITMAP_BITS - (num % MP_BITMAP_BITS);
+
+	rwlock_lock_read(&cache->c_list_lock);
+	list_for_each_entry(mp_cache_page_t, page, &cache->c_page_list, cp_node) {
+		if(MP_CACHE_ITEM_IN_PAGE(page, array)) {
+			found_page = B_TRUE;
+			break;
+		}
+	}
+	rwlock_unlock(&cache->c_list_lock);
+
+	assert(found_page);
+
+	idx = MP_CACHE_ITEM_INDEX(page, array);
+
+	if(num <= MP_BITMAP_BITS) {
+		mp_bitmap_free(page->cp_bitmap, num, idx);
+	}
+	else {
+		mp_bitmap_free_cells(page->cp_bitmap, num / MP_BITMAP_BITS, idx);
+	}
+
+	atomic_add(&page->cp_free_items, num);
+
+#	ifdef MEMPOOL_TRACE
+	if(mp_trace_slab) {
+		logmsg(LOG_TRACE, "FREE SLAB %s %p @page: %p num: %d idx: %d <- %p",
+				cache->c_name, cache, page, num, idx, array);
+	}
+#	endif
+}
+
+void* mp_cache_alloc(mp_cache_t* cache) {
+	return mp_cache_alloc_array(cache, 1);
+}
+
+void mp_cache_free(mp_cache_t* cache, void* ptr) {
+	return mp_cache_free_array(cache, ptr, 1);
+}
+
+/**
+ * Allocate at least sz bytes and return it from mempool allocators
+ *
+ * For large (> MPHEAPMAXALLOC) or aligned (sz & MPFRAGMASK == 0) allocations uses frag allocator
+ * Otherwise allocates from mempool heap
+ *
+ * @note Never returns NULL. If all memory in mempool segment is exhausted, it will abort execution
+ * */
 void* mp_malloc(size_t sz) {
 	void* ptr;
 
@@ -1070,7 +1389,7 @@ void* mp_malloc(size_t sz) {
 	logmsg(LOG_TRACE, "ALLOC %zd", sz);
 #	endif
 
-	if(sz > MPHEAPMAXALLOC) {
+	if(sz > MPHEAPMAXALLOC || (sz & MPFRAGMASK == 0)) {
 		ptr = mp_frag_alloc(sz, FRAG_COMMON);
 	}
 	else {
@@ -1098,6 +1417,11 @@ size_t mp_get_size(void* ptr) {
 	return mp_frag_get_size(descr);
 }
 
+/**
+ * Reallocate memory at oldptr to size sz.
+ *
+ * Doesn't shrink memory
+ * */
 void* mp_realloc(void* oldptr, size_t sz) {
 	void* newptr = mp_malloc(sz);
 	size_t oldsz = mp_get_size(oldptr);
@@ -1160,28 +1484,5 @@ void mempool_fini(void) {
 	plat_mp_seg_free(mp_segment, mp_segment_size);
 }
 
-#else /* MEMPOOL_USE_LIBC_HEAP */
-
-void* mp_malloc(size_t sz) {
-	return malloc(sz);
-}
-
-void* mp_realloc(void* oldptr, size_t sz) {
-	return realloc(oldptr, sz);
-}
-
-void mp_free(void* ptr) {
-	free(ptr);
-}
-
-int mempool_init(void) {
-	return 0;
-}
-
-void mempool_fini(void) {
-
-}
-
 #endif
-
 

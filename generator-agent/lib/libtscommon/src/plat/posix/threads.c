@@ -16,7 +16,9 @@ PLATAPI void plat_thread_init(plat_thread_t* thread, void* arg,
 		  	  	  	  	  	  thread_start_func start) {
 
 	pthread_attr_init(&thread->t_attr);
+
 	pthread_attr_setdetachstate(&thread->t_attr, PTHREAD_CREATE_JOINABLE);
+	pthread_attr_setstacksize(&thread->t_attr,TSTACKSIZE);
 
 	pthread_create(&thread->t_thread,
 			       &thread->t_attr,

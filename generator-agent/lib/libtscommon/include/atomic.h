@@ -30,6 +30,18 @@ STATIC_INLINE long atomic_inc_ret(atomic_t* atom) {
 	return __sync_fetch_and_add(atom, 1);
 }
 
+STATIC_INLINE long atomic_dec(atomic_t* atom) {
+	return __sync_fetch_and_sub(atom, 1);
+}
+
+STATIC_INLINE long atomic_add(atomic_t* atom, long value) {
+	return __sync_fetch_and_add(atom, value);
+}
+
+STATIC_INLINE long atomic_sub(atomic_t* atom, long value) {
+	return __sync_fetch_and_sub(atom, value);
+}
+
 STATIC_INLINE long atomic_or(atomic_t* atom, long value) {
 	return __sync_fetch_and_or(atom, value);
 }
@@ -57,8 +69,20 @@ STATIC_INLINE long atomic_exchange(atomic_t* atom, long value) {
 	return InterlockedExchange(atom, value);
 }
 
+STATIC_INLINE long atomic_add(atomic_t* atom, long value) {
+	return InterlockedAdd(atom, value);
+}
+
+STATIC_INLINE long atomic_sub(atomic_t* atom, long value) {
+	return InterlockedAdd(atom, -value);
+}
+
 STATIC_INLINE long atomic_inc_ret(atomic_t* atom) {
 	return InterlockedIncrement(atom);
+}
+
+STATIC_INLINE long atomic_dec_ret(atomic_t* atom) {
+	return InterlockedDecrement(atom);
 }
 
 STATIC_INLINE long atomic_or(atomic_t* atom, long value) {

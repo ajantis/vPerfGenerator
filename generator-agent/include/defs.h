@@ -72,6 +72,15 @@ typedef enum { B_FALSE, B_TRUE } boolean_t;
 #define LIBIMPORT			extern
 #endif
 
+#ifdef __GNUC__
+#  define PACKED_STRUCT		__attribute__((packed))
+#else
+#  define PACKED_STRUCT
+# endif
+
+#define min(a, b) ((a) < (b)? (a) : (b))
+#define max(a, b) ((a) > (b)? (a) : (b))
+
 #include <config.h>
 
 #endif /* DEFS_H_ */

@@ -128,6 +128,8 @@ typedef unsigned 	thread_id_t;
 
 typedef thread_result_t (*thread_start_func)(thread_arg_t arg);
 
+#define		TSTACKSIZE		(64 * SZ_KB)
+
 typedef struct thread {
 	plat_thread_t	t_impl;
 

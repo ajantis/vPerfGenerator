@@ -17,7 +17,7 @@
 PLATAPI void plat_thread_init(plat_thread_t* thread, void* arg,
 							  thread_start_func start) {
 
-	thread->t_handle = CreateThread(NULL, 0,
+	thread->t_handle = CreateThread(NULL, TSTACKSIZE,
 							        (LPTHREAD_START_ROUTINE) start,
 							        arg,
 							        0, NULL);

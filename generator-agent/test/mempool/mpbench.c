@@ -72,8 +72,8 @@ thread_result_t bench(thread_arg_t arg) {
 		b->free_func(ptrs[i]);
 
 	b->tm_malloc 	 =  CLOCK_DIFF(t2, t1);
-	b->tm_free 		 =  CLOCK_DIFF(t2, t1);
-	b->tm_2nd_malloc =  CLOCK_DIFF(t2, t1);
+	b->tm_free 		 =  CLOCK_DIFF(t3, t2);
+	b->tm_2nd_malloc =  CLOCK_DIFF(t4, t3);
 THREAD_END:
 	THREAD_FINISH(arg);
 }

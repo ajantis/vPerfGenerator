@@ -11,6 +11,7 @@
 #include <defs.h>
 #include <list.h>
 #include <threads.h>
+#include <tstime.h>
 
 #include <stdlib.h>
 #include <stddef.h>
@@ -27,7 +28,7 @@
 #define MP_BITMAP_BUSY		0xFFFFFFFFl
 
 #define MPFRAGSIZE			(MPPAGESIZE / MP_BITMAP_BITS)
-
+#define MPFRAGMASK			(MPFRAGSIZE - 1)
 
 #define FRAG_UNALLOCATED -2
 #define FRAG_REFERENCE	 -1
@@ -45,6 +46,8 @@ typedef struct {
 	};
 } mp_frag_descr_t;
 
+/* Heap allocator */
+
 /* All heap allocations aligned to 8 bytes and maximum allocation is 256 bytes*/
 #define MPHEAPUNIT				4
 #define MPHEAPMINUNITS			4
@@ -61,13 +64,15 @@ typedef struct {
 #define MPHEAPPAGESIZE			MPHEAPUNIT * MPHEAPMAXUNITS
 
 #pragma pack(push, MPHEAPHHSIZE)
-typedef struct {
+struct mp_heap_header {
 	uint16_t	hh_size		: 10;
 
 	int16_t		hh_left 	: 11;
 	int16_t		hh_right 	: 11;
-} mp_heap_header_t;
+} PACKED_STRUCT;
 #pragma pack(pop)
+
+typedef struct mp_heap_header mp_heap_header_t;
 
 #define MP_HEAP_HEADER_INIT(hh, free)  	\
 		{								\
@@ -102,6 +107,8 @@ typedef struct {
 #define MP_HH_L		0
 #define MP_HH_R		1
 
+#define MP_HEAP_PAGE_LIFETIME		T_SEC
+
 typedef struct {
 	thread_mutex_t		hp_mutex;
 
@@ -109,12 +116,62 @@ typedef struct {
 
 	list_node_t			hp_node;			/**< List node (for linking with another pages)*/
 
+	ts_time_t			hp_birth;			/**< Time of page allocation */
+
 	int					hp_defrag_period;
+	unsigned			hp_allocated_count;
 	unsigned			hp_free_count;		/**< Number of free fragments*/
 	mp_heap_header_t*	hp_root_free;		/**< Root of free BST */
 
 	char				hp_data[0];
 } mp_heap_page_t;
+
+/* SLAB allocator */
+
+#define MPCACHENAMELEN		32
+#define MPCACHEPAGESIZE		8192
+
+#define MP_CACHE_ITEM(cache, page, index)	 (void*) (((char*) page->cp_first_item) + index * cache->c_item_size)
+#define MP_CACHE_ITEM_IN_PAGE(page, ptr)	 (((char*) (ptr)) > ((char*) (page))) && (((char*) (ptr)) < (((char*) (page)) + MPCACHEPAGESIZE))
+#define MP_CACHE_ITEM_INDEX(page, ptr)		 ( ( ((char*) ptr) - ((char*) page->cp_first_item) ) / page->cp_cache->c_item_size)
+
+struct mp_cache;
+
+typedef struct {
+	struct mp_cache*	cp_cache;
+	list_node_t	cp_node;
+
+	atomic_t	cp_free_items;
+	void* 		cp_first_item;
+
+	atomic_t	cp_bitmap[0];
+} mp_cache_page_t;
+
+typedef struct mp_cache {
+	thread_mutex_t	c_page_lock;
+	thread_rwlock_t	c_list_lock;
+
+	list_head_t	c_page_list;
+	mp_cache_page_t* c_last_page;
+
+	size_t		c_item_size;
+	unsigned 	c_items_per_page;
+
+	ptrdiff_t	c_first_item_off;
+
+	char		c_name[MPCACHENAMELEN];
+} mp_cache_t;
+
+LIBEXPORT void mp_cache_init_impl(mp_cache_t* cache, const char* name, size_t item_size);
+LIBEXPORT void mp_cache_destroy(mp_cache_t* cache);
+
+LIBEXPORT void* mp_cache_alloc(mp_cache_t* cache);
+LIBEXPORT void mp_cache_free(mp_cache_t* cache, void* ptr);
+
+LIBEXPORT void* mp_cache_alloc_array(mp_cache_t* cache, unsigned num);
+LIBEXPORT void mp_cache_free_array(mp_cache_t* cache, void* array, unsigned num);
+
+#define mp_cache_init(cache, type)		mp_cache_init_impl(cache, #type, sizeof(type))
 
 LIBEXPORT void* mp_malloc(size_t sz);
 LIBEXPORT void* mp_realloc(void* old, size_t sz);

@@ -53,6 +53,8 @@ static thread_event_t conn_event;
 
 squeue_t proc_queue;
 
+mp_cache_t hdl_cache;
+
 /*
  * Hash table helpers
  * */
@@ -73,7 +75,7 @@ int clnt_send(JSONNODE* node);
 
 static clnt_msg_handler_t* clnt_create_msg() {
 	unsigned msg_id = (unsigned) atomic_inc_ret(&clnt_msg_id);
-	clnt_msg_handler_t* hdl = mp_malloc(sizeof(clnt_msg_handler_t));
+	clnt_msg_handler_t* hdl = (clnt_msg_handler_t*) mp_cache_alloc(&hdl_cache);
 
 	event_init(&hdl->mh_event, "clnt_msg_handler");
 
@@ -91,7 +93,7 @@ static clnt_msg_handler_t* clnt_create_msg() {
 static void clnt_delete_handler(clnt_msg_handler_t* hdl) {
 	hash_map_remove(&hdl_hashmap, hdl);
 
-	mp_free(hdl);
+	mp_cache_free(&hdl_cache, hdl);
 }
 
 int clnt_process_response(unsigned msg_id, JSONNODE* response, clnt_response_type_t rt, JSONNODE* n_code) {
@@ -555,6 +557,8 @@ int clnt_init() {
 		return -1;
 	}
 
+	mp_cache_init(&hdl_cache, clnt_msg_handler_t);
+
 	hash_map_init(&hdl_hashmap, "hdl_hashmap");
 	mutex_init(&send_mutex, "send_mutex");
 	event_init(&conn_event, "conn_event");
@@ -589,6 +593,8 @@ void clnt_fini(void) {
 
 	hash_map_walk(&hdl_hashmap, clnt_handler_cleanup, NULL);
 	hash_map_destroy(&hdl_hashmap);
+
+	mp_cache_destroy(&hdl_cache);
 
 	plat_clnt_fini();
 }

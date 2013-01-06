@@ -23,7 +23,7 @@ struct subsystem subsys[] = {
 	SUBSYSTEM("log", log_init, log_fini),
 	SUBSYSTEM("mempool", mempool_init, mempool_fini),
 	SUBSYSTEM("threads", threads_init, threads_fini),
-	SUBSYSTEM("modules", load_modules, unload_modules),
+	SUBSYSTEM("modules", mod_init, mod_fini),
 	SUBSYSTEM("workload", wl_init, wl_fini),
 	SUBSYSTEM("threadpool", tp_init, tp_fini),
 	SUBSYSTEM("agent", agent_init, agent_fini)
