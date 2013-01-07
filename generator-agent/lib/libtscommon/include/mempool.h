@@ -60,17 +60,23 @@ typedef struct {
 /* Period between defragmentations */
 #define MPHHDEFRAGPERIOD		8
 
-#define MPHEAPHHSIZE			MPHEAPUNIT			/* Size of header */
+/* GCC correctly packs mp_heap_header, so size of it would be 32 bits (one unit)
+ * on other platforms (such as MSVC), it may create 48-bits structure, so reserve
+ * two units for it  */
+#ifdef __GNUC__
+#define MPHEAPHHSIZE			MPHEAPUNIT
+#else
+#define MPHEAPHHSIZE			(2 * MPHEAPUNIT)
+#endif
+
 #define MPHEAPPAGESIZE			MPHEAPUNIT * MPHEAPMAXUNITS
 
-#pragma pack(push, MPHEAPHHSIZE)
 struct mp_heap_header {
-	uint16_t	hh_size		: 10;
+	uint16_t	hh_size	 : 10;
 
-	int16_t		hh_left 	: 11;
-	int16_t		hh_right 	: 11;
+	int16_t		hh_left  : 11;
+	int16_t		hh_right : 11;
 } PACKED_STRUCT;
-#pragma pack(pop)
 
 typedef struct mp_heap_header mp_heap_header_t;
 

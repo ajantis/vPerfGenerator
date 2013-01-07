@@ -1,14 +1,22 @@
-tgtdir = 'lib'
 target = 'libtscommon'
 
 Import('env')
 
 lib = env.Clone()
 
+# dl for modules
+# pthread for thread-handling
 if lib.SupportedPlatform('posix'):
     lib.Append(LIBS = ['c', 'dl', 'pthread'])
 
+# We need librt for ns-precision time source
+if lib.SupportedPlatform('linux'):
+    lib.Append(LIBS = ['rt'])
+
+# Process PLATAPIs
 lib.PreparePlatform()
 
 lib.AddDeps(('lib', 'libjson'))
-env['DEPTARGETS'][target] = lib.SharedLibrary(lib.Target(tgtdir, target), Glob("src/*.c") + Glob("plat/*/*.c"))
+
+objects = lib.CompileSharedLibrary()
+library = lib.LinkSharedLibrary(target, objects)

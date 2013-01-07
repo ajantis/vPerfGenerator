@@ -1,6 +1,7 @@
 import os
 import sys
 
+from SCons.Action import CommandAction 
 from SCons.Errors import StopError 
 
 PathJoin = os.path.join
@@ -106,6 +107,27 @@ def PreparePlatform(self):
             # Add builder 
             self.PlatSrcBuilder(tgt_file, src_file)
 
+def CompileSharedLibrary(self, extra_sources = []):
+    objects = self.SharedObject(Glob("src/*.c") + Glob("plat/*/*.c") + extra_sources)
+    
+    # In Solaris we need to convert types from DWARF into CTF
+    if self.SupportedPlatform('solaris') and self['CTFCONVERT']:
+        self.AddPostAction(objects, CommandAction('$CTFCONVERT -l $TSVERSION $TARGET'))
+    
+    return objects
+    
+def CompileProgram(self, extra_sources = []):
+    objects = self.Object(Glob("src/*.c") + Glob("plat/*/*.c") + extra_sources)
+    return objects
+
+def LinkSharedLibrary(self, target, objects):
+    library = self.SharedLibrary(self.Target('lib', target), objects)
+    
+    if self.SupportedPlatform('solaris') and self['CTFMERGE']:
+        self.AddPostAction(library, '$CTFMERGE -l $TSVERSION -o $TARGET $SOURCES')
+    
+    return library
+
 # Prepare build environment
 
 env = DefaultEnvironment(ENV = {'PATH': os.environ['PATH']})
@@ -118,6 +140,12 @@ env.AddMethod(Module)
 env.AddMethod(InstallFile)
 env.AddMethod(PreparePlatform)
 env.AddMethod(SupportedPlatform)
+env.AddMethod(CompileSharedLibrary)
+env.AddMethod(CompileProgram)
+env.AddMethod(LinkSharedLibrary)
+
+env['TSPROJECT'] = 'vPerfGenerator agent'
+env['TSVERSION'] = '0.2'
 
 env['DEPTARGETS'] = {}
 env['CURTARGET'] = ''
@@ -133,7 +161,7 @@ if env['CC'] == 'gcc':
 
 if env['CC'] == 'gcc':
     # env[] syntax not working here :( 
-    env.Append(LINKFLAGS = ['-z origin'])
+    env.Append(LINKFLAGS = ['-zorigin'])
     env.Append(RPATH = env.Literal(os.path.join('\\$$ORIGIN', os.pardir, 'lib')))
 
 # For debugging
@@ -158,18 +186,16 @@ if env['CC'] == 'gcc':
 
 # Cross-platform build
 PLATFORM_CHAIN = {'win32': ['win', 'generic'],
-                  'linux2': ['linux', 'posix', 'generic'],
-                  'sunos5': ['solaris', 'posix', 'generic']
+                  'posix': ['linux', 'posix', 'generic'],       # Strangely SCons detects linux as posix
+                  'sunos': ['solaris', 'posix', 'generic']
                   }
-
-env['PLATFORM'] = sys.platform
 
 try:
     env['PLATCHAIN'] = PLATFORM_CHAIN[env['PLATFORM']]
 except KeyError:
-    raise StopError('Unsupported platform %s' % sys.platform)
+    raise StopError('Unsupported platform "%s"' % env['PLATFORM'])
 
-if sys.platform == 'win32':
+if env['PLATFORM'] == 'win32':
     env.Macroses('_WINSOCKAPI_')
 
 # Create definitions like PLAT_SOLARIS
@@ -179,7 +205,6 @@ env.Append(LIBPATH = env.Target('lib'))
 
 env['PLATDEBUG'] = True
 env['PLATCACHE'] = 'plat_cache.pch'
-
 #
 PlatIncBuilder = Builder(action = '%s tools/plat/parse-include.py $SOURCES' % (sys.executable),
                          src_suffix = '.h')
@@ -188,6 +213,13 @@ PlatSrcBuilder = Builder(action = '%s tools/plat/proc-source.py $SOURCE > $TARGE
                          src_suffix = '.c')
 env.Append(BUILDERS = {'PlatIncBuilder': PlatIncBuilder, 
                        'PlatSrcBuilder': PlatSrcBuilder})
+
+if env['PLATFORM'] == 'sunos':
+    env['CTFCONVERT'] = '/opt/onbld/bin/i386/ctfconvert'
+    env['CTFMERGE'] = '/opt/onbld/bin/i386/ctfmerge'
+else:
+    env['CTFCONVERT'] = None
+    env['CTFMERGE'] = None
 
 # Building shared libraries
 SConscript('lib/libjson/SConscript', 'env', 

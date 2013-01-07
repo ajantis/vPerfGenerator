@@ -51,14 +51,20 @@ STATIC_INLINE long atomic_and(atomic_t* atom, long value) {
 }
 
 
-#elif defined(PLAT_WINDOWS)
+#elif defined(PLAT_WIN) && defined(_MSC_VER)
 
 #include <windows.h>
 
-typedef volatile long atomic_t;
+#if !defined(_M_AMD64) && !defined(_M_IA64) && !defined(_M_X64)
+#include <intrin.h>
+#pragma intrinsic (_InterlockedAnd)
+#define InterlockedAnd _InterlockedAnd
+#endif
+
+typedef LONG volatile atomic_t;
 
 STATIC_INLINE long atomic_read(atomic_t* atom) {
-	return InterlockedAdd(atom, 0);
+	return InterlockedExchangeAdd(atom, 0);
 }
 
 STATIC_INLINE void atomic_set(atomic_t* atom, long value) {
@@ -70,11 +76,11 @@ STATIC_INLINE long atomic_exchange(atomic_t* atom, long value) {
 }
 
 STATIC_INLINE long atomic_add(atomic_t* atom, long value) {
-	return InterlockedAdd(atom, value);
+	return InterlockedExchangeAdd(atom, value);
 }
 
 STATIC_INLINE long atomic_sub(atomic_t* atom, long value) {
-	return InterlockedAdd(atom, -value);
+	return InterlockedExchangeAdd(atom, -value);
 }
 
 STATIC_INLINE long atomic_inc_ret(atomic_t* atom) {

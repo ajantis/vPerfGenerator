@@ -12,4 +12,4 @@ elif lib['CXX'] == 'cl':
     # To disallow C++ exceptions pass C++ code in libJSON and go to C code in other libraries
     lib.Append(CXXFLAGS = ['/EHsc'])
 
-env['DEPTARGETS'][target] = lib.SharedLibrary(lib.Target(tgtdir, target), Glob("src/*.cpp"))
+lib.SharedLibrary(lib.Target(tgtdir, target), Glob("src/*.cpp"))

@@ -104,24 +104,28 @@ PLATAPI void plat_rwlock_init(plat_thread_rwlock_t* rwlock) {
 PLATAPI void plat_rwlock_lock_read(plat_thread_rwlock_t* rwlock) {
 	AcquireSRWLockShared(&rwlock->tl_slim_rwlock);
 
-	TlsSetValue(rwlock->tl_mode_key, TL_MODE_SHARED);
+	TlsSetValue(rwlock->tl_mode_key, (void*) TL_MODE_SHARED);
 }
 
 PLATAPI void plat_rwlock_lock_write(plat_thread_rwlock_t* rwlock) {
 	AcquireSRWLockExclusive(&rwlock->tl_slim_rwlock);
 
-	TlsSetValue(rwlock->tl_mode_key, TL_MODE_EXCLUSIVE);
+	TlsSetValue(rwlock->tl_mode_key, (void*) TL_MODE_EXCLUSIVE);
 }
 
 PLATAPI void plat_rwlock_unlock(plat_thread_rwlock_t* rwlock) {
-	switch(TlsGetValue(rwlock->tl_mode_key)) {
+	switch((unsigned) TlsGetValue(rwlock->tl_mode_key)) {
 	case TL_MODE_SHARED:
 		ReleaseSRWLockShared(&rwlock->tl_slim_rwlock);
+		break;
 	case TL_MODE_EXCLUSIVE:
 		ReleaseSRWLockExclusive(&rwlock->tl_slim_rwlock);
+		break;
 	default:
 		abort();
 	}
+
+	TlsSetValue(rwlock->tl_mode_key, (void*) TL_MODE_FREE);
 }
 
 PLATAPI void plat_rwlock_destroy(plat_thread_rwlock_t* rwlock) {

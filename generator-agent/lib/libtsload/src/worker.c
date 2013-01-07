@@ -38,7 +38,7 @@ thread_result_t control_thread(thread_arg_t arg) {
 	/* Synchronize all control-threads on all nodes to start
 	 * quantum at beginning of next second (real time synchronization
 	 * is provided by NTP) */
-	tm_sleep(tm_ceil_diff(tm, T_SEC));
+	tm_sleep_nano(tm_ceil_diff(tm, T_SEC));
 
 	logmsg(LOG_DEBUG, "Started control thread (tpool: %s)", tp->tp_name);
 
@@ -123,7 +123,7 @@ thread_result_t control_thread(thread_arg_t arg) {
 	quantum_sleep:
 		mutex_unlock(&tp->tp_mutex);
 
-		tm_sleep(tm_ceil_diff(tm_get_time(), tp->tp_quantum));
+		tm_sleep_nano(tm_ceil_diff(tm_get_time(), tp->tp_quantum));
 	}
 
 THREAD_END:

@@ -19,6 +19,7 @@ typedef struct {
 	CRITICAL_SECTION tm_crit_section;
 } plat_thread_mutex_t;
 
+#define TL_MODE_FREE			0
 #define TL_MODE_EXCLUSIVE		1
 #define TL_MODE_SHARED			2
 

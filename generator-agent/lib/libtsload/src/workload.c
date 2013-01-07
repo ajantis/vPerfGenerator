@@ -377,9 +377,9 @@ void wl_run_request(request_t* rq) {
 
 	rq->rq_flags |= RQF_STARTED;
 
-	rq->rq_start_time = tm_get_time();
+	rq->rq_start_time = tm_get_clock();
 	ret = wl->wl_ts_mod->mod_run_request(rq);
-	rq->rq_end_time = tm_get_time();
+	rq->rq_end_time = tm_get_clock();
 
 	/* FIXME: on-time condition*/
 	if(rq->rq_end_time < (wl->wl_tp->tp_time + wl->wl_tp->tp_quantum))

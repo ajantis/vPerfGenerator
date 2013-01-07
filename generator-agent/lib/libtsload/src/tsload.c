@@ -15,6 +15,8 @@
 #include <modules.h>
 #include <loadagent.h>
 #include <threadpool.h>
+#include <tstime.h>
+#include <uname.h>
 
 #include <tsinit.h>
 #include <tsload.h>
@@ -33,7 +35,9 @@ struct subsystem subsys[] = {
 int tsload_start(const char* basename) {
 	init(subsys, sizeof(subsys) / sizeof(struct subsystem));
 
-	logmsg(LOG_INFO, "Started %s...", basename);
+	logmsg(LOG_INFO, "Started %s on %s...", basename, hi_get_nodename());
+
+	logmsg(LOG_INFO, "Clock resolution is %llu", tm_get_clock_res());
 
 	/*Wait until universe collapses or we receive a signal :)*/
 	t_eternal_wait();

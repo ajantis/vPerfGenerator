@@ -34,12 +34,16 @@ typedef enum { B_FALSE, B_TRUE } boolean_t;
 #define PLATAPI
 #define PLATAPIDECL(...)
 
+/* Checkformat provides warnings for incorrect printf format */
 #ifdef __GNUC__
 #	define CHECKFORMAT(func, arg1, arg2) __attribute__ ((format (func, arg1, arg2)))
 #else
 #	define CHECKFORMAT(func, arg1, arg2)
 #endif
 
+/* Initialize structure member
+ * VisualC doesn't support designated initializers (C99), so
+ * it cannot use form .member = value */
 #ifdef __GNUC__
 #	define SM_INIT(member, value)   member = value
 #else
@@ -56,6 +60,7 @@ typedef enum { B_FALSE, B_TRUE } boolean_t;
 
 #define uninitialized_var(x) x = x
 
+/* likely and unlikely conditional optimizations */
 #ifdef __GNUC__
 #  define likely(x)		(__builtin_expect(!!(x), 1))
 #  define unlikely(x)	(__builtin_expect(!!(x), 0))
@@ -64,6 +69,11 @@ typedef enum { B_FALSE, B_TRUE } boolean_t;
 #  define unlikely(x)	x
 # endif
 
+/* On Windows we should define special markings for exported functions
+ * and variables from shared libraries.
+ *
+ * Use LIBEXPORT in header for functions
+ * Use LIBIMPORT for shared data in executable code*/
 #ifdef _MSC_VER
 #define LIBEXPORT			__declspec(dllexport)
 #define LIBIMPORT			__declspec(dllimport)
@@ -72,14 +82,22 @@ typedef enum { B_FALSE, B_TRUE } boolean_t;
 #define LIBIMPORT			extern
 #endif
 
+/* For GNU C we need to use attributes with packed structures
+ * For VC++ it is defined using #pragma pack(...). GNU C supports for compability */
 #ifdef __GNUC__
 #  define PACKED_STRUCT		__attribute__((packed))
 #else
 #  define PACKED_STRUCT
 # endif
 
-#define min(a, b) ((a) < (b)? (a) : (b))
-#define max(a, b) ((a) > (b)? (a) : (b))
+/* Define min and max macroses.
+ * VS has it's own min/max implementation, so use it */
+#ifndef _MSC_VER
+#	define min(a, b) ((a) < (b)? (a) : (b))
+#	define max(a, b) ((a) > (b)? (a) : (b))
+#else
+#	include <stdlib.h>
+#endif
 
 #include <config.h>
 

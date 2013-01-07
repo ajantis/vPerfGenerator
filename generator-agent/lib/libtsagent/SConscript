@@ -1,4 +1,3 @@
-tgtdir = 'lib'
 target = 'libtsagent'
 
 Import('env')
@@ -8,14 +7,17 @@ lib = env.Clone()
 if lib.SupportedPlatform('posix'):
     lib.Append(LIBS = ['c'])
 
+# Add winsock2 library
 if lib.SupportedPlatform('win'):
     lib.Append(LIBS = ['Ws2_32'])
 
+# Sockets and name services requires libraries
 if lib.SupportedPlatform('solaris'):
     lib.Append(LIBS = ['socket', 'nsl'])
 
 
 lib.PreparePlatform()
-
 lib.AddDeps(('lib', 'libjson'), ('lib', 'libtscommon'), ('lib', 'libhostinfo'))
-env['DEPTARGETS'][target] = lib.SharedLibrary(lib.Target(tgtdir, target), Glob("src/*.c") + Glob("plat/*/*.c"))
+
+objects = lib.CompileSharedLibrary()
+library = lib.LinkSharedLibrary(target, objects)

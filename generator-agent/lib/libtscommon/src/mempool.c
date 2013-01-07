@@ -239,7 +239,7 @@ int mp_bitmap_alloc(atomic_t* bitmap, int num_items, int alloc_items) {
 			}
 		}
 
-		tm_sleep(MPWAITTIME);
+		tm_sleep_nano(MPWAITTIME);
 
 		++retries;
 	}
@@ -296,7 +296,7 @@ int mp_bitmap_alloc_cells(atomic_t* bitmap, int num_items, int alloc_cells) {
 			}
 		}
 
-		tm_sleep(MPWAITTIME);
+		tm_sleep_nano(MPWAITTIME);
 
 		++retries;
 	}
@@ -460,7 +460,7 @@ void mp_frag_free(void* frag) {
 		}
 		else if(descr->fd_type == FRAG_REFERENCE) {
 			logmsg(LOG_CRIT, "Trying to free memory @%p which is part of fragment [%p",
-					frag, frag - (descr->fd_size * MPFRAGSIZE));
+					frag, ((char*) frag) - (descr->fd_size * MPFRAGSIZE));
 		}
 
 		return;
@@ -1369,7 +1369,7 @@ void* mp_cache_alloc(mp_cache_t* cache) {
 }
 
 void mp_cache_free(mp_cache_t* cache, void* ptr) {
-	return mp_cache_free_array(cache, ptr, 1);
+	mp_cache_free_array(cache, ptr, 1);
 }
 
 /**

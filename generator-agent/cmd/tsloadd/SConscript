@@ -15,7 +15,8 @@ cmd.AddDeps(('lib', 'libtsagent'),
             ('lib', 'libjson'), 
             ('lib', 'libhostinfo'), 
             ('lib', 'libtsload'))
-tsloadd = cmd.Program(cmd.Target(tgtdir, target), Glob("src/*.c"))
+objects = cmd.CompileProgram()
+tsloadd = cmd.Program(cmd.Target(tgtdir, target), objects)
 
 cmd.Depends(tsloadd, 'tsload.cfg')
 cmd.InstallFile('etc', 'tsload.cfg')

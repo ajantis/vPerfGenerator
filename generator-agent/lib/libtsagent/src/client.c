@@ -487,7 +487,7 @@ thread_result_t clnt_connect_thread(thread_arg_t arg) {
 	while(!clnt_finished) {
 		if(!clnt_connected) {
 			if(clnt_connect() != CLNT_OK) {
-				tm_sleep(CLNT_RETRY_TIMEOUT);
+				tm_sleep_milli(CLNT_RETRY_TIMEOUT);
 				continue;
 			}
 

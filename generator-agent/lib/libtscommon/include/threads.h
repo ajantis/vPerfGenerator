@@ -16,6 +16,16 @@
 #include <tstime.h>
 #include <atomic.h>
 
+#ifdef PLAT_SOLARIS
+/* Solaris has it's own definitions of mutexes,
+ * so hide our implementation with ts_ prefix */
+#define mutex_init			ts_mutex_init
+#define mutex_destroy		ts_mutex_destroy
+#define	mutex_lock			ts_mutex_lock
+#define	mutex_try_lock		ts_mutex_try_lock
+#define	mutex_unlock		ts_mutex_unlock
+#endif
+
 #define TEVENTNAMELEN	32
 #define TMUTEXNAMELEN	32
 #define TKEYNAMELEN 	32
@@ -27,7 +37,8 @@
 #define THASHMASK		(THASHSIZE - 1)
 
 /**
- * Threads engine. Working with pthread
+ * Threads engine. Provides cross-platform interface for threads handling
+ * and synchronization primitives.
  */
 
 /**
