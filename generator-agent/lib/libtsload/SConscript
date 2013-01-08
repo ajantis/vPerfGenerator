@@ -9,7 +9,6 @@ if lib.SupportedPlatform('posix'):
 
 lib.AddDeps(('lib', 'libjson'), 
             ('lib', 'libtscommon'), 
-            ('lib', 'libtsagent'),
             ('lib', 'libhostinfo'))
 
 objects = lib.CompileSharedLibrary(Glob("src/disp/*.c"))

@@ -57,9 +57,9 @@ class WorkloadConfigurator(Thread):
                                'test': 'read',
                                'sparse': False}}
         
-        # client.invoke('configure_workload', 'test', workload)
-        
-        client.invoke('configure_workloads', workloads = {'test' : workload} )
+        client.invoke('configure_workload', 
+                      workload_name='test', 
+                      workload_params=workload)
 
 
 class WorkloadRunner(Thread):
@@ -119,14 +119,14 @@ class TSLoadServer(TSServer):
         else:
             raise TSException('Operation is not supported')
     
-    def workloadStatus(self, client, status):
-        self.logger.info('Workload %s status %d(%d): %s' % (status['workload'],
-                                                            status['status'],
-                                                            status['done'],
-                                                            status['message']))
+    def workloadStatus(self, client, workload, status, progress, message):
+        self.logger.info('Workload %s status %d(%d): %s' % (workload,
+                                                            status,
+                                                            progress,
+                                                            message))
         
         # SUCCESS
-        if status['status'] == 2:
+        if status == 2:
             global wlRunners
             
             wlRunner = WorkloadRunner(client)

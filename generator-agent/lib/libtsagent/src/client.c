@@ -21,8 +21,8 @@
 #define CLNT_CHUNK	1024
 
 JSONNODE* json_clnt_command_format(const char* command, JSONNODE* msg_node, unsigned msg_id);
-void clnt_proc_set_msg(clnt_proc_msg_t* msg);
 void clnt_on_disconnect(void);
+int clnt_send(JSONNODE* node);
 
 /* Globals */
 plat_clnt_socket clnt_socket;
@@ -55,6 +55,8 @@ squeue_t proc_queue;
 
 mp_cache_t hdl_cache;
 
+thread_key_t	proc_msg_key;
+
 /*
  * Hash table helpers
  * */
@@ -71,7 +73,18 @@ DECLARE_HASH_MAP(hdl_hashmap, clnt_msg_handler_t, CLNTMHTABLESIZE, mh_msg_id, mh
 	}
 );
 
-int clnt_send(JSONNODE* node);
+/*
+ * Should be called from clnt_proc_thread
+ *
+ * @return message that is currently processed
+ * */
+clnt_proc_msg_t* clnt_proc_get_msg(void) {
+	return (clnt_proc_msg_t*) tkey_get(&proc_msg_key);
+}
+
+void clnt_proc_set_msg(clnt_proc_msg_t* msg) {
+	tkey_set(&proc_msg_key, msg);
+}
 
 static clnt_msg_handler_t* clnt_create_msg() {
 	unsigned msg_id = (unsigned) atomic_inc_ret(&clnt_msg_id);
@@ -349,21 +362,12 @@ THREAD_END:
 	THREAD_FINISH(arg);
 }
 
-/*
- * Should be called from clnt_proc_thread
- *
- * @return message that is currently processed
- * */
-clnt_proc_msg_t* clnt_proc_get_msg(void) {
-	assert(t_self() == &t_client_process);
+/* Returns B_TRUE if error was reported during processing of
+ * this message */
+boolean_t clnt_proc_error(void) {
+	clnt_proc_msg_t* msg = clnt_proc_get_msg();
 
-	return (clnt_proc_msg_t*) t_client_process.t_arg;
-}
-
-void clnt_proc_set_msg(clnt_proc_msg_t* msg) {
-	assert(t_self() == &t_client_process);
-
-	t_client_process.t_arg = (void*) msg;
+	return msg->m_response_type == RT_ERROR;
 }
 
 /* Adds response to command that is processed
@@ -563,6 +567,8 @@ int clnt_init() {
 	mutex_init(&send_mutex, "send_mutex");
 	event_init(&conn_event, "conn_event");
 
+	tkey_init(&proc_msg_key, "proc_msg_key");
+
 	squeue_init(&proc_queue, "proc_queue");
 
 	t_init(&t_client_connect, NULL, clnt_connect_thread, "clnt_conn_thread");
@@ -587,6 +593,8 @@ void clnt_fini(void) {
 	t_destroy(&t_client_process);
 	t_destroy(&t_client_receive);
 	t_destroy(&t_client_connect);
+
+	tkey_destroy(&proc_msg_key);
 
 	event_destroy(&conn_event);
 	mutex_destroy(&send_mutex);

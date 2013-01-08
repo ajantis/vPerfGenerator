@@ -9,6 +9,8 @@
 #define AGENT_H_
 
 #include <defs.h>
+#include <errcode.h>
+
 #include <libjson.h>
 
 #define AGENTMAXARGC	16
@@ -37,16 +39,9 @@ typedef struct {
 
 #define ADT_LAST_METHOD() 		 { NULL }
 
-typedef enum agent_errcode {
-	AE_COMMAND_NOT_FOUND = 100,
-	AE_MESSAGE_FORMAT	 = 101,
-	AE_INVALID_DATA		 = 102,
-	AE_INTERNAL_ERROR	 = 200
-} agent_errcode_t;
-
 LIBEXPORT void agent_process_command(char* command, JSONNODE* msg);
 LIBEXPORT void agent_response_msg(JSONNODE* response);
-LIBEXPORT void agent_error_msg(agent_errcode_t code, const char* format, ...);
+LIBEXPORT void agent_error_msg(ts_errcode_t code, const char* format, ...);
 LIBEXPORT void agent_register_methods(agent_dispatch_t* table);
 
 int agent_hello();

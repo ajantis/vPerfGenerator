@@ -11,18 +11,18 @@
 #include <stdlib.h>
 
 int tsi_subsys_count;
-struct subsystem* tsi_subsys;
+struct subsystem** tsi_subsys;
 
-void finish(void);
+void ts_finish(void);
 
-int init(struct subsystem* subsys, int count) {
+int ts_init(struct subsystem** subsys_list, int count) {
 	int i = 0;
 	int err = 0;
 
-	tsi_subsys = subsys;
+	tsi_subsys = subsys_list;
 	tsi_subsys_count = count;
 
-	atexit(finish);
+	atexit(ts_finish);
 
 	if(plat_init() == -1) {
 		fprintf(stderr, "Platform-dependent initialization failure!\n");
@@ -30,30 +30,32 @@ int init(struct subsystem* subsys, int count) {
 	}
 
 	for(i = 0; i < count; ++i) {
-		err = subsys[i].s_init();
+		err = tsi_subsys[i]->s_init();
 
 		if(err != 0) {
-			subsys[i].s_state = SS_ERROR;
-			fprintf(stderr, "Failure initializing %s, exiting\n", subsys[i].s_name);
+			tsi_subsys[i]->s_state = SS_ERROR;
+			fprintf(stderr, "Failure initializing %s, exiting\n", tsi_subsys[i]->s_name);
 			exit(err);
 
 			return err;
 		}
 
-		subsys[i].s_error_code = err;
+		tsi_subsys[i]->s_error_code = err;
 	}
 
 	return 0;
 }
 
-void finish(void) {
+void ts_finish(void) {
 	int i = 0;
 
 	for(i = tsi_subsys_count - 1; i >= 0; --i) {
-		if(tsi_subsys[i].s_state == SS_OK) {
-			tsi_subsys[i].s_fini();
+		if(tsi_subsys[i]->s_state == SS_OK) {
+			tsi_subsys[i]->s_fini();
 		}
 	}
+
+	free(tsi_subsys);
 
 	plat_finish();
 }

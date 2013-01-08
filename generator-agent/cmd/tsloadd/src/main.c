@@ -8,6 +8,7 @@
 #define LOG_SOURCE "tsloadd"
 #include <log.h>
 
+#include <loadagent.h>
 #include <modtsload.h>
 #include <cfgfile.h>
 #include <tsload.h>
@@ -21,6 +22,10 @@ LIBIMPORT int log_debug;
 LIBIMPORT int log_trace;
 
 char config_file_name[CONFPATHLEN];
+
+struct subsystem xsubsys[] = {
+	SUBSYSTEM("agent", agent_init, agent_fini)
+};
 
 void usage() {
 	fprintf(stderr, "command line: \n");
@@ -77,6 +82,7 @@ int main(int argc, char* argv[]) {
 		return 1;
 	}
 
+	tsload_init(xsubsys, 1);
 	tsload_start(argv[0]);
 
 	return 0;

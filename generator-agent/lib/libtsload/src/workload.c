@@ -17,7 +17,7 @@
 #include <threadpool.h>
 #include <workload.h>
 #include <modtsload.h>
-#include <loadagent.h>
+#include <tsload.h>
 #include <tstime.h>
 
 #include <libjson.h>
@@ -199,7 +199,7 @@ thread_result_t wl_notification_thread(thread_arg_t arg) {
 			THREAD_EXIT(0);
 		}
 
-		agent_workload_status(msg->wl->wl_name, msg->status, msg->done, msg->msg);
+		tsload_workload_status(msg->wl->wl_name, msg->status, msg->done, msg->msg);
 
 		mp_free(msg);
 	}
@@ -281,7 +281,7 @@ int wl_provide_step(workload_t* wl, long step_id, unsigned num_rqs) {
 
 	if(step_id != (wl->wl_last_step + 1)) {
 		/*Provided incorrect step*/
-		agent_error_msg(AE_INVALID_DATA, "Step %ld is not correct, last step was %ld!", step_id, wl->wl_last_step);
+		tsload_error_msg(TSE_INVALID_DATA, "Step %ld is not correct, last step was %ld!", step_id, wl->wl_last_step);
 
 		ret = WL_STEP_INVALID;
 		goto done;
@@ -321,7 +321,7 @@ int wl_advance_step(workload_step_t* step) {
 
 	if(wl->wl_current_step > wl->wl_last_step) {
 		/* No steps on queue */
-		logmsg(LOG_WARN, "No steps on queue %s, step #%d!", wl->wl_name, wl->wl_current_step);
+		logmsg(LOG_WARN, "No steps on queue %s, step #%ld!", wl->wl_name, wl->wl_current_step);
 
 		ret = -1;
 		goto done;
@@ -369,8 +369,7 @@ void wl_request_free(request_t* rq) {
 }
 
 /**
- * Run request for execution
- */
+ * Run request for execution */
 void wl_run_request(request_t* rq) {
 	int ret;
 	workload_t* wl = rq->rq_workload;
@@ -422,7 +421,7 @@ thread_result_t wl_requests_thread(thread_arg_t arg) {
 		}
 
 		j_rq_chain = json_request_format_all(rq_chain);
-		agent_requests_report(j_rq_chain);
+		tsload_requests_report(j_rq_chain);
 
 		wl_rq_chain_destroy(rq_chain);
 	}
@@ -455,40 +454,16 @@ JSONNODE* json_request_format_all(list_head_t* rq_list) {
 	return j_rq_list;
 }
 
-void json_workload_proc_all(JSONNODE* node, list_head_t* wl_list) {
-	JSONNODE_ITERATOR iter = json_begin(node),
-			          end = json_end(node);
-	workload_t* wl;
-
-	while(iter != end) {
-		wl = json_workload_proc(*iter);
-		++iter;
-
-		/* json_workload_proc failed to process workload,
-		 * free all workloads that are already parsed and return NULL*/
-		if(wl == NULL) {
-			logmsg(LOG_WARN, "Failed to process workloads from JSON, discarding all of them");
-			wl_destroy_all(wl_list);
-
-			return;
-		}
-
-		/* Insert workload into workload chain */
-		list_add_tail(&wl->wl_chain, wl_list);
-	}
-}
-
-
 #define JSON_GET_VALIDATE_PARAM(iter, name, req_type)	\
 	{											\
 		iter = json_find(node, name);			\
 		if(iter == i_end) {						\
-			agent_error_msg(AE_MESSAGE_FORMAT,	\
+			tsload_error_msg(TSE_MESSAGE_FORMAT,	\
 					"Failed to parse workload, missing parameter %s", name);	\
 			goto fail;							\
 		}										\
 		if(json_type(*iter) != req_type) {		\
-			agent_error_msg(AE_MESSAGE_FORMAT,	\
+			tsload_error_msg(TSE_MESSAGE_FORMAT,	\
 					"Expected that " name " is " #req_type );	\
 			goto fail;							\
 		}										\
@@ -501,7 +476,7 @@ void json_workload_proc_all(JSONNODE* node, list_head_t* wl_list) {
 		obj = search(name);					\
 		json_free(name);					\
 		if(obj == NULL) {					\
-			agent_error_msg(AE_INVALID_DATA,				\
+			tsload_error_msg(TSE_INVALID_DATA,				\
 					"Invalid " #type " name %s", name);		\
 			goto fail;						\
 		}									\
@@ -519,7 +494,7 @@ void json_workload_proc_all(JSONNODE* node, list_head_t* wl_list) {
  * and create workload. Called from agent context,
  * so returns NULL in case of error and invokes agent_error_msg
  * */
-workload_t* json_workload_proc(JSONNODE* node) {
+workload_t* json_workload_proc(const char* wl_name, JSONNODE* node) {
 	JSONNODE_ITERATOR i_mod = NULL;
 	JSONNODE_ITERATOR i_tp = NULL;
 	JSONNODE_ITERATOR i_params = NULL;
@@ -529,8 +504,6 @@ workload_t* json_workload_proc(JSONNODE* node) {
 	module_t* mod = NULL;
 	tsload_module_t* tmod = NULL;
 	thread_pool_t* tp = NULL;
-
-	char* wl_name = NULL;
 
 	int ret;
 
@@ -548,16 +521,15 @@ workload_t* json_workload_proc(JSONNODE* node) {
 	tmod = (tsload_module_t*) mod->mod_helper;
 
 	/* Get workload's name */
-	wl_name = json_name(node);
 	logmsg(LOG_DEBUG, "Parsing workload %s", wl_name);
 
 	if(strlen(wl_name) == 0) {
-		agent_error_msg(AE_MESSAGE_FORMAT,"Failed to parse workload, no name was defined");
+		tsload_error_msg(TSE_MESSAGE_FORMAT,"Failed to parse workload, no name was defined");
 		goto fail;
 	}
 
 	if(wl_search(wl_name) != NULL) {
-		agent_error_msg(AE_INVALID_DATA, "Workload %s already exists", wl_name);
+		tsload_error_msg(TSE_INVALID_DATA, "Workload %s already exists", wl_name);
 		goto fail;
 	}
 
@@ -575,9 +547,6 @@ workload_t* json_workload_proc(JSONNODE* node) {
 	return wl;
 
 fail:
-	if(wl_name)
-		json_free(wl_name);
-
 	if(wl)
 		wl_destroy(wl);
 

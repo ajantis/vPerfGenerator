@@ -76,6 +76,8 @@ LIBEXPORT clnt_response_type_t clnt_invoke(const char* command, JSONNODE* msg_no
 clnt_proc_msg_t* clnt_proc_get_msg();
 void clnt_add_response(clnt_response_type_t type, JSONNODE* node);
 
+LIBEXPORT boolean_t clnt_proc_error(void);
+
 LIBEXPORT int clnt_init(void);
 LIBEXPORT void clnt_fini(void);
 

@@ -10,7 +10,7 @@
 
 #include <modules.h>
 #include <wlparam.h>
-#include <agent.h>
+#include <tsload.h>
 
 #include <libjson.h>
 
@@ -193,19 +193,19 @@ int json_wlparam_proc_all(JSONNODE* node, wlp_descr_t* wlp, void* params) {
 						  i_end = json_end(node);
 
 		if(i_param == i_end) {
-			agent_error_msg(AE_INVALID_DATA, "Workload parameter %s not specified", wlp->name);
+			agent_error_msg(TSE_INVALID_DATA, "Workload parameter %s not specified", wlp->name);
 			return WLPARAM_JSON_NOT_FOUND;
 		}
 
 		ret = json_wlparam_proc(*i_param, wlp, ((char*) params) + wlp->off);
 
 		if(ret == WLPARAM_JSON_WRONG_TYPE) {
-			agent_error_msg(AE_INVALID_DATA, "Workload parameter %s has wrong type", wlp->name);
+			agent_error_msg(TSE_INVALID_DATA, "Workload parameter %s has wrong type", wlp->name);
 			return ret;
 		}
 
 		if(ret == WLPARAM_JSON_OUTSIDE_RANGE) {
-			agent_error_msg(AE_INVALID_DATA, "Workload parameter %s outside defined range", wlp->name);
+			agent_error_msg(TSE_INVALID_DATA, "Workload parameter %s outside defined range", wlp->name);
 			return ret;
 		}
 

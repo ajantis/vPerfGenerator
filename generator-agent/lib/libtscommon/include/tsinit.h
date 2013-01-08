@@ -35,7 +35,7 @@ struct subsystem {
 		SM_INIT(.s_fini, fini)				\
 	}
 
-LIBEXPORT int init(struct subsystem* subsys, int count);
+LIBEXPORT int ts_init(struct subsystem** subsys, int count);
 
 PLATAPI int plat_init(void);
 PLATAPI void plat_finish(void);

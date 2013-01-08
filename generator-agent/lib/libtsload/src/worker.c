@@ -22,7 +22,7 @@ void tp_detach_nolock(thread_pool_t* tp, struct workload* wl);
 
 /* Control thread
  *
- * Control thread notifies workers after on each quantum ending
+ * Control thread notifies workers after each quantum ending
  * and processes each step for each workload on thread pool
  * */
 thread_result_t control_thread(thread_arg_t arg) {
@@ -45,7 +45,7 @@ thread_result_t control_thread(thread_arg_t arg) {
 	while(!tp->tp_is_dead) {
 		tp->tp_time = tm_get_time();
 
-		logmsg(LOG_TRACE, "Control thread %s is running (tm: %llu)",
+		logmsg(LOG_TRACE, "Control thread %s is running (tm: %lld)",
 					tp->tp_name, tp->tp_time);
 
 		mutex_lock(&tp->tp_mutex);
