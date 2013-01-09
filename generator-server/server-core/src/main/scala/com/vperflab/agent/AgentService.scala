@@ -66,11 +66,14 @@ object AgentService {
     agentId
   }
 
-  def listAgents : List[AgentStatus] = {
+  def listAgents : List[Agent] = {
     println(Agent.findAll)
     println(activeAgents)
 
-    Agent.findAll.map(agent => AgentStatus(agent.hostName.asString,
-      activeAgents contains agent.hostName.asString))
+    Agent.findAll.map {
+      // this is just for example.
+      // TODO Make status update async
+      case agent: Agent => agent.isActive(activeAgents contains agent.hostName.asString).save
+    }
   }
 }

@@ -38,7 +38,7 @@ class Boot extends Bootable {
     def sitemap() = SiteMap(
       // Menus on bottom bar (main menu)
       Menu("Welcome") / "index" >> LocGroup("mainMenu") , // >> User.AddUserMenusAfter,
-      Menu("Agents") / "agents" / "index" >> LocGroup("mainMenu"),
+      Menu("Agents") / "agents" >> LocGroup("mainMenu"),
       Menu("Experiments") / "experiments" / "index" >> LocGroup("mainMenu"),
       Menu("Profiles") / "profiles" / "index" >> LocGroup("mainMenu"),
       Menu("Monitoring") / "monitoring" >> LocGroup("mainMenu"),

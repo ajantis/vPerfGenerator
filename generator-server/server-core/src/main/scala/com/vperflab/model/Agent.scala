@@ -16,6 +16,10 @@ class Agent extends MongoRecord[Agent] with ObjectIdPk[Agent] with CreatedUpdate
   import com.foursquare.rogue.Rogue._
 
   def workloadProfiles: List[WorkloadProfile] = WorkloadProfile.where(_.agent.obj.open_!.id eqs thisAgent.id.is).fetch()
+
+  def url: String = meta.baseAgentsUrl + "/" + hostName
 }
 
-object Agent extends Agent with MongoMetaRecord[Agent]
+object Agent extends Agent with MongoMetaRecord[Agent]{
+  val baseAgentsUrl = "/agents"
+}
