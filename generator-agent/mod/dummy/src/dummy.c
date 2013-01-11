@@ -136,6 +136,8 @@ MODEXPORT int mod_workload_unconfig(workload_t* wl) {
 
 	close(dummy->fd);
 
+	remove(dummy->path);
+
 	mp_free(dummy->block);
 
 	return 0;

@@ -11,6 +11,7 @@
 #include <defs.h>
 #include <stdint.h>
 #include <limits.h>
+#include <time.h>
 
 /**
  * 64-bit integer is enough to keep time up to XXIIIth century
@@ -19,6 +20,15 @@
 typedef int64_t ts_time_t;
 
 #define TS_TIME_MAX 	ULLONG_MAX
+
+#define TS_TIME_TO_UNIX(t)	((time_t) ((t) / T_SEC))
+
+/* Get ts_time's component. as long I.e for 789.123456 s
+ * it will return 789 secs (TS_TIME_SEC), 123 msecs and 456 us */
+#define TS_TIME_SEC(t)		((long) (t / T_SEC))
+#define TS_TIME_MS(t)		((long) ((t / T_MS) % (T_SEC / T_MS)))
+#define TS_TIME_US(t)		((long) ((t / T_US) % (T_MS / T_US)))
+#define TS_TIME_NS(t)		((long) (t % (T_US / T_NS)))
 
 /**
  * Returns time since Epoch.

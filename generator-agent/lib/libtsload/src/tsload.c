@@ -45,7 +45,8 @@ void tsload_configure_workload(const char* wl_name, JSONNODE* wl_params) {
 	workload_t* wl = json_workload_proc(wl_name, wl_params);
 
 	if(wl == NULL) {
-		return tsload_error_msg(TSE_INTERNAL_ERROR, "Error in agent_configure_workload!");
+		tsload_error_msg(TSE_INTERNAL_ERROR, "Error in tsload_configure_workload!");
+		return NULL;
 	}
 
 	wl_config(wl);
@@ -56,7 +57,7 @@ int tsload_provide_step(const char* wl_name, long step_id, unsigned num_rqs) {
 
 	if(wl == NULL) {
 		tsload_error_msg(TSE_INVALID_DATA, "Not found workload %s", wl_name);
-		return;
+		return -1;
 	}
 
 	return wl_provide_step(wl, step_id, num_rqs);
@@ -76,6 +77,28 @@ void tsload_start_workload(const char* wl_name, ts_time_t start_time) {
 	}
 
 	wl->wl_start_time = start_time;
+}
+
+void tsload_unconfigure_workload(const char* wl_name) {
+	workload_t* wl = wl_search(wl_name);
+
+	if(wl == NULL) {
+		tsload_error_msg(TSE_INVALID_DATA, "Not found workload %s", wl_name);
+		return;
+	}
+
+	if(wl->wl_status == WLS_CONFIGURING) {
+		tsload_error_msg(TSE_INVALID_STATE, "Workload %s is currently configuring", wl_name);
+		return;
+	}
+
+	if(wl->wl_status == WLS_RUNNING) {
+		/* XXX: does this cause race condition if we are finish workload at the same time? */
+		tp_detach(wl->wl_tp, wl);
+	}
+
+	wl_unconfig(wl);
+	wl_destroy(wl);
 }
 
 int tsload_init(struct subsystem* xsubsys, unsigned xs_count) {

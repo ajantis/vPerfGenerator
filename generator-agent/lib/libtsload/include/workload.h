@@ -64,7 +64,8 @@ typedef enum {
 	WLS_CONFIGURING = 1,
 	WLS_SUCCESS = 2,
 	WLS_FAIL = 3,
-	WLS_FINISHED = 4
+	WLS_FINISHED = 4,
+	WLS_RUNNING	= 5
 } wl_status_t;
 
 typedef struct workload {
@@ -79,6 +80,7 @@ typedef struct workload {
 	thread_t		 wl_cfg_thread;		/**< Thread responsible for configuration*/
 
 	boolean_t		 wl_is_configured;
+	wl_status_t 	 wl_status;
 
 	int				 wl_current_rq;
 
@@ -105,12 +107,12 @@ typedef struct workload {
 typedef struct {
 	workload_t* wl;
 	wl_status_t status;
-	int done;
+	long progress;
 
 	char msg[256];
 } wl_notify_msg_t;
 
-LIBEXPORT void wl_notify(workload_t* wl, wl_status_t status, int done, char* format, ...) ;
+LIBEXPORT void wl_notify(workload_t* wl, wl_status_t status, long progress, char* format, ...) ;
 
 LIBEXPORT workload_t* wl_search(const char* name);
 

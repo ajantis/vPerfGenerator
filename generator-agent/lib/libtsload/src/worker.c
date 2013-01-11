@@ -96,12 +96,17 @@ thread_result_t control_thread(thread_arg_t arg) {
 			ret = wl_advance_step(step + wli);
 
 			if(ret == -1) {
+				wl_notify(wl, WLS_FINISHED, 0, "Finished workload %s on step #%ld",
+								wl->wl_name, wl->wl_current_step);
+
 				/*If steps was not provided, detach workload from threadpool*/
 				tp_detach_nolock(wl->wl_tp, wl);
 
-				/*FIXME: unconfig detached works*/
 				continue;
 			}
+
+			wl_notify(wl, WLS_RUNNING, 0, "Running workload %s step #%ld",
+							wl->wl_name, wl->wl_current_step);
 
 			/*FIXME: case if worker didn't started processing of requests for previous step yet */
 			tp_distribute_requests(step + wli, tp);

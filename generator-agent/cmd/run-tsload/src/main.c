@@ -11,24 +11,33 @@
 #include <mempool.h>
 #include <modules.h>
 #include <modtsload.h>
+#include <tsload.h>
 #include <threads.h>
+#include <getopt.h>
+#include <pathutil.h>
 
 #include <commands.h>
 
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <time.h>
 
 #include <unistd.h>
 
-extern char wl_filename[];
-extern char step_filename[];
+boolean_t log_configured = B_FALSE;
 
-extern char log_filename[];
-extern int log_debug;
-extern int log_trace;
+extern char experiment_dir[];
 
-extern char mod_search_path[];
+LIBIMPORT char log_filename[];
+LIBIMPORT int log_debug;
+LIBIMPORT int log_trace;
+
+LIBIMPORT char mod_search_path[];
+
+struct subsystem xsubsys[] = {
+	SUBSYSTEM("load", load_init, load_fini)
+};
 
 enum {
 	CMD_NONE,
@@ -36,19 +45,14 @@ enum {
 	CMD_LOAD
 } command;
 
-void env_usage() {
-	fprintf(stderr, "environment options: \n");
-	fprintf(stderr, "TS_MODPATH - path to loadable modules\n");
-	fprintf(stderr, "TS_LOGFILE - log destination ('-' for stdout)\n");
-
-	exit(1);
-}
-
 void usage() {
-	fprintf(stderr, "command line: \n");
-	fprintf(stderr, "\trun-tsload [-d|-t] -w <workload-file> -s <steps-file> \n\t\truns loader\n");
-	fprintf(stderr, "\trun-tsload [-d|-t] -i \n\t\tget information on modules (in json)\n");
-	fprintf(stderr, "\trun-tsload [-d|-t] -h \n\t\tyou are here\n");
+	fprintf(stderr, "environment options: \n"
+					"\tTS_MODPATH - path to loadable modules\n"
+					"\tTS_LOGFILE - log destination ('-' for stdout)\n"
+					"command line: \n"
+					"\trun-tsload [-d|-t] -e <experiment directory> \n\t\truns loader\n"
+					"\trun-tsload [-d|-t] -m \n\t\tget information on modules (in JSON)\n"
+					"\trun-tsload [-d|-t] -h \n\t\tyou are here\n");
 
 	exit(1);
 }
@@ -57,37 +61,46 @@ void read_environ() {
 	char* env_mod_path = getenv("TS_MODPATH");
 	char* env_log_filename = getenv("TS_LOGFILE");
 
-	if(!env_mod_path || !env_log_filename) {
-		env_usage();
+	if(!env_mod_path) {
+		fprintf(stderr, "Missing TS_MODPATH environment variable\n");
+		usage();
+	}
+
+	if(env_log_filename) {
+		strncpy(log_filename, env_log_filename, LOGFNMAXLEN);
+		log_configured = B_TRUE;
 	}
 
 	strncpy(mod_search_path, env_mod_path, MODPATHLEN);
-	strncpy(log_filename, env_log_filename, LOGFNMAXLEN);
 }
 
-void parse_options(int argc, char* argv[]) {
-	int wflag = 0;
-	int sflag = 0;
-	int iflag = 0;
-	int ok = 1;
+void parse_options(int argc, const char* argv[]) {
+	boolean_t eflag = B_FALSE;
+	boolean_t ok = B_TRUE;
 
 	int c;
 
-	while((c = getopt(argc, argv, "w:s:dtih")) != -1) {
+	char logname[48];
+
+	while((c = plat_getopt(argc, argv, "e:r:dtmh")) != -1) {
 		switch(c) {
 		case 'h':
 			usage();
 			break;
-		case 'w':
-			wflag = 1;
-			strncpy(wl_filename, optarg, MODPATHLEN);
+		case 'e':
+			eflag = B_TRUE;
+			command = CMD_LOAD;
+			strncpy(experiment_dir, optarg, PATHMAXLEN);
+
+			/* In experiment mode we write logs into experiment directory */
+			time_t now = time(NULL);
+
+			strftime(logname, 48, "run-tsload-%Y-%m-%d-%H_%M_%S.log", localtime(&now));
+			path_join(log_filename, LOGFNMAXLEN, experiment_dir, logname, NULL);
+
 			break;
-		case 's':
-			sflag = 1;
-			strncpy(step_filename, optarg, MODPATHLEN);
-			break;
-		case 'i':
-			iflag = 1;
+		case 'm':
+			command = CMD_INFO;
 			break;
 		case 't':
 			log_trace = 1;
@@ -96,11 +109,11 @@ void parse_options(int argc, char* argv[]) {
 			log_debug = 1;
 			break;
 		case '?':
-			if(optopt == 'l' || optopt == 'm')
+			if(optopt == 'w' || optopt == 's' || optopt == 'r')
 				fprintf(stderr, "-%c option requires an argument\n", optopt);
 			else
 				fprintf(stderr, "Unknown option `-%c'.\n", optopt);
-			ok = 0;
+			ok = B_FALSE;
 			break;
 		}
 
@@ -108,16 +121,14 @@ void parse_options(int argc, char* argv[]) {
 			break;
 	}
 
-	if(!ok) {
+	if(!eflag && !log_configured) {
+		fprintf(stderr, "Missing TS_LOGFILE environment variable, and not configured in experiment mode\n");
 		usage();
 	}
 
-	if(wflag && sflag)
-		command = CMD_LOAD;
-	else if(iflag)
-		command = CMD_INFO;
-	else
+	if(!ok) {
 		usage();
+	}
 }
 
 int main(int argc, char* argv[]) {
@@ -130,23 +141,9 @@ int main(int argc, char* argv[]) {
 
 	set_mod_helper(MOD_TSLOAD, tsload_mod_helper);
 
-	if((err = mempool_init()) != 0)
-		return err;
-
-	if((err = threads_init()) != 0)
-		return err;
-
-	if((err = log_init()) != 0) {
-		return err;
-	}
+	tsload_init(xsubsys, 1);
 
 	logmsg(LOG_INFO, "Started run-tsload");
-
-	if((err = load_modules()) != 0) {
-		fprintf(stderr, "Load modules error %d\n", err);
-		return err;
-	}
-
 	logmsg(LOG_DEBUG, "run-tsload command: %d", command);
 
 	if(command == CMD_INFO) {
@@ -155,12 +152,13 @@ int main(int argc, char* argv[]) {
 	else if(command == CMD_LOAD) {
 		err = do_load();
 	}
-
-	if(err != 0) {
-		fprintf(stderr, "Command execution was not OK, see log for details\n");
+	else {
+		usage();
 	}
 
-	log_fini();
+	if(err != 0) {
+		fprintf(stderr, "Error encountered, see log for details\n");
+	}
 
 	return 0;
 }

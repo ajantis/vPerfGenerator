@@ -139,15 +139,15 @@ workload_t* wl_search(const char* name) {
  * @param done configuration progress (in percent)
  * @param format message format string
  */
-void wl_notify(workload_t* wl, wl_status_t status, int done, char* format, ...) {
+void wl_notify(workload_t* wl, wl_status_t status, long progress, char* format, ...) {
 	wl_notify_msg_t* msg = NULL;
 	va_list args;
 
 	ts_time_t now = tm_get_time();
 
-	if( status == WLS_CONFIGURING &&
+	/* Ignore intermediate progress messages if they are going too fasy */
+	if( status == WLS_CONFIGURING && progress > 2 && progress < 98 &&
 		(now - wl->wl_notify_time) < (T_SEC / WL_NOTIFICATIONS_PER_SEC)) {
-		/* Don not send notifications more than WL_NOTIFICATIONS_PER_SEC per second*/
 		return;
 	}
 
@@ -156,20 +156,25 @@ void wl_notify(workload_t* wl, wl_status_t status, int done, char* format, ...) 
 	switch(status) {
 	case WLS_CONFIGURING:
 		/* 146% and -5% are awkward */
-		if(done < 0) done = 0;
-		if(done > 100) done = 100;
+		if(progress < 0) progress = 0;
+		if(progress > 100) progress = 100;
 	break;
 	case WLS_FAIL:
-		done = -1;
+		progress = -1;
 	break;
 	case WLS_SUCCESS:
-	case WLS_FINISHED:
-		done = 100;
+		progress = 100;
 	break;
+	case WLS_RUNNING:
+	case WLS_FINISHED:
+		progress = wl->wl_current_step;
+		break;
 	default:
 		assert(status == WLS_CONFIGURING);
 	break;
 	}
+
+	wl->wl_status = status;
 
 	msg = mp_malloc(sizeof(wl_notify_msg_t));
 
@@ -182,7 +187,7 @@ void wl_notify(workload_t* wl, wl_status_t status, int done, char* format, ...) 
 
 	msg->wl = wl;
 	msg->status = status;
-	msg->done = done;
+	msg->progress = progress;
 
 	squeue_push(&wl_notifications, msg);
 }
@@ -199,7 +204,7 @@ thread_result_t wl_notification_thread(thread_arg_t arg) {
 			THREAD_EXIT(0);
 		}
 
-		tsload_workload_status(msg->wl->wl_name, msg->status, msg->done, msg->msg);
+		tsload_workload_status(msg->wl->wl_name, msg->status, msg->progress, msg->msg);
 
 		mp_free(msg);
 	}
@@ -420,8 +425,7 @@ thread_result_t wl_requests_thread(thread_arg_t arg) {
 			THREAD_EXIT(0);
 		}
 
-		j_rq_chain = json_request_format_all(rq_chain);
-		tsload_requests_report(j_rq_chain);
+		tsload_requests_report(rq_chain);
 
 		wl_rq_chain_destroy(rq_chain);
 	}
@@ -438,6 +442,8 @@ JSONNODE* json_request_format_all(list_head_t* rq_list) {
 
 	list_for_each_entry(request_t, rq, rq_list, rq_node) {
 		jrq = json_new(JSON_NODE);
+
+		json_push_back(jrq, json_new_a("workload_name", rq->rq_workload->wl_name));
 
 		json_push_back(jrq, json_new_i("step", rq->rq_step));
 		json_push_back(jrq, json_new_i("request", rq->rq_id));

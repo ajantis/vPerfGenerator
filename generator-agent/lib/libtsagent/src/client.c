@@ -87,7 +87,7 @@ void clnt_proc_set_msg(clnt_proc_msg_t* msg) {
 }
 
 static clnt_msg_handler_t* clnt_create_msg() {
-	unsigned msg_id = (unsigned) atomic_inc_ret(&clnt_msg_id);
+	unsigned msg_id = (unsigned) atomic_inc(&clnt_msg_id);
 	clnt_msg_handler_t* hdl = (clnt_msg_handler_t*) mp_cache_alloc(&hdl_cache);
 
 	event_init(&hdl->mh_event, "clnt_msg_handler");

@@ -46,9 +46,9 @@ def Module(self, mod_name):
     mod.AddDeps(('lib', 'libtscommon'), ('lib', 'libtsload'))
     mod.SharedLibrary(mod.Target('mod', mod_name), Glob("src/*.c"))
 
-def InstallFile(self, target, file_name):
-    self.Command(self.Target(target, file_name),
-                 file_name, Copy("$TARGET", "$SOURCE"))
+def InstallFile(self, target, file):
+    self.Command(self.Target(target, str(file)),
+                 file, Copy("$TARGET", "$SOURCE"))
 
 def PreparePlatform(self):
     self.Append(ENV = {'PLATCACHE': PathJoin(Dir('.').path, self['PLATCACHE'])})
@@ -237,6 +237,8 @@ SConscript('lib/libtsload/SConscript', 'env',
 
 SConscript('cmd/tsloadd/SConscript', 'env', 
            variant_dir = env.BuildDir('cmd_tsloadd'))
+SConscript('cmd/run-tsload/SConscript', 'env', 
+           variant_dir = env.BuildDir('cmd_run_tsload'))
 
 # Building modules
 

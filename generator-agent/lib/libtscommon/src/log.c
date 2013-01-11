@@ -82,7 +82,13 @@ int log_init() {
 
 	if((ret = log_rotate()) != 0)
 		return ret;
+
 	log_file = fopen(log_filename, "a");
+
+	if(!log_file) {
+		fprintf(stderr, "Couldn't open log file '%s'\n", log_filename);
+		return -1;
+	}
 
 	json_register_debug_callback(json_error_callback);
 

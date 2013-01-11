@@ -93,9 +93,11 @@ void agent_workload_status(const char* wl_name, int status, int progress, const 
 	json_delete(response);
 }
 
-void agent_requests_report(JSONNODE* j_rq_list) {
+void agent_requests_report(list_head_t* rq_list) {
 	JSONNODE *msg = json_new(JSON_NODE), *arg0 = json_new(JSON_NODE);
 	JSONNODE *response;
+
+	JSONNODE *j_rq_list = json_request_format_all(rq_list);
 
 	json_set_name(arg0, "requests");
 	json_push_back(msg, arg0);

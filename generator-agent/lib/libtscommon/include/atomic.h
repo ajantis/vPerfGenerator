@@ -26,7 +26,7 @@ STATIC_INLINE long atomic_exchange(atomic_t* atom, long value) {
 	 return __sync_lock_test_and_set(atom, value);
 }
 
-STATIC_INLINE long atomic_inc_ret(atomic_t* atom) {
+STATIC_INLINE long atomic_inc(atomic_t* atom) {
 	return __sync_fetch_and_add(atom, 1);
 }
 
@@ -83,7 +83,7 @@ STATIC_INLINE long atomic_sub(atomic_t* atom, long value) {
 	return InterlockedExchangeAdd(atom, -value);
 }
 
-STATIC_INLINE long atomic_inc_ret(atomic_t* atom) {
+STATIC_INLINE long atomic_inc(atomic_t* atom) {
 	return InterlockedIncrement(atom);
 }
 
