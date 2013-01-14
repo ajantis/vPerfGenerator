@@ -8,9 +8,9 @@
 #include <defs.h>
 
 PLATAPI unsigned long plat_gettid() {
-#ifdef HAVE_DECL___NR_GETTID
-# 	include <sys/syscall.h>
-	return syscall(__NR_gettid);
+#ifdef HAVE_DECL__LWP_SELF
+#	include <sys/lwp.h>
+	return _lwp_self();
 #else
 	return 0;
 #endif

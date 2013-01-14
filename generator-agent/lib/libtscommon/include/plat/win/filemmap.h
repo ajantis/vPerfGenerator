@@ -15,7 +15,7 @@
 #define MMFL_RDWR		OF_READWRITE
 
 typedef struct {
-	int mmf_mode;
+	int 	mmf_mode;
 	HFILE	mmf_file;
 	HANDLE  mmf_map;
 } mmap_file_t;

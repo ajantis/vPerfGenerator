@@ -138,7 +138,7 @@ LIBEXPORT void wl_fini(void);
 #ifndef NO_JSON
 #include <libjson.h>
 
-JSONNODE* json_request_format_all(list_head_t* rq_list);
+LIBEXPORT JSONNODE* json_request_format_all(list_head_t* rq_list);
 workload_t* json_workload_proc(const char* wl_name, JSONNODE* node);
 #endif
 

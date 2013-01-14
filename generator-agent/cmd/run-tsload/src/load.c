@@ -10,7 +10,6 @@
 
 #include <defs.h>
 #include <filemmap.h>
-#include <tsload.h>
 #include <threads.h>
 #include <hashmap.h>
 #include <atomic.h>
@@ -19,6 +18,9 @@
 #include <tstime.h>
 #include <pathutil.h>
 #include <plat/posixdecl.h>
+
+#define TSLOAD_IMPORT LIBIMPORT
+#include <tsload.h>
 
 #include <commands.h>
 #include <steps.h>

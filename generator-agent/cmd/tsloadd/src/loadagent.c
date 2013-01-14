@@ -12,6 +12,8 @@
 #include <defs.h>
 #include <client.h>
 #include <agent.h>
+
+#define TSLOAD_IMPORT LIBIMPORT
 #include <tsload.h>
 
 /* = Agent's handlers = */

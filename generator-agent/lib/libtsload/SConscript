@@ -4,12 +4,11 @@ Import('env')
 
 lib = env.Clone()
 
-if lib.SupportedPlatform('posix'):
-    lib.Append(LIBS = ['c'])
-
 lib.AddDeps(('lib', 'libjson'), 
             ('lib', 'libtscommon'), 
             ('lib', 'libhostinfo'))
 
 objects = lib.CompileSharedLibrary(Glob("src/disp/*.c"))
 library = lib.LinkSharedLibrary(target, objects)
+
+lib.InstallTarget(lib['INSTALL_LIB'], library)

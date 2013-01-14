@@ -36,6 +36,7 @@ struct subsystem {
 	}
 
 LIBEXPORT int ts_init(struct subsystem** subsys, int count);
+LIBEXPORT void ts_finish(void);
 
 PLATAPI int plat_init(void);
 PLATAPI void plat_finish(void);

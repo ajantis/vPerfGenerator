@@ -31,9 +31,18 @@ int plat_read_ntdll(void) {
 	return ret;
 }
 
+/* atexit doesn't works if user closes console window
+ * or sends Ctrl+C, so handle it manually */
+BOOL plat_console_handler(DWORD ctrl_type) {
+	ts_finish();
+
+	return TRUE;
+}
+
 PLATAPI int plat_init(void) {
 	/* Suppress messageboxes with failures */
 	SetErrorMode(SEM_FAILCRITICALERRORS);
+	SetConsoleCtrlHandler((PHANDLER_ROUTINE) plat_console_handler, TRUE);
 
 	return plat_read_ntdll();
 }

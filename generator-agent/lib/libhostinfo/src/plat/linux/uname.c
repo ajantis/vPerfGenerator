@@ -12,8 +12,8 @@
 
 #include <sys/utsname.h>
 
-#ifndef LSB_RELEASE_CMD
-#define LSB_RELEASE_CMD "/usr/bin/lsb_release"
+#ifndef LSB_RELEASE_PATH
+#define LSB_RELEASE_PATH "/usr/bin/lsb_release"
 #endif
 
 #define OSNAMELEN 	64
@@ -26,7 +26,7 @@ struct utsname* hi_get_uname();
 
 /*Parses lsb_release output*/
 void read_lsb_release(void) {
-	FILE* pipe = popen(LSB_RELEASE_CMD " -d -s", "r");
+	FILE* pipe = popen(LSB_RELEASE_PATH " -d -s", "r");
 	char descr_str[128] = "";
 	char *p_descr = descr_str;
 	size_t len;

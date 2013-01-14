@@ -10,7 +10,7 @@
 
 #include <defs.h>
 
-#if defined(__GNUC__)
+#if defined(HAVE_ATOMIC_BUILTINS)
 
 typedef volatile long atomic_t;
 
@@ -87,7 +87,7 @@ STATIC_INLINE long atomic_inc(atomic_t* atom) {
 	return InterlockedIncrement(atom);
 }
 
-STATIC_INLINE long atomic_dec_ret(atomic_t* atom) {
+STATIC_INLINE long atomic_dec(atomic_t* atom) {
 	return InterlockedDecrement(atom);
 }
 

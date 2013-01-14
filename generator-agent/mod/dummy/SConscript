@@ -1,8 +1,0 @@
-Import('env')
-
-mod = env.Clone()
-
-if mod.SupportedPlatform('posix'):
-    mod.Append(LIBS = ['c'])
-
-mod.Module('dummy')

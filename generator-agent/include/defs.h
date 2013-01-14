@@ -10,12 +10,13 @@
 #ifndef DEFS_H_
 #define DEFS_H_
 
+#include <genconfig.h>
 #include <stddef.h>
 
-#ifndef PLAT_SOLARIS
+#ifndef HAVE_BOOLEAN_T
 typedef enum { B_FALSE, B_TRUE } boolean_t;
 #else
-/* In Solaris boolean defined in <sys/types.h> */
+/* On Solaris boolean defined in <sys/types.h> */
 #include <sys/types.h>
 #endif
 
@@ -42,9 +43,10 @@ typedef enum { B_FALSE, B_TRUE } boolean_t;
 #endif
 
 /* Initialize structure member
- * VisualC doesn't support designated initializers (C99), so
- * it cannot use form .member = value */
-#ifdef __GNUC__
+ * VisualC doesn't support designated initializers (C99), so it cannot use form .member = value
+ *
+ * Checked by CheckDesignatedInitializers */
+#ifdef HAVE_DESIGNATED_INITIALIZERS
 #	define SM_INIT(member, value)   member = value
 #else
 #	define SM_INIT(member, value)	value
@@ -92,10 +94,15 @@ typedef enum { B_FALSE, B_TRUE } boolean_t;
 
 /* Define min and max macroses.
  * VS has it's own min/max implementation, so use it */
-#ifndef _MSC_VER
+#ifndef HAVE_DECL_MIN
 #	define min(a, b) ((a) < (b)? (a) : (b))
+#endif
+
+#ifndef HAVE_DECL_MAX
 #	define max(a, b) ((a) > (b)? (a) : (b))
-#else
+#endif
+
+#if !defined(HAVE_DECL_MIN) || !defined(HAVE_DECL_MAX)
 #	include <stdlib.h>
 #endif
 

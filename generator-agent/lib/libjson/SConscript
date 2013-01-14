@@ -1,4 +1,3 @@
-tgtdir = 'lib'
 target = 'libjson'
 
 Import('env')
@@ -12,4 +11,7 @@ elif lib['CXX'] == 'cl':
     # To disallow C++ exceptions pass C++ code in libJSON and go to C code in other libraries
     lib.Append(CXXFLAGS = ['/EHsc'])
 
-lib.SharedLibrary(lib.Target(tgtdir, target), Glob("src/*.cpp"))
+objects = lib.CompileSharedLibrary(Glob("src/*.cpp"), ctfconvert = False)
+library = lib.LinkSharedLibrary(target, objects, ctfmerge = False)
+
+lib.InstallTarget(lib['INSTALL_LIB'], library)

@@ -13,6 +13,7 @@
 #include <cfgfile.h>
 #include <tsload.h>
 #include <getopt.h>
+#include <tsversion.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -23,13 +24,14 @@ LIBIMPORT int log_trace;
 
 char config_file_name[CONFPATHLEN];
 
-struct subsystem xsubsys[] = {
+LIBEXPORT struct subsystem xsubsys[] = {
 	SUBSYSTEM("agent", agent_init, agent_fini)
 };
 
 void usage() {
-	fprintf(stderr, "command line: \n");
-	fprintf(stderr, "\ttsloadd -f <config-file> [-d|-t]\n");
+	fprintf(stderr, "command line: \n"
+					"\ttsloadd -f <config-file> [-d|-t]\n"
+					"\ttsloadd -v - tsload version\n");
 
 	exit(1);
 }
@@ -40,7 +42,7 @@ void parse_options(int argc, char* argv[]) {
 
 	int c;
 
-	while((c = plat_getopt(argc, argv, "f:dt")) != -1) {
+	while((c = plat_getopt(argc, argv, "f:dtv")) != -1) {
 		switch(c) {
 		case 'f':
 			fflag = 1;
@@ -51,6 +53,10 @@ void parse_options(int argc, char* argv[]) {
 			/*FALLTHROUGH*/
 		case 'd':
 			log_debug = 1;
+			break;
+		case 'v':
+			print_ts_version("Loader agent (daemon)");
+			exit(0);
 			break;
 		case '?':
 			if(optopt == 'l' || optopt == 'm')
@@ -82,7 +88,9 @@ int main(int argc, char* argv[]) {
 		return 1;
 	}
 
+	atexit(ts_finish);
 	tsload_init(xsubsys, 1);
+
 	tsload_start(argv[0]);
 
 	return 0;

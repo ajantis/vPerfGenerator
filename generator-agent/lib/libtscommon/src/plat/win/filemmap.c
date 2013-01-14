@@ -7,8 +7,7 @@
 
 #include <filemmap.h>
 
-#include <sys/mman.h>
-#include <unistd.h>
+#include <windows.h>
 
 PLATAPI int mmf_open(mmap_file_t* mmf, const char* filename, int mmfl) {
 	OFSTRUCT of;
@@ -25,7 +24,7 @@ PLATAPI int mmf_open(mmap_file_t* mmf, const char* filename, int mmfl) {
 
 PLATAPI void mmf_close(mmap_file_t* mmf) {
 	if(mmf->mmf_file != HFILE_ERROR)
-		CloseHanfle(mmf->mmf_file);
+		CloseHandle(mmf->mmf_file);
 }
 
 PLATAPI void* mmf_create(mmap_file_t* mmf, long long offset, size_t length) {
@@ -37,17 +36,17 @@ PLATAPI void* mmf_create(mmap_file_t* mmf, long long offset, size_t length) {
 	case MMFL_RDONLY:
 		prot = FILE_MAP_READ;
 		break;
-	case MFFL_WRONLY:
+	case MMFL_WRONLY:
 		prot = FILE_MAP_WRITE;
 		break;
-	case MFFL_RDWR:
+	case MMFL_RDWR:
 		prot = FILE_MAP_WRITE | FILE_MAP_READ;
 		break;
 	default:
 		return MME_INVALID_FLAG;
 	}
 
-	file_size_low = GetFileSize(mmf->mmf_file, &file_size_high);
+	file_size_low = GetFileSize((HANDLE) mmf->mmf_file, &file_size_high);
 
 	/* Windows can't map zero-lenght files */
 	if(file_size_low == 0 && file_size_high == 0)
@@ -55,10 +54,10 @@ PLATAPI void* mmf_create(mmap_file_t* mmf, long long offset, size_t length) {
 
 	if(offset == MMF_MAP_ALL) {
 		offset = 0;
-		length = (file_size_high << 32) | file_length_low;
+		length = (((DWORD64) file_size_high) << 32) | file_size_low;
 	}
 
-	mmf->mmf_map = CreateFileMapping(mmf->mmf_file, NULL,
+	mmf->mmf_map = CreateFileMapping((HANDLE) mmf->mmf_file, NULL,
 								     prot, file_size_high, file_size_low, NULL);
 
 	if(mmf->mmf_map == ERROR_INVALID_HANDLE)

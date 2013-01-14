@@ -12,6 +12,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef HAVE_EXECINFO_H
+
 #include <execinfo.h>
 
 PLATAPI int plat_get_callers(char* callers, size_t size) {
@@ -42,3 +44,11 @@ PLATAPI int plat_get_callers(char* callers, size_t size) {
 
 	return 0;
 }
+
+#else
+
+PLATAPI int plat_get_callers(char* callers, size_t size) {
+	return 0;
+}
+
+#endif

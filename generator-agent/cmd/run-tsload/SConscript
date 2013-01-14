@@ -1,14 +1,48 @@
-import os
+from pathutil import *
 
-tgtdir = 'bin'
-target = 'run-tsload'
+_target = 'run-tsload'
 
 Import('env')
 
-cmd = env.Clone()
+batch_script = """
+set PATH=%%PATH%%;%(TSPATH)s
 
-if cmd.SupportedPlatform('posix'):
-    cmd.Append(LIBS = ['c'])
+set TS_LOGFILE=%(LOGFILE)s
+set TS_MODPATH=%(MODPATH)s
+
+%(RUNTSLOAD)s %%*
+"""
+
+sh_script = """#!/bin/sh
+
+PATH=$PATH:%(TSPATH)s
+TS_LOGFILE=%(LOGFILE)s
+TS_MODPATH=%(MODPATH)s
+
+export PATH TS_LOGFILE TS_MODPATH
+
+%(RUNTSLOAD)s $@
+"""
+
+def CreateScript(target, source, env):
+    script_path = str(target[0])
+    script_file = open(script_path, 'w')
+    
+    run_tsload = _target + env['PROGSUFFIX']
+    
+    if env.SupportedPlatform('posix'):
+        script = sh_script
+    elif env.SupportedPlatform('win'):
+        script = batch_script
+    
+    script_file.write(script % { 'TSPATH': PathJoin(env['PREFIX'], env['INSTALL_BIN']),
+                                 'LOGFILE': env['LOAD_LOGFILE'],
+                                 'MODPATH': env['LOAD_MODPATH'],
+                                 'RUNTSLOAD': run_tsload })
+    
+    script_file.close()
+
+cmd = env.Clone()
 
 cmd.AddDeps(('lib', 'libtsagent'), 
             ('lib', 'libtscommon'), 
@@ -16,9 +50,25 @@ cmd.AddDeps(('lib', 'libtsagent'),
             ('lib', 'libhostinfo'), 
             ('lib', 'libtsload'))
 objects = cmd.CompileProgram()
-run_tsload = cmd.Program(cmd.Target(tgtdir, target), objects)
+run_tsload = cmd.Program(_target, objects)
+
+i_run_tsload = cmd.InstallTarget(cmd['INSTALL_BIN'], run_tsload)
 
 # Install test experiment files
 for file in Dir('test').glob('*'):
     cmd.Depends(run_tsload,  file)
-    cmd.InstallFile('share/run-tsload', file)
+
+cmd.InstallTarget(cmd['INSTALL_VAR'], Dir('test'))
+
+# Generate run-tsload script
+if env.SupportedPlatform('posix'):
+    suffix = '.sh'
+elif env.SupportedPlatform('win'):
+    suffix = '.bat'
+
+script = cmd.Command(_target + suffix, i_run_tsload, CreateScript)
+i_script = cmd.InstallTarget(cmd['INSTALL_BIN'], script)
+
+if env.SupportedPlatform('posix'):
+    cmd.AddPostAction(i_script, cmd.Chmod(str(i_script), 0755))
+    

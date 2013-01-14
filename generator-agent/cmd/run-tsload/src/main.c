@@ -15,6 +15,7 @@
 #include <threads.h>
 #include <getopt.h>
 #include <pathutil.h>
+#include <tsversion.h>
 
 #include <commands.h>
 
@@ -23,8 +24,7 @@
 #include <stdlib.h>
 #include <time.h>
 
-#include <unistd.h>
-
+boolean_t mod_configured = B_FALSE;
 boolean_t log_configured = B_FALSE;
 
 extern char experiment_dir[];
@@ -35,7 +35,7 @@ LIBIMPORT int log_trace;
 
 LIBIMPORT char mod_search_path[];
 
-struct subsystem xsubsys[] = {
+LIBEXPORT struct subsystem xsubsys[] = {
 	SUBSYSTEM("load", load_init, load_fini)
 };
 
@@ -52,7 +52,8 @@ void usage() {
 					"command line: \n"
 					"\trun-tsload [-d|-t] -e <experiment directory> \n\t\truns loader\n"
 					"\trun-tsload [-d|-t] -m \n\t\tget information on modules (in JSON)\n"
-					"\trun-tsload [-d|-t] -h \n\t\tyou are here\n");
+					"\trun-tsload [-d|-t] -h \n\t\thelp\n"
+					"\trun-tsload -v \n\t\tversion information\n");
 
 	exit(1);
 }
@@ -61,9 +62,9 @@ void read_environ() {
 	char* env_mod_path = getenv("TS_MODPATH");
 	char* env_log_filename = getenv("TS_LOGFILE");
 
-	if(!env_mod_path) {
-		fprintf(stderr, "Missing TS_MODPATH environment variable\n");
-		usage();
+	if(env_mod_path) {
+		strncpy(mod_search_path, env_mod_path, MODPATHLEN);
+		mod_configured = B_TRUE;
 	}
 
 	if(env_log_filename) {
@@ -71,18 +72,20 @@ void read_environ() {
 		log_configured = B_TRUE;
 	}
 
-	strncpy(mod_search_path, env_mod_path, MODPATHLEN);
+
 }
 
 void parse_options(int argc, const char* argv[]) {
 	boolean_t eflag = B_FALSE;
 	boolean_t ok = B_TRUE;
 
+	time_t now;
+
 	int c;
 
 	char logname[48];
 
-	while((c = plat_getopt(argc, argv, "e:r:dtmh")) != -1) {
+	while((c = plat_getopt(argc, argv, "e:r:dtmhv")) != -1) {
 		switch(c) {
 		case 'h':
 			usage();
@@ -93,7 +96,7 @@ void parse_options(int argc, const char* argv[]) {
 			strncpy(experiment_dir, optarg, PATHMAXLEN);
 
 			/* In experiment mode we write logs into experiment directory */
-			time_t now = time(NULL);
+			now = time(NULL);
 
 			strftime(logname, 48, "run-tsload-%Y-%m-%d-%H_%M_%S.log", localtime(&now));
 			path_join(log_filename, LOGFNMAXLEN, experiment_dir, logname, NULL);
@@ -107,6 +110,10 @@ void parse_options(int argc, const char* argv[]) {
 			/*FALLTHROUGH*/
 		case 'd':
 			log_debug = 1;
+			break;
+		case 'v':
+			print_ts_version("loader tool (standalone)");
+			exit(0);
 			break;
 		case '?':
 			if(optopt == 'w' || optopt == 's' || optopt == 'r')
@@ -139,8 +146,14 @@ int main(int argc, char* argv[]) {
 	read_environ();
 	parse_options(argc, argv);
 
+	if(!mod_configured) {
+		fprintf(stderr, "Missing TS_MODPATH environment variable\n");
+		usage();
+	}
+
 	set_mod_helper(MOD_TSLOAD, tsload_mod_helper);
 
+	atexit(ts_finish);
 	tsload_init(xsubsys, 1);
 
 	logmsg(LOG_INFO, "Started run-tsload");

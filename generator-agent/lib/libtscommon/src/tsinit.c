@@ -11,7 +11,7 @@
 #include <stdlib.h>
 
 int tsi_subsys_count;
-struct subsystem** tsi_subsys;
+struct subsystem** tsi_subsys = NULL;
 
 void ts_finish(void);
 
@@ -21,8 +21,6 @@ int ts_init(struct subsystem** subsys_list, int count) {
 
 	tsi_subsys = subsys_list;
 	tsi_subsys_count = count;
-
-	atexit(ts_finish);
 
 	if(plat_init() == -1) {
 		fprintf(stderr, "Platform-dependent initialization failure!\n");
@@ -49,6 +47,10 @@ int ts_init(struct subsystem** subsys_list, int count) {
 void ts_finish(void) {
 	int i = 0;
 
+	/* Not yet initialized */
+	if(!tsi_subsys)
+		return;
+
 	for(i = tsi_subsys_count - 1; i >= 0; --i) {
 		if(tsi_subsys[i]->s_state == SS_OK) {
 			tsi_subsys[i]->s_fini();
@@ -56,6 +58,7 @@ void ts_finish(void) {
 	}
 
 	free(tsi_subsys);
+	tsi_subsys = NULL;
 
 	plat_finish();
 }

@@ -8,20 +8,20 @@
 #ifndef CONFIG_H_
 #define CONFIG_H_
 
+#include <genconfig.h>
+
 /*
  * Mempool configuration options
  * ----------------------------- */
 
-/* MEMPOOL_TRACE - allow additional tracing for mempool allocator
+/*! MEMPOOL_TRACE - allow additional tracing for mempool allocator
  * (controlled by mp_trace_bitmaps and mp_trace_allocator flags) */
-/* #define MEMPOOL_TRACE */
+#undef MEMPOOL_TRACE
 
-/* MEMPOOL_USE_VALGRIND - add valgrind macroses to mempool allocator
+/*! MEMPOOL_USE_VALGRIND - add valgrind macroses to mempool allocator
  */
-/* #define MEMPOOL_USE_VALGRIND */
-
-/* MEMPOOL_USE_LIBC_HEAP - use libc's heap for mp_malloc/mp_realloc/mp_free
- */
-/* #define MEMPOOL_USE_LIBC_HEAP */
+#ifdef HAVE_VALGRIND_VALGRIND_H
+#define MEMPOOL_USE_VALGRIND
+#endif
 
 #endif /* CONFIG_H_ */

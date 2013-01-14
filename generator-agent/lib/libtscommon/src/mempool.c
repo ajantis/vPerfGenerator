@@ -38,11 +38,11 @@ boolean_t		mp_trace_allocator = B_FALSE;
 boolean_t		mp_trace_bitmaps = B_FALSE;
 boolean_t		mp_trace_heap = B_FALSE;
 boolean_t		mp_trace_heap_btree = B_FALSE;
-boolean_t		mp_trace_slab = B_TRUE;
+boolean_t		mp_trace_slab = B_FALSE;
 #endif
 
 /* Valgrind integration */
-#ifdef MEMPOOL_USE_VALGRIND
+#ifdef HAVE_VALGRIND_VALGRIND_H
 #include <valgrind/valgrind.h>
 
 #define MEMPOOL_REDZONE_SIZE	8

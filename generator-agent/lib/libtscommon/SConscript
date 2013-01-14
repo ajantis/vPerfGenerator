@@ -7,7 +7,7 @@ lib = env.Clone()
 # dl for modules
 # pthread for thread-handling
 if lib.SupportedPlatform('posix'):
-    lib.Append(LIBS = ['c', 'dl', 'pthread'])
+    lib.Append(LIBS = ['dl', 'pthread'])
 
 # We need librt for ns-precision time source
 if lib.SupportedPlatform('linux'):
@@ -20,3 +20,5 @@ lib.AddDeps(('lib', 'libjson'))
 
 objects = lib.CompileSharedLibrary()
 library = lib.LinkSharedLibrary(target, objects)
+
+lib.InstallTarget(lib['INSTALL_LIB'], library)
