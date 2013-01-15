@@ -106,6 +106,4 @@ typedef enum { B_FALSE, B_TRUE } boolean_t;
 #	include <stdlib.h>
 #endif
 
-#include <config.h>
-
 #endif /* DEFS_H_ */

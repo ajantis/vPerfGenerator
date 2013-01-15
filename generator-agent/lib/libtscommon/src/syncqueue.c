@@ -146,7 +146,7 @@ void squeue_destroy(squeue_t* sq, void (*el_free)(void* obj)) {
 	}
 
 	sq->sq_is_destroyed = B_TRUE;
-	event_notify_one(&sq->sq_event);
+	event_notify_all(&sq->sq_event);
 
 	mutex_unlock(&sq->sq_mutex);
 

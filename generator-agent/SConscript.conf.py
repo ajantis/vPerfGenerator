@@ -28,7 +28,7 @@ def CheckBinary(context, name, paths = []):
             context.Result(True)
             return full_path
     
-    contex.Result(False)
+    context.Result(False)
 
 def CheckDesignatedInitializers(context):
     test_source = """
@@ -162,10 +162,12 @@ if env.SupportedPlatform('linux'):
 
 # ----------------------------
 # mempool checks
-conf.CheckHeader('valgrind/valgrind.h')
-
 if not GetOption('mempool_alloc'):
     conf.Define('MEMPOOL_USE_LIBC_HEAP', comment='--enable-mempool-alloc was specified')
+
+conf.CheckHeader('valgrind/valgrind.h')
+if GetOption('mempool_valgrind'):
+    conf.Define('MEMPOOL_VALGRIND', comment='--enable-valgrind was specified')
     
 if GetOption('trace'):
     conf.Define('MEMPOOL_TRACE', comment='--trace was enabled')

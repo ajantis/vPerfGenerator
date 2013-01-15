@@ -42,7 +42,7 @@ boolean_t		mp_trace_slab = B_FALSE;
 #endif
 
 /* Valgrind integration */
-#ifdef HAVE_VALGRIND_VALGRIND_H
+#if defined(HAVE_VALGRIND_VALGRIND_H) && defined(MEMPOOL_VALGRIND)
 #include <valgrind/valgrind.h>
 
 #define MEMPOOL_REDZONE_SIZE	8
@@ -268,7 +268,7 @@ int mp_bitmap_alloc_cells(atomic_t* bitmap, int num_items, int alloc_cells) {
 	while(retries < MPMAXRETRIES) {
 		for(i = 0; i < num_cells; ++i) {
 			/* Try to allocate entire cell */
-			bidx = mp_bitmap_cell_alloc(bitmap, MP_BITMAP_BITS, MP_BITMAP_BITS);
+			bidx = mp_bitmap_cell_alloc(bitmap + i, MP_BITMAP_BITS, MP_BITMAP_BITS);
 
 			if(bidx != -1) {
 				/* Allocation successfull */

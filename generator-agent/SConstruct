@@ -140,7 +140,8 @@ AddOption('--mach',  dest='mach', action="store", default='',
 
 AddEnableOption('mempool-alloc',  dest='mempool_alloc', default=True,
           help='mempool allocator')
-
+AddEnableOption('mempool-valgrind',  dest='mempool_valgrind', default=False,
+          help='adds Valgrind support to mempool allocator. If valgrind development package is not installed, this option is useless')
 
 # Debug options
 AddEnableOption('debug', dest='debug', default=True, 
@@ -226,6 +227,7 @@ if env.SupportedPlatform('win'):
         env.Append(CCFLAGS = ['/MD'])
 elif env.SupportedPlatform('posix'):
     env.Append(LIBS = ['c'])
+    env.Macroses('_GNU_SOURCE')
 
 # ----------------------------
 # CONFIGURE

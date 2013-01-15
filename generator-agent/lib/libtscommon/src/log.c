@@ -37,10 +37,11 @@ thread_mutex_t	log_mutex;
 const char* log_severity[] =
 	{"CRIT", "WARN", "INFO", "_DBG", "_TRC" };
 
-/*Used by libjson*/
+#ifdef JSON_DEBUG
 static void json_error_callback(const char* msg) {
 	logmsg_src(LOG_DEBUG, "JSON", msg);
 }
+#endif
 
 /* Rotate tsload logs
  *
@@ -90,7 +91,9 @@ int log_init() {
 		return -1;
 	}
 
+#	ifdef JSON_DEBUG
 	json_register_debug_callback(json_error_callback);
+#	endif
 
 	return 0;
 }

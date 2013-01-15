@@ -69,5 +69,5 @@ PLATAPI const char* hi_get_os_name() {
 }
 
 PLATAPI const char* hi_get_domainname() {
-	return hi_get_uname()->__domainname;
+	return hi_get_uname()->domainname;
 }
