@@ -6,74 +6,55 @@ import org.springframework.stereotype.Component
 import com.vperflab.tsserver.{TSClient, TSLoadServer, TSLoadClient, TSClientError}
 import com.vperflab.model.Agent
 import scala.collection.mutable.{Map => MutableMap}
+import org.bson.types.ObjectId
 
 @Component
-class AgentService {
-  var tsLoadServer = new TSLoadServer(9090)
-  var tsLoadSrvThread = new Thread(tsLoadServer)
+class AgentService extends Loggable{
+  val tsLoadServer = new TSLoadServer(port = 9090, agentService = this)
+  val tsLoadSrvThread = new Thread(tsLoadServer)
 
-  tsLoadSrvThread.start()
-}
+  {
+    logger.info("Starting TS Load server ...")
+    tsLoadSrvThread.start()
+  }
 
-class ActiveAgent(hostName: String) {
-  var loadClient: TSClient[TSLoadClient] = _
+  def removeLoadAgent(agentId: String){
+    Agent.find("_id", new ObjectId(agentId)) match {
+      case Full(agent) if agent.isActive.is => {
+        logger.info("Agent " + agent.hostName.asString + " is set as inactive.")
+        agent.isActive(false).save
+      }
+      case Full(agent) if(!agent.isActive.is) =>
+        logger.info("Agent " + agent.hostName.asString + " is already inactive. Skipping...")
+      case _ => {
+        logger.error("Agent with id " + agentId + " is not found.")
+      }
+    }
 
-  def getLoadAgent =
-    loadClient.getInterface
+  }
 
-  def setLoadClient(client: TSClient[TSLoadClient]) =
-    loadClient = client
-}
-
-case class AgentStatus(hostName: String, isActive: Boolean)
-
-object AgentService {
-  var activeAgents = MutableMap[String, ActiveAgent]()
-
-  /**
-   * Registers agent and returns it's id
-   */
-  def registerAgent(hostName: String) : String = {
-
+  // Registers agent if necessary and returns it's id
+  def addLoadAgent(hostName: String, client: TSClient[TSLoadClient]): String = {
     val existingAgent: Box[Agent] = Agent.where(_.hostName eqs hostName).fetch().headOption
 
-    existingAgent match {
-      case Full(agent: Agent) => agent.id.asString
+    val agentId = existingAgent match {
+      case Full(agent: Agent) => {
+        logger.info("Existing agent " + hostName + " is active again...")
+        agent.isActive(true).save.id.value
+      }
       case Empty =>
         /*No such agent, create a new one*/
-        Agent.createRecord.hostName(hostName).save.id.asString
+        logger.info("Registering new agent " + hostName)
+        Agent.createRecord.hostName(hostName).isActive(true).save.id.get
 
       case Failure(message, exception, chain) =>
         throw new TSClientError(message)
 
     }
+    agentId.toString
   }
 
-  def registerLoadAgent(hostName: String, client: TSClient[TSLoadClient]) : String = {
-    val agentId = registerAgent(hostName: String)
-
-    activeAgents.synchronized {
-      if(!(activeAgents contains hostName)) {
-        var agent = new ActiveAgent(hostName)
-        agent.setLoadClient(client)
-
-        activeAgents += hostName -> agent
-      }
-      else {
-        /*Already registered?*/
-      }
-    }
-    agentId
-  }
-
-  def listAgents : List[Agent] = {
-    println(Agent.findAll)
-    println(activeAgents)
-
-    Agent.findAll.map {
-      // this is just for example.
-      // TODO Make status update async
-      case agent: Agent => agent.isActive(activeAgents contains agent.hostName.asString).save
-    }
-  }
+  def listAgents : List[Agent] = Agent.findAll
 }
+
+case class ActiveAgent(hostName: String, loadClient: TSClient[TSLoadClient])

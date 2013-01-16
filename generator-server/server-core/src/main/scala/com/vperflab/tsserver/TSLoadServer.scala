@@ -4,6 +4,7 @@ import java.util.Date
 import java.lang.{Boolean => JBoolean, Integer => JInteger, Double => JDouble}
 
 import com.vperflab.agent.AgentService
+import collection.mutable
 
 /* @hello() */
 class TSHostInfo extends TSObject {
@@ -115,7 +116,7 @@ class TSRequest extends TSObject {
   
   var flags: Long = _
   
-  override def toString(): String = "<RQ %d/%d@%d>".format(step, request, thread)
+  override def toString: String = "<RQ %d/%d@%d>".format(step, request, thread)
 }
 
 class TSRequestReport extends TSObject {
@@ -126,7 +127,7 @@ class TSRequestReport extends TSObject {
 
 trait TSLoadClient extends TSClientInterface{
   @TSClientMethod(name = "get_modules_info")
-  def getModulesInfo() : TSModulesInfo
+  def getModulesInfo : TSModulesInfo
   
   @TSClientMethod(name = "configure_workload", 
 		  		  argNames = Array("workload_name", "workload_params"), 
@@ -143,19 +144,26 @@ trait TSLoadClient extends TSClientInterface{
   def provideStep(workloadName: String, stepId: Long, numRequests: Long) : TSProvideStepResult
 }
 
-class TSLoadServer(portNumber: Int) extends TSServer[TSLoadClient](portNumber) {
+class TSLoadServer(port: Int, agentService: AgentService) extends TSServer[TSLoadClient](port) {
+
+  val clients = new mutable.HashMap[String, TSClient[TSLoadClient]]()
+
 	@TSServerMethod(name = "hello", 
 	                argNames = Array("info"))
 	def hello(client: TSClient[TSLoadClient], info: TSHostInfo) : TSHelloResponse = {
-	  val agentId = AgentService.registerLoadAgent(info.hostName, client)
-	  
-	  return new TSHelloResponse(agentId)
+	  val agentId = agentService.addLoadAgent(info.hostName, client)
+    client.id = agentId
+
+	  clients.synchronized {
+      clients += agentId -> client
+    }
+	  new TSHelloResponse(agentId)
 	}
 	
 	@TSServerMethod(name = "workload_status", 
 				    argNames = Array("status"), 
 				    noReturn = true) 
-	def workloadStatus(client: TSClient[TSLoadClient], status: TSWorkloadStatus) = {
+	def workloadStatus(client: TSClient[TSLoadClient], status: TSWorkloadStatus) {
 	  /* TODO: Workload status*/
 	}
 	
@@ -167,4 +175,12 @@ class TSLoadServer(portNumber: Int) extends TSServer[TSLoadClient](portNumber) {
 	    /* TODO: report requests */
 	  }
 	}
+
+  override def processClientDisconnect(client: TSClient[TSLoadClient]) {
+    clients.synchronized {
+      clients -= client.id
+    }
+
+    agentService.removeLoadAgent(client.id)
+  }
 }
