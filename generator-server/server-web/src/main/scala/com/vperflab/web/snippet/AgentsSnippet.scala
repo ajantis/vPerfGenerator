@@ -20,8 +20,11 @@ class AgentsSnippet extends Loggable{
     ".agent *" #> agentService.listAgents.map {
       case agent: Agent =>
         "a *" #> agent.hostName &
-        "a [href]" #> agent.url &
-        ".status *" #> agent.isActive
+        "a [href]" #> agent.id.get.toString &
+        ".status *" #> (agent.isActive.is match {
+          case true => "Online"
+          case _ => "Offline"
+        })
     }
   }
 

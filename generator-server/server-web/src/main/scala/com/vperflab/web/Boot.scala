@@ -6,15 +6,11 @@ import _root_.net.liftweb.http._
 import _root_.net.liftweb.http.provider._
 import _root_.net.liftweb.sitemap._
 import _root_.net.liftweb.sitemap.Loc.LocGroup
-import _root_.net.liftweb.mapper.{DB, Schemifier, DefaultConnectionIdentifier, StandardDBVendor}
 import _root_.net.liftweb.widgets.logchanger._
 import net.liftweb.widgets.flot._
 import net.liftweb.http.ResourceServer
-import com.vperflab.model.{Iteration, Experiment,
-IterationExecution, Execution, Agent}
 import model.User
-import snippet.LogLevel
-import net.liftweb.sitemap.Loc.Hidden
+import snippet.{AgentPage, LogLevel}
 import net.liftweb.mongodb.{MongoHost, MongoAddress, DefaultMongoIdentifier, MongoDB}
 
 /**
@@ -37,8 +33,10 @@ class Boot extends Bootable {
     // Build SiteMap
     def sitemap() = SiteMap(
       // Menus on bottom bar (main menu)
-      Menu("Welcome") / "index" >> LocGroup("mainMenu") , // >> User.AddUserMenusAfter,
-      Menu("Agents") / "agents" >> LocGroup("mainMenu"),
+      Menu("Welcome") / "index" >> LocGroup("mainMenu"), // >> User.AddUserMenusAfter,
+      Menu("Agents") / "agents" >> LocGroup("mainMenu") submenus {
+        Menu(AgentPage)
+      },
       Menu("Experiments") / "experiments" / "index" >> LocGroup("mainMenu"),
       Menu("Profiles") / "profiles" / "index" >> LocGroup("mainMenu"),
       Menu("Monitoring") / "monitoring" >> LocGroup("mainMenu"),

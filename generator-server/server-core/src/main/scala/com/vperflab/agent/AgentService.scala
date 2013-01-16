@@ -3,10 +3,12 @@ package com.vperflab.agent
 import com.foursquare.rogue.Rogue._
 import net.liftweb.common._
 import org.springframework.stereotype.Component
-import com.vperflab.tsserver.{TSClient, TSLoadServer, TSLoadClient, TSClientError}
-import com.vperflab.model.Agent
-import scala.collection.mutable.{Map => MutableMap}
+import com.vperflab.tsserver._
+import com.vperflab.model.{WorkloadParamInfo, ModuleInfo, Agent}
 import org.bson.types.ObjectId
+import net.liftweb.common.Full
+import scala.Some
+import com.vperflab.tsserver.TSClientError
 
 @Component
 class AgentService extends Loggable{
@@ -30,7 +32,6 @@ class AgentService extends Loggable{
         logger.error("Agent with id " + agentId + " is not found.")
       }
     }
-
   }
 
   // Registers agent if necessary and returns it's id
@@ -42,11 +43,13 @@ class AgentService extends Loggable{
         logger.info("Existing agent " + hostName + " is active again...")
         agent.isActive(true).save.id.value
       }
-      case Empty =>
+      case Empty => {
         /*No such agent, create a new one*/
         logger.info("Registering new agent " + hostName)
-        Agent.createRecord.hostName(hostName).isActive(true).save.id.get
+        val newAgent = Agent.createRecord.hostName(hostName).isActive(true).save
 
+        newAgent.id.get
+      }
       case Failure(message, exception, chain) =>
         throw new TSClientError(message)
 
@@ -54,7 +57,38 @@ class AgentService extends Loggable{
     agentId.toString
   }
 
-  def listAgents : List[Agent] = Agent.findAll
+  def listAgents: List[Agent] = Agent.findAll
+
+  def prefetchAgentInfo(agent: Agent) = {
+    tsLoadServer.fetchModulesInfo(agent.id.get.toString) match {
+      case Some(info) => {
+        logger info "Module info is fetched for agent " + agent.hostName.is + ". Updating..."
+        val modules = info.modules
+        val modulesInfo = for {
+          module <- modules
+          params: List[WorkloadParamInfo] = (module._2.params.map {
+            case (name: String, paramData: TSWorkloadParamInfo) => {
+              val paramsInfo: Map[String, String] =
+                paramData match {
+                  case i: TSWLParamIntegerInfo => Map(("min" -> i.min.toString), ("max" -> i.max.toString))
+                  case i: TSWLParamFloatInfo => Map(("min" -> i.min.toString), ("max" -> i.max.toString))
+                  case i: TSWLParamSizeInfo => Map(("min" -> i.min.toString), ("max" -> i.max.toString))
+                  case i: TSWLParamStringInfo => Map(("length" -> i.len.toString))
+                  case i: TSWLParamStringSetInfo => Map(("values" -> i.strset.mkString(",")))
+                  case _ => Map()
+                }
+              WorkloadParamInfo.createRecord.name(name).description(paramData.description).
+                additionalData(paramsInfo)
+            }
+          }).toList
+        } yield ModuleInfo.createRecord.name(module._1).path(module._2.path).params(params)
+
+        agent.modules(modulesInfo.toList).save
+      }
+      case _ => logger.error("Modules info is not fetched for agent " + agent.hostName.is)
+    }
+
+  }
 }
 
 case class ActiveAgent(hostName: String, loadClient: TSClient[TSLoadClient])

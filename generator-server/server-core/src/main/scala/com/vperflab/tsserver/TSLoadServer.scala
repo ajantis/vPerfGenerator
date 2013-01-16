@@ -176,6 +176,12 @@ class TSLoadServer(port: Int, agentService: AgentService) extends TSServer[TSLoa
 	  }
 	}
 
+  def fetchModulesInfo(clientId: String): Option[TSModulesInfo] = {
+    clientForId(clientId).map(_.getInterface.getModulesInfo)
+  }
+
+  private def clientForId(clientId: String): Option[TSClient[TSLoadClient]] = clients.get(clientId)
+
   override def processClientDisconnect(client: TSClient[TSLoadClient]) {
     clients.synchronized {
       clients -= client.id

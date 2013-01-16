@@ -22,7 +22,6 @@ import scala.reflect.Manifest
 class TSClientInvocationHandler[CI <: TSClientInterface](client: TSClient[CI])
   extends InvocationHandler {
 
-
   def doTrace(msg: String) {
     System.out.println(msg)
   }
@@ -50,11 +49,11 @@ class TSClientInvocationHandler[CI <: TSClientInterface](client: TSClient[CI])
    * @return response
    */
   def invoke(proxy: Any, method: Method, args: Array[Object]) : Object = {
-    val retClass = method.getReturnType()
+    val retClass = method.getReturnType
     val methodInfo = getMethodInfo(method)
 
     val argNamesList = methodInfo.argNames.toList
-    val classList = method.getParameterTypes().toList
+    val classList = method.getParameterTypes.toList
 
     val argList = args match {
       case null => Nil
