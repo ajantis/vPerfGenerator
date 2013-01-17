@@ -20,14 +20,19 @@ class BuildManager:
     def __init__(self):
         self.build_items = {}
         self.build_item_names = []
+        self.build_item_default = []
             
-    def AddBuildItem(self, group, name, targets = [], deps = []):
+    def AddBuildItem(self, group, name, targets = [], deps = [], default=True):
         full_name = group + '-' + name
         deps = chain(deps, *[self.build_items[item].deps for item in deps])
         
         item = BuildItem(targets, list(set(deps)))
         
         self.build_item_names.append(full_name)
+        
+        if default:
+            self.build_item_default.append(full_name)
+        
         self.build_items[full_name] = item
         
         return full_name
@@ -59,7 +64,7 @@ class BuildManager:
         
         # By default we build all items
         if not build_items:
-            build_items = self.build_item_names
+            build_items = self.build_item_default
         
         # Resolve dependencies
         for item in build_items:
@@ -89,7 +94,9 @@ class BuildManager:
         for name in self.build_item_names:
             build_item = self.build_items[name]
             
-            print name + ': ' + ' '.join(build_item.deps) 
+            prefix = '=> ' if name in self.build_item_default else ''
+            
+            print prefix + name + ': ' + ' '.join(build_item.deps) 
             print '\n'.join('\t' + target 
                             for target
                             in build_item.targets)

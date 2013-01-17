@@ -87,12 +87,16 @@ int hash_map_insert(hashmap_t* hm, hm_item_t* object) {
 		next = hm_next(hm, iter);
 
 		/* Walk through chain until reach tail */
-		while(next != NULL) {
+		while(B_TRUE) {
 			if(hm->hm_compare(hm_get_key(hm, iter),
-			                  hm_get_key(hm, object)) == 0) {
+			                  hm_get_key(hm, object))) {
 				ret = HASH_MAP_DUPLICATE;
 				goto done;
 			}
+
+			/* Found tail */
+			if(next == NULL)
+				break;
 
 			iter = next;
 			next = hm_next(hm, iter);
@@ -168,7 +172,7 @@ void* hash_map_find(hashmap_t* hm, const hm_key_t* key) {
 	mutex_lock(&hm->hm_mutex);
 
 	while(iter != NULL) {
-		if(hm->hm_compare(hm_get_key(hm, iter), key) == 0)
+		if(hm->hm_compare(hm_get_key(hm, iter), key))
 			break;
 
 		iter =  hm_next(hm, iter);

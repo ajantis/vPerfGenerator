@@ -291,10 +291,15 @@ if env.SupportedPlatform('posix') and env['CC'] == 'gcc':
 AddBuildItem('core', 'lib',
              targets=['lib/libjson',
                       'lib/libhostinfo',
-                      'lib/libtscommon']),
+                      'lib/libtscommon'])
 AddBuildItem('core', 'agent',
              targets = ['lib/libtsagent'],
-             deps = ['core-lib']),
+             deps = ['core-lib'])
+
+AddBuildItem('swat', 'tool',
+             targets = ['cmd/swat-import'],
+             deps = ['core-lib'],
+             default = False)
 
 AddBuildItem('load', 'lib',
              targets = ['lib/libtsload'],
@@ -302,10 +307,10 @@ AddBuildItem('load', 'lib',
 AddBuildItem('load', 'agent',
              targets = ['cmd/tsloadd'],
              deps = ['core-agent',
-                     'load-lib']),
+                     'load-lib'])
 AddBuildItem('load', 'tool',
              targets = ['cmd/run-tsload'],
-             deps = ['load-lib']),
+             deps = ['load-lib'])
 AddBuildItem('load', 'modules',
              deps = ['core-lib'])
 

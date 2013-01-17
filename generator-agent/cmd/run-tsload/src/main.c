@@ -116,7 +116,7 @@ void parse_options(int argc, const char* argv[]) {
 			exit(0);
 			break;
 		case '?':
-			if(optopt == 'w' || optopt == 's' || optopt == 'r')
+			if(optopt == 'e' || optopt == 'r')
 				fprintf(stderr, "-%c option requires an argument\n", optopt);
 			else
 				fprintf(stderr, "Unknown option `-%c'.\n", optopt);

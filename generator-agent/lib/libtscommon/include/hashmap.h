@@ -34,8 +34,8 @@ typedef struct {
 	ptrdiff_t hm_off_key;
 	ptrdiff_t hm_off_next;
 
-	unsigned (*hm_hash_key)(const void* key);
-	int (*hm_compare)(const void* key1, const void* key2);
+	unsigned (*hm_hash_key)(const hm_key_t* key);
+	boolean_t (*hm_compare)(const hm_key_t* key1, const hm_key_t* key2);
 } hashmap_t;
 
 LIBEXPORT void hash_map_init(hashmap_t* hm, const char* name);

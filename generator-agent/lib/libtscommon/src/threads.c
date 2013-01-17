@@ -21,18 +21,15 @@
 /* Thread hash map. Maps pthread to our thread */
 DECLARE_HASH_MAP(thread_hash_map, thread_t, THASHSIZE, t_id, t_next,
 	/*hash*/ {
-		int id = * (int*) key;
+		thread_id_t tid = * (thread_id_t*) key;
 
-		return id % THASHMASK;
+		return tid % THASHMASK;
 	},
 	/*compare*/ {
-		thread_id_t tid1 = * (int*) key1;
-		thread_id_t tid2 = * (int*) key2;
+		thread_id_t tid1 = * (thread_id_t*) key1;
+		thread_id_t tid2 = * (thread_id_t*) key2;
 
-		if(tid1 == tid2)
-			return B_FALSE;
-
-		return B_TRUE;
+		return tid1 == tid2;
 	});
 
 /*End of thread_hash_map declaration*/
