@@ -23,6 +23,8 @@ typedef struct steps_file {
 	long 	sf_step_id;
 
 	struct steps_file* sf_next;
+
+	boolean_t sf_error;
 } steps_file_t;
 
 int step_open(const char* wl_name, const char* file_name);

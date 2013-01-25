@@ -48,7 +48,7 @@ DECLARE_HASH_MAP(workload_hash_map, workload_t, WLHASHSIZE, wl_name, wl_hm_next,
 		return hash & WLHASHMASK;
 	},
 	{
-		return strcmp((char*) key1, (char*) key2);
+		return strcmp((char*) key1, (char*) key2) == 0;
 	}
 )
 
@@ -86,8 +86,9 @@ workload_t* wl_create(const char* name, module_t* mod, thread_pool_t* tp) {
 	wl->wl_params = mp_malloc(tmod->mod_params_size);
 
 	wl->wl_is_configured = B_FALSE;
-
 	wl->wl_is_started = B_FALSE;
+	wl->wl_status = WLS_NEW;
+
 	wl->wl_start_time = TS_TIME_MAX;
 
 	wl->wl_notify_time = 0;
@@ -250,7 +251,8 @@ int wl_is_started(workload_t* wl) {
 	if(wl->wl_is_started)
 		return B_TRUE;
 
-	if(tm_get_time() >= wl->wl_start_time) {
+	if(wl->wl_is_configured &&
+	   tm_get_time() >= wl->wl_start_time) {
 		logmsg(LOG_INFO, "Starting workload %s...", wl->wl_name);
 
 		wl->wl_is_started = B_TRUE;

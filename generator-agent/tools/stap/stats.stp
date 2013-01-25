@@ -1,0 +1,103 @@
+#!/usr/bin/stap
+
+/*
+stats.stp - measures how many resources was used by loader's threads
+*/
+
+global threads;
+
+global cpustat;
+global iostat;
+global netstat_send;
+global netstat_recv;
+
+global cpustat_rq;
+global iostat_rq;
+
+global cpu_on_ts;
+global rq_on_ts;
+global on_request;
+
+probe process("lib/libtscommon.so").function("t_post_init") {
+	threads[tid()] = user_string($t->t_name);
+}
+
+probe scheduler.cpu_on {
+	cpu_on_ts[tid()] = gettimeofday_ns();
+	
+	if(on_request[tid()])
+		rq_on_ts[tid()] = gettimeofday_ns();
+}
+
+probe scheduler.cpu_off {
+	on_time = cpu_on_ts[tid()];
+	
+	cpustat[tid()] <<< (gettimeofday_ns() - on_time);
+	
+	if(on_request[tid()]) {
+		rq_on_ts[tid()] = gettimeofday_ns();
+		cpustat_rq[tid()] <<< (gettimeofday_ns() - on_time);
+	}
+}
+
+probe process("lib/libtsload.so").function("wl_run_request") {
+	on_request[tid()] = 1;
+	
+	rq_on_ts[tid()] = gettimeofday_ns();
+}
+
+probe process("lib/libtsload.so").function("wl_run_request").return {
+	on_time = rq_on_ts[tid()];
+	
+	cpustat_rq[tid()] <<< (gettimeofday_ns() - on_time);
+	
+	on_request[tid()] = 0;
+}
+
+probe kernel.function("do_sync_write"),
+	  kernel.function("do_sync_read") {
+	if(on_request[tid()])
+		iostat_rq[tid()] <<< $len;
+	else
+		iostat[tid()] <<< $len;
+}
+
+probe socket.send {
+	netstat_send[tid()] <<< size;
+}
+
+probe socket.receive {
+	netstat_recv[tid()] <<< size;
+}
+
+probe end {
+	foreach (tid1 in threads) {
+		used_cpu = @sum(cpustat[tid1])	
+		used_rq_cpu = @sum(cpustat_rq[tid1])
+		
+		used_io = @sum(iostat[tid1])
+		used_rq_io = @sum(iostat_rq[tid1])
+		
+		net_send = @sum(netstat_send[tid1])
+		net_recv = @sum(netstat_recv[tid1])
+		net_msgs = @count(netstat_recv[tid1]) + @count(netstat_send[tid1])
+		
+		printf("%s  cpu: %ld ns [rq: %ld ns] io: %ld b [rq: %ld b] net: %ld/%ld [%ld msgs]\n",
+					threads[tid1], used_cpu, used_rq_cpu, used_io, used_rq_io, net_send, net_recv, net_msgs);
+		
+		total_used_cpu += used_cpu
+		total_used_rq_cpu += used_rq_cpu
+		
+		total_used_io += used_io
+		total_used_rq_io += used_rq_io
+		
+		total_net_send += net_send
+		total_net_recv += net_recv
+		total_net_msgs += net_msgs
+	}
+	
+	printf("TOTAL  cpu: %ld ns [rq: %ld ns] io: %ld b [rq: %ld b] net: %ld/%ld [%ld msgs]\n",
+			total_used_cpu, total_used_rq_cpu, total_used_io, total_used_rq_io, 
+			total_net_send, total_net_recv, total_net_msgs);
+
+}

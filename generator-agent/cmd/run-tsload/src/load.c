@@ -263,6 +263,7 @@ static void unconfigure_all_wls(void) {
  * Workloads are starting at the same time, but  */
 static void start_all_wls(void) {
 	int i, j;
+	int ret;
 
 	char start_time_str[32];
 
@@ -275,14 +276,19 @@ static void start_all_wls(void) {
 
 	for(i = 0; i < wl_count; ++i) {
 		for(j = 0; j < WLSTEPQSIZE; ++j) {
-			if(load_provide_step(wl_name_array[i]) == STEP_ERROR)
+			ret = load_provide_step(wl_name_array[i]);
+
+			if(ret == STEP_ERROR)
 				return;
+
+			if(ret == STEP_NO_RQS)
+				break;
 		}
 
 		tsload_start_workload(wl_name_array[i], start_time);
 
-		load_fprintf(stdout, "Scheduling workload %s at %s,%03ld\n", wl_name_array[i],
-				start_time_str, TS_TIME_MS(start_time));
+		load_fprintf(stdout, "Scheduling workload %s at %s,%03ld (provided %d steps)\n", wl_name_array[i],
+				start_time_str, TS_TIME_MS(start_time), j);
 
 		atomic_inc(&wl_run_count);
 

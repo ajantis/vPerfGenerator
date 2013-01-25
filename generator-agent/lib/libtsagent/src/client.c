@@ -69,7 +69,7 @@ DECLARE_HASH_MAP(hdl_hashmap, clnt_msg_handler_t, CLNTMHTABLESIZE, mh_msg_id, mh
 		unsigned* msg_id1 = (unsigned*) key1;
 		unsigned* msg_id2 = (unsigned*) key2;
 
-		return ((int) *msg_id1) - *msg_id2;
+		return *msg_id1 == *msg_id2;
 	}
 );
 

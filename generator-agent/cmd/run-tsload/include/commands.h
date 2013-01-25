@@ -22,7 +22,7 @@
 
 #define EXPNAMELEN	32
 
-#define WL_START_DELAY		T_SEC
+#define WL_START_DELAY		(3 * T_SEC)
 
 #define DEFAULT_EXPERIMENT_FILENAME		"experiment.json"
 

@@ -19,7 +19,7 @@
  * */
 typedef int64_t ts_time_t;
 
-#define TS_TIME_MAX 	ULLONG_MAX
+#define TS_TIME_MAX 	LLONG_MAX
 
 #define TS_TIME_TO_UNIX(t)	((time_t) ((t) / T_SEC))
 

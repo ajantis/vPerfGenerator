@@ -25,7 +25,7 @@ DECLARE_HASH_MAP(steps_hash_map, steps_file_t, WLHASHSIZE, sf_wl_name, sf_next,
 		return hash & WLHASHMASK;
 	},
 	{
-		return strcmp((char*) key1, (char*) key2);
+		return strcmp((char*) key1, (char*) key2) == 0;
 	}
 )
 
@@ -41,6 +41,7 @@ int step_open(const char* wl_name, const char* file_name) {
 	sf->sf_file = file;
 	sf->sf_next = NULL;
 	sf->sf_step_id = 0;
+	sf->sf_error = B_FALSE;
 	strncpy(sf->sf_wl_name, wl_name, WLNAMELEN);
 
 	hash_map_insert(&steps_hash_map, (hm_item_t*) sf);
@@ -63,12 +64,14 @@ static long step_parse_line(char* line) {
 		++p;
 	}
 
+	/* Read and process number of requests
+	 * No need for checking of negative values,
+	 * because we filter minus sign earlier*/
 	return atol(line);
 }
 
 void step_close(steps_file_t* sf) {
 	fclose(sf->sf_file);
-	hash_map_remove(&steps_hash_map, (hm_item_t*) sf);
 	mp_free(sf);
 }
 
@@ -80,26 +83,23 @@ int step_get_step(const char* wl_name, long* step_id, unsigned* p_num_rqs) {
 	long num_rqs;
 
 	if(sf == NULL)
-		return STEP_NO_RQS;
+		return STEP_ERROR;
 
 	*step_id = sf->sf_step_id;
 
-	/* There are no more steps on file, close it and destroy */
-	if(feof(sf->sf_file)) {
-		step_close(sf);
+	/* There are no more steps on file */
+	if(sf->sf_error || feof(sf->sf_file) != 0) {
+		sf->sf_error = B_TRUE;
 		return STEP_NO_RQS;
 	}
 
 	/* Read next step from file */
 	fgets(step_str, 16, sf->sf_file);
 
-	/* Read and process number of requests
-	 * No need for checking of negative values,
-	 * because we filter minus sign earlier*/
 	num_rqs = step_parse_line(step_str);
 
 	if(num_rqs < 0) {
-		step_close(sf);
+		sf->sf_error = B_TRUE;
 		return STEP_ERROR;
 	}
 
@@ -113,8 +113,7 @@ int step_get_step(const char* wl_name, long* step_id, unsigned* p_num_rqs) {
 int step_close_walker(void* psf, void* arg) {
 	steps_file_t* sf = (steps_file_t*) psf;
 
-	fclose(sf->sf_file);
-	mp_free(psf);
+	step_close(sf);
 
 	return HM_WALKER_CONTINUE | HM_WALKER_REMOVE;
 }

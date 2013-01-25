@@ -12,6 +12,7 @@
 #include <defs.h>
 #include <client.h>
 #include <agent.h>
+#include <workload.h>
 
 #define TSLOAD_IMPORT LIBIMPORT
 #include <tsload.h>

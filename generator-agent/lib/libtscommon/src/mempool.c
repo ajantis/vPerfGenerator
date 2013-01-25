@@ -44,26 +44,22 @@ boolean_t		mp_trace_slab = B_FALSE;
 /* Valgrind integration */
 #if defined(HAVE_VALGRIND_VALGRIND_H) && defined(MEMPOOL_VALGRIND)
 #include <valgrind/valgrind.h>
+#include <valgrind/memcheck.h>
 
-#define MEMPOOL_REDZONE_SIZE	8
+#define MEMPOOL_REDZONE_SIZE	0
 
 #else
 #define VALGRIND_MEMPOOL_ALLOC(pool, addr, size)
 #define VALGRIND_MEMPOOL_FREE(pool, addr)
+
+#define VALGRIND_MAKE_MEM_DEFINED(addr, size)
+#define VALGRIND_MAKE_MEM_UNDEFINED(addr, size)
 
 #define VALGRIND_CREATE_MEMPOOL(pool, rzB, is_zeroed)
 #define VALGRIND_DESTROY_MEMPOOL(pool)
 
 #define MEMPOOL_REDZONE_SIZE	0
 #endif
-
-/**
- * Valgrind adds small redzone before and after allocated chunk. However,
- * They are added into allocated chunks, so we need these conversion routines
- * for mp_alloc/mp_free
- */
-#define VALGRIND_TO_PTR(ptr)		(((char*) ptr) - MEMPOOL_REDZONE_SIZE)
-#define PTR_TO_VALGRIND(ptr)		(((char*) ptr) + MEMPOOL_REDZONE_SIZE)
 
 /**
  * Memory pool
@@ -433,6 +429,10 @@ void* mp_frag_alloc(size_t size, short flags) {
 	/* Compute pointer and return it */
 	ptr = ((char*) mp_segment) + (idx * MPFRAGSIZE);
 
+	if(flags == FRAG_COMMON)
+		VALGRIND_MEMPOOL_ALLOC(mp_segment, ptr, size);
+
+
 #	ifdef MEMPOOL_TRACE
 	if(mp_trace_allocator) {
 		logmsg(LOG_TRACE, "ALLOC FRAG %d frags (size: %zd) from %d -> %p", alloc_frags, size, idx, ptr);
@@ -466,6 +466,9 @@ void mp_frag_free(void* frag) {
 		return;
 	}
 	free_frags = descr->fd_size;
+
+	if(descr->fd_type == FRAG_COMMON)
+		VALGRIND_MEMPOOL_FREE(mp_segment, frag);
 
 	/* Clear fragment descriptors */
 	for(i = 0; i < free_frags; ++i, ++descr) {
@@ -549,6 +552,8 @@ mp_heap_page_t* mp_heap_page_alloc() {
 			page = (mp_heap_page_t*) raw_page;
 			header = (mp_heap_header_t*) &(page->hp_data);
 
+			VALGRIND_MAKE_MEM_DEFINED(page, sizeof(mp_heap_page_t));
+
 			free = (MPHEAPPAGESIZE - sizeof(mp_heap_page_t) - MPHEAPHHSIZE) / MPHEAPUNIT;
 
 			last_heap_page = page;
@@ -564,6 +569,7 @@ mp_heap_page_t* mp_heap_page_alloc() {
 			page->hp_birth = tm_get_time();
 
 			/* Initialize header */
+			VALGRIND_MAKE_MEM_DEFINED(header, MPHEAPHHSIZE);
 			MP_HEAP_HEADER_INIT(header, free);
 
 			rwlock_lock_write(&heap_list_lock);
@@ -617,6 +623,8 @@ void mp_heap_page_free(mp_heap_page_t* page) {
 #	endif
 
 	mp_frag_free(page);
+
+	VALGRIND_MAKE_MEM_UNDEFINED(page, sizeof(mp_heap_page_t));
 }
 
 /**
@@ -699,6 +707,8 @@ void mp_heap_page_defrag(mp_heap_page_t* page) {
 
 			hh_next = MP_HH_NEXT(hh_next);
 			++index;
+
+			VALGRIND_MAKE_MEM_UNDEFINED(hh_next, MPHEAPHHSIZE);
 		}
 
 		/* Insert entry back to free BST */
@@ -992,6 +1002,8 @@ void* mp_heap_alloc(size_t size) {
 
 	size_t diff = 0;
 
+	void* ptr;
+
 	if(unlikely(units < MPHEAPMINUNITS))
 		units = MPHEAPMINUNITS;
 
@@ -1050,6 +1062,7 @@ void* mp_heap_alloc(size_t size) {
 			hh->hh_size = units;
 
 			hh_next = MP_HH_NEXT(hh);
+			VALGRIND_MAKE_MEM_DEFINED(hh_next, MPHEAPHHSIZE);	/* Say valgrind that hh is defined */
 			MP_HEAP_HEADER_INIT(hh_next, diff);
 
 			/* Return rest of fragment to free list */
@@ -1069,7 +1082,10 @@ void* mp_heap_alloc(size_t size) {
 	}
 #	endif
 
-	return MP_HH_TO_FRAGMENT(hh);
+	ptr = MP_HH_TO_FRAGMENT(hh);
+
+	VALGRIND_MEMPOOL_ALLOC(mp_segment, ptr, size);
+	return ptr;
 }
 
 /**
@@ -1081,6 +1097,8 @@ void mp_heap_free(void* ptr) {
 	mp_heap_header_t* hh = MP_HH_FROM_FRAGMENT(ptr);
 
 	mp_heap_page_t* page = NULL, *iter = NULL;
+
+	VALGRIND_MAKE_MEM_DEFINED(hh, MPHEAPHHSIZE);
 
 	assert(hh->hh_size > 0);
 	assert(MP_HH_IS_ALLOCATED(hh));
@@ -1120,6 +1138,8 @@ void mp_heap_free(void* ptr) {
 				hh->hh_size, page, page->hp_free, page->hp_free_count, hh);
 	}
 #	endif
+
+	VALGRIND_MEMPOOL_FREE(mp_segment, ptr);
 }
 
 /**
@@ -1147,6 +1167,8 @@ mp_cache_page_t* mp_cache_page_alloc(mp_cache_t* cache) {
 		raw_page = mp_frag_alloc(MPCACHEPAGESIZE, FRAG_SLAB);
 
 		page = (mp_cache_page_t*) raw_page;
+
+		VALGRIND_MAKE_MEM_DEFINED(page, cache->c_first_item_off);
 
 		page->cp_cache = cache;
 		atomic_set(&page->cp_free_items, cache->c_items_per_page);
@@ -1189,6 +1211,8 @@ void mp_cache_page_free_nolock(mp_cache_page_t* page) {
 	if(cache->c_last_page == page) {
 		cache->c_last_page = NULL;
 	}
+
+	VALGRIND_MAKE_MEM_UNDEFINED(page, cache->c_first_item_off);
 
 #	ifdef MEMPOOL_TRACE
 	if(mp_trace_slab) {
@@ -1315,6 +1339,8 @@ void* mp_cache_alloc_array(mp_cache_t* cache, unsigned num) {
 		item = MP_CACHE_ITEM(cache, page, idx);
 	}
 
+	VALGRIND_MEMPOOL_ALLOC(mp_segment, item, num * cache->c_item_size);
+
 #	ifdef MEMPOOL_TRACE
 	if(mp_trace_slab) {
 		logmsg(LOG_TRACE, "ALLOC SLAB %s %p @page: %p num %d idx: %d <- %p",
@@ -1356,6 +1382,8 @@ void mp_cache_free_array(mp_cache_t* cache, void* array, unsigned num) {
 
 	atomic_add(&page->cp_free_items, num);
 
+	VALGRIND_MEMPOOL_FREE(mp_segment, array);
+
 #	ifdef MEMPOOL_TRACE
 	if(mp_trace_slab) {
 		logmsg(LOG_TRACE, "FREE SLAB %s %p @page: %p num: %d idx: %d <- %p",
@@ -1383,21 +1411,16 @@ void mp_cache_free(mp_cache_t* cache, void* ptr) {
 void* mp_malloc(size_t sz) {
 	void* ptr;
 
-	sz += 2 * MEMPOOL_REDZONE_SIZE;
-
 #	ifdef MEMPOOL_TRACE
 	logmsg(LOG_TRACE, "ALLOC %zd", sz);
 #	endif
 
-	if(sz > MPHEAPMAXALLOC || (sz & MPFRAGMASK == 0)) {
+	if((sz > MPHEAPMAXALLOC) || ((sz & MPFRAGMASK) == 0)) {
 		ptr = mp_frag_alloc(sz, FRAG_COMMON);
 	}
 	else {
 		ptr = mp_heap_alloc(sz);
 	}
-
-	ptr = PTR_TO_VALGRIND(ptr);
-	VALGRIND_MEMPOOL_ALLOC(mp_segment, ptr, sz);
 
 #	ifdef MEMPOOL_TRACE
 	logmsg(LOG_TRACE, "ALLOC %p : %zd", ptr, sz);
@@ -1447,12 +1470,10 @@ void mp_free(void* ptr) {
 	logmsg(LOG_TRACE, "FREE %p", ptr);
 #	endif
 
-	VALGRIND_MEMPOOL_FREE(mp_segment, ptr);
-
 	if(descr->fd_type == FRAG_HEAP)
-		mp_heap_free(VALGRIND_TO_PTR(ptr));
+		mp_heap_free(ptr);
 	else
-		mp_frag_free(VALGRIND_TO_PTR(ptr));
+		mp_frag_free(ptr);
 
 #	ifdef MEMPOOL_TRACE
 	logmsg(LOG_TRACE, "FREE %p", ptr);

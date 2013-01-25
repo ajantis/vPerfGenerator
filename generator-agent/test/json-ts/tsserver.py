@@ -19,7 +19,7 @@ import traceback
 from jsonts import *
 
 MAX_STEPS = 20
-MAX_REQUESTS = 20
+MAX_REQUESTS = 100
 
 PORT = 9090
 
@@ -51,7 +51,7 @@ class WorkloadConfigurator(Thread):
     def configureWorkload(self, client):
         workload = {'module': 'dummy',
                     'threadpool': '[DEFAULT]',
-                    'params': {'filesize': 16777216,
+                    'params': {'filesize': 134217728,
                                'blocksize': 4096,
                                'path': 'C:\\testfile',
                                'test': 'read',

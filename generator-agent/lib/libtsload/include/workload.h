@@ -61,6 +61,7 @@ typedef struct workload_step {
 
 /*Sibling to TSWorkloadStatusCode*/
 typedef enum {
+	WLS_NEW = 0,
 	WLS_CONFIGURING = 1,
 	WLS_SUCCESS = 2,
 	WLS_FAIL = 3,
