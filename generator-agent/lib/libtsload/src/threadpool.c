@@ -212,15 +212,20 @@ void tp_distribute_requests(workload_step_t* step, thread_pool_t* tp) {
 	unsigned rq_per_worker = step->wls_rq_count / tp->tp_num_threads;
 	unsigned extra_rqs = step->wls_rq_count % tp->tp_num_threads;
 
-	int* num_rqs = (int*) mp_malloc(tp->tp_num_threads * sizeof(int));
+	int* num_rqs = NULL;
 	request_t* rq;
 
 	int tid;
 
+	if(step->wls_rq_count == 0)
+		return;
+
+	num_rqs = (int*) mp_malloc(tp->tp_num_threads * sizeof(int));
+
 	distribute_requests(rq_per_worker, extra_rqs, tp->tp_num_threads, num_rqs);
 
 	for(tid = 0; tid < tp->tp_num_threads; ++tid) {
-		while(num_rqs[tid] >= 0) {
+		while(num_rqs[tid] > 0) {
 			rq = wl_create_request(step->wls_workload, tid);
 
 			list_add_tail(&rq->rq_node, &tp->tp_workers[tid].w_requests);
@@ -237,7 +242,7 @@ int tp_init(void) {
 	mp_cache_init(&tp_worker_cache, tp_worker_t);
 
 	/*FIXME: default pool should have threads number num_of_phys_cores*/
-	default_pool = tp_create(4, DEFAULT_TP_NAME, 250 * T_MS);
+	default_pool = tp_create(4, DEFAULT_TP_NAME, T_SEC);
 
 	return 0;
 }

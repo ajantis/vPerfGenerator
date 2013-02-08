@@ -8,7 +8,7 @@
 #ifndef ERRCODE_H_
 #define ERRCODE_H_
 
-typedef enum agent_errcode {
+typedef enum ts_errcode {
 	TSE_COMMAND_NOT_FOUND 	 = 100,
 	TSE_MESSAGE_FORMAT		 = 101,
 	TSE_INVALID_DATA		 = 102,

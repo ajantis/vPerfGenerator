@@ -61,6 +61,8 @@ typedef struct swat_workload {
 
 #define SWAT_ERR_SERIALIZE 	-2
 
+typedef enum { CMD_SER, CMD_STAT } swat_command_t;
+
 int swat_wl_init(void);
 int swat_wl_serialize(void);
 

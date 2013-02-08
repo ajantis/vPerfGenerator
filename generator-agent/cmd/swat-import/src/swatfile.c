@@ -22,7 +22,7 @@ boolean_t conv_endianess = B_FALSE;
 long report_threshold = 5 * SZ_MB;
 
 #ifdef SWAT_TRACE
-boolean_t swat_trace = B_FALSE;
+boolean_t swat_trace = B_TRUE;
 #endif
 
 gzFile* flat_gz;
@@ -54,7 +54,7 @@ int swat_read(void) {
 		return SWAT_ERR_OPEN_FILE;
 	}
 
-	printf("Processing swatfile... ");
+	/* printf("Processing swatfile... "); */
 
 	while(gzread(flat_gz, &control, SWAT_LONG_SIZE) > 0) {
 		if(conv_endianess)
@@ -83,15 +83,16 @@ int swat_read(void) {
 		++entry_count;
 
 		/* Report */
+		/*
 		cur_off = gztell(flat_gz);
 		if((cur_off - last_off) > report_threshold) {
 			printf("%8ldM ", cur_off / SZ_MB);
 			fflush(stdout);
 			last_off = cur_off;
-		}
+		} */
 	}
 
-	printf("\nProcessed %ld entries\n", entry_count);
+	/* printf("\nProcessed %ld entries\n", entry_count); */
 
 	gzclose(flat_gz);
 

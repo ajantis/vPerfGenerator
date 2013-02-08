@@ -23,6 +23,7 @@ struct dummy_workload {
 	wlp_strset_t test;
 
 	wlp_bool_t	 sparse;
+	wlp_bool_t 	 sync;
 
 	int	fd;
 

@@ -6,6 +6,7 @@
  */
 
 #include <swat.h>
+#include <swatmap.h>
 
 #include <hashmap.h>
 #include <pathutil.h>
@@ -13,16 +14,20 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 
 #include <libjson.h>
 
-ts_time_t quantum = 250 * T_MS;
+ts_time_t quantum = T_SEC;
+
+swat_command_t command;
+uint64_t swat_stat_device;
 
 char experiment_dir[PATHMAXLEN];
 
 #ifdef SWAT_TRACE
 boolean_t swat_wl_trace = B_FALSE;
-boolean_t swat_wl_stat_trace = B_TRUE;
+boolean_t swat_wl_stat_trace = B_FALSE;
 
 unsigned swat_chunk_count = 0;
 unsigned swat_wl_count = 0;
@@ -37,6 +42,19 @@ long swat_wl_max_step = 0;
 #define SWAT_WL_STAT_MAX(s, v)
 
 #endif
+
+struct {
+	long step_id;
+	ts_time_t step_start;
+
+	long read_count;
+	long write_count;
+	long total_io;
+
+	ts_time_t* resp_times;
+	int resp_times_cap;
+	int resp_times_cnt;
+} swat_stat;
 
 DECLARE_HASH_MAP(swat_wl_hash_map, swat_workload_t, SWATWLHASHSIZE, swl_key, swl_next,
 	/*hash*/ {
@@ -55,6 +73,8 @@ DECLARE_HASH_MAP(swat_wl_hash_map, swat_workload_t, SWATWLHASHSIZE, swl_key, swl
 	}
 );
 
+/**
+ * Allocate and add a chunk of workload steps */
 void swat_wl_add_chunk(swat_workload_t* wl) {
 	swl_chunk_t* chunk = (swl_chunk_t*) malloc(sizeof(swl_chunk_t));
 
@@ -100,6 +120,8 @@ long swat_wl_add_steps(swat_workload_t* wl, long steps) {
 		wl->swl_last_chunk->swl_num_rqs[rel_step] = 0;
 	}
 
+	rel_step = wl->swl_last_step % SWATCHUNKLEN;
+
 	SWAT_WL_STAT_MAX(swat_wl_max_step, wl->swl_last_step);
 
 	return rel_step;
@@ -115,7 +137,7 @@ swat_workload_t* swat_wl_create(swl_key_t* key) {
 	wl->swl_key.swl_flag = key->swl_flag;
 
 	snprintf(wl->swl_name, SWATWLNAMELEN, "%s-%lld-%ld",
-					(key->swl_flag == 1) ? "write" : "read",
+					(key->swl_flag == 0) ? "read" : "write",
 					key->swl_xfersize, key->swl_device);
 
 	wl->swl_last_step = 0;
@@ -135,6 +157,104 @@ swat_workload_t* swat_wl_create(swl_key_t* key) {
 	return wl;
 }
 
+STATIC_INLINE int32_t swat_xfer_approx(int32_t xfersize) {
+	int msb = __msb32(xfersize);
+
+	if(xfersize < 4 * SZ_KB)
+		return 1 << msb;
+	else if(xfersize < 1 * SZ_MB)
+		/* Round up */
+		return (((xfersize & ((1 << msb) - 1)) == 0) ? 1 : 2) << msb;
+
+	return xfersize / (1 * SZ_MB);
+}
+
+void swat_stat_reset(void) {
+	swat_stat.total_io = 0;
+	swat_stat.read_count = 0;
+	swat_stat.write_count = 0;
+
+	swat_stat.resp_times_cap = SWATCHUNKLEN;
+	swat_stat.resp_times = malloc(swat_stat.resp_times_cap * sizeof(ts_time_t));
+	swat_stat.resp_times_cnt = 0;
+}
+
+void swat_stat_init(void) {
+	swat_stat.step_id = 0;
+	swat_stat.step_start = 0;
+
+	swat_stat_reset();
+}
+
+void swat_stat_report(void) {
+	long io_count = swat_stat.read_count + swat_stat.write_count;
+
+	double read_pct = 100. * ((double) swat_stat.read_count / (double) io_count);
+
+	double r_max = 0.;
+	double r_mean = 0.;
+	double r_stddev = 0.;
+	double resp_time;
+
+	int ri;
+
+	for(ri = 0; ri < swat_stat.resp_times_cnt; ++ri) {
+		resp_time = ((double) swat_stat.resp_times[ri]) / (T_MS / T_US);
+
+		if(resp_time > r_max)
+			r_max = resp_time;
+
+		r_mean += (double) resp_time;
+	}
+
+	r_mean /= swat_stat.resp_times_cnt;
+
+	for(ri = 0; ri < swat_stat.resp_times_cnt; ++ri) {
+		resp_time = ((double) swat_stat.resp_times[ri]) / (T_MS / T_US);
+
+		r_stddev += pow(resp_time - r_mean, 2);
+	}
+
+	r_stddev = sqrt(r_stddev / swat_stat.resp_times_cnt);
+
+	printf("%8ld %8ld %8.3f %8ld %8.3f %8.3f %8.3f %8.3f\n",
+				swat_stat.step_id, io_count,
+				(double) swat_stat.total_io / SZ_MB,
+				swat_stat.total_io / io_count,
+				read_pct, r_mean, r_max, r_stddev);
+
+	++swat_stat.step_id;
+}
+
+void swat_stat_add_entry(struct swat_record* sr) {
+	if(sr->sr_device != swat_stat_device)
+		return;
+
+	if(((sr->sr_start * T_US) - swat_stat.step_start) > quantum) {
+		swat_stat_report();
+		swat_stat.step_start += quantum;
+
+		free(swat_stat.resp_times);
+
+		swat_stat_reset();
+	}
+
+	swat_stat.total_io += sr->sr_xfersize;
+
+	if(sr->sr_flag == 0)
+		++swat_stat.read_count;
+	else
+		++swat_stat.write_count;
+
+	if(swat_stat.resp_times_cnt == swat_stat.resp_times_cap) {
+		swat_stat.resp_times_cap += SWATCHUNKLEN;
+		swat_stat.resp_times = realloc(swat_stat.resp_times,
+									   swat_stat.resp_times_cap * sizeof(ts_time_t));
+	}
+
+	swat_stat.resp_times[swat_stat.resp_times_cnt++] = sr->sr_resp;
+}
+
 void swat_add_entry(struct swat_record* sr) {
 	swat_workload_t* wl;
 	swl_key_t key;
@@ -142,8 +262,13 @@ void swat_add_entry(struct swat_record* sr) {
 	long steps;
 	long rel_step;
 
+	if(command == CMD_STAT) {
+		swat_stat_add_entry(sr);
+		return;
+	}
+
 	key.swl_device = sr->sr_device;
-	key.swl_xfersize = sr->sr_xfersize;
+	key.swl_xfersize = swat_xfer_approx(sr->sr_xfersize);
 	key.swl_flag = sr->sr_flag;
 
 	wl = hash_map_find(&swat_wl_hash_map, (hm_key_t*) &key);
@@ -168,6 +293,7 @@ void swat_add_entry(struct swat_record* sr) {
 }
 
 int swat_wl_init(void) {
+	swat_stat_init();
 	hash_map_init(&swat_wl_hash_map, "swat_wl_hash_map");
 
 	return 0;
@@ -191,9 +317,10 @@ JSONNODE* json_swat_wl_format(const char* dev_path, swat_workload_t* wl) {
 
 	json_push_back(params, json_new_i("blocksize", wl->swl_key.swl_xfersize));
 	json_push_back(params, json_new_a("test",
-			(wl->swl_key.swl_flag == 1) ? "write" : "read"));
-	json_push_back(params, json_new_i("path", dev_path));
+			(wl->swl_key.swl_flag == 0) ? "read" : "write"));
+	json_push_back(params, json_new_a("path", dev_path));
 	json_push_back(params, json_new_b("sparse", B_FALSE));
+	json_push_back(params, json_new_b("sync", B_TRUE));
 
 	return node;
 }

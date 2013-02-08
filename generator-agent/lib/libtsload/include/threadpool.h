@@ -12,6 +12,7 @@
 #include <tstime.h>
 #include <threads.h>
 #include <syncqueue.h>
+#include <atomic.h>
 
 #define TPNAMELEN		64
 #define TPMAXTHREADS 	64
@@ -20,6 +21,10 @@
 
 #define CONTROL_TID		-1
 #define WORKER_TID		0
+
+#define	WORKING			0
+#define SLEEPING		1
+#define INTERRUPT		2
 
 struct request;
 struct workload;
@@ -42,6 +47,8 @@ typedef struct tp_worker {
 	thread_mutex_t w_rq_mutex;
 
 	list_head_t w_requests;
+
+	atomic_t 	w_state;
 } tp_worker_t;
 
 typedef struct thread_pool {

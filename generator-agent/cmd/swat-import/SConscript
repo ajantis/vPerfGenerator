@@ -6,7 +6,7 @@ Import('env')
 
 cmd = env.Clone()
 
-cmd.Append(LIBS = ['z'])
+cmd.Append(LIBS = ['z', 'm'])
 
 cmd.AddDeps(('lib', 'libtscommon'), 
             ('lib', 'libjson'))

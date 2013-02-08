@@ -138,8 +138,8 @@ AddOption('--list',  dest='list', action="store_true", default=False,
 AddOption('--mach',  dest='mach', action="store", default='',
           help='Machine architecture')
 
-AddEnableOption('mempool-alloc',  dest='mempool_alloc', default=True,
-          help='mempool allocator')
+AddEnableOption('mempool-alloc',  dest='mempool_alloc', default=False,
+          help='mempool allocator [EXPERIMENTAL]')
 AddEnableOption('mempool-valgrind',  dest='mempool_valgrind', default=False,
           help='adds Valgrind support to mempool allocator. If valgrind development package is not installed, this option is useless')
 

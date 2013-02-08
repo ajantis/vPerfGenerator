@@ -83,6 +83,17 @@ typedef struct {
 	};
 } wlp_range_t;
 
+typedef struct {
+	boolean_t enabled;
+
+	wlp_bool_t b;
+	wlp_integer_t i;
+	wlp_float_t f;
+	wlp_size_t sz;
+	const char* s;
+	wlp_strset_t ssi;
+} wlp_default_t;
+
 #define WLP_NO_RANGE()				{ B_FALSE, { {0} } }
 
 #define WLP_STRING_LENGTH(length) 	{ B_TRUE, { {length}, {0, 0}, {0.0, 0.0}, {0, 0}, {0, NULL} } }
@@ -94,10 +105,25 @@ typedef struct {
 #define WLP_STRING_SET_RANGE(set) 	{ B_TRUE, { {0}, {0, 0}, {0.0, 0.0}, {0, 0}, 		\
 									    {sizeof((set)) / sizeof(char*), (set) } } }
 
+#define WLP_NO_DEFAULT()				{ B_FALSE, B_FALSE }
+
+#define WLP_BOOLEAN_DEFAULT(b)			{ B_TRUE, b }
+#define WLP_INT_DEFAULT(i)				{ B_TRUE, B_FALSE, i }
+#define WLP_FLOAT_DEFAULT(f)			{ B_TRUE, B_FALSE, 0, f }
+#define WLP_SIZE_DEFAULT(sz)			{ B_TRUE, B_FALSE, 0, 0.0, sz }
+#define WLP_STRING_DEFAULT(s)			{ B_TRUE, B_FALSE, 0, 0.0, 0, s }
+#define WLP_STRING_SET_DEFAULT(ssi)		{ B_TRUE, B_FALSE, 0, 0.0, 0, NULL, ssi }
+
+#define WLPF_NO_FLAGS				0x00
+#define WLPF_OPTIONAL				0x01
+
 /*Description of param*/
 typedef struct {
 	wlp_type_t type;
+	unsigned long flags;
+
 	wlp_range_t range;
+	wlp_default_t defval;
 
 	char* name;
 	char* description;
@@ -109,10 +135,13 @@ typedef struct {
 #ifndef NO_JSON
 #include <libjson.h>
 
+#define WLPARAM_DEFAULT_OK			0
 #define WLPARAM_JSON_OK				0
 #define WLPARAM_JSON_WRONG_TYPE		-1
 #define WLPARAM_JSON_OUTSIDE_RANGE	-2
 #define WLPARAM_JSON_NOT_FOUND		-3
+#define WLPARAM_NO_DEFAULT			-4
+
 
 JSONNODE* json_wlparam_format(wlp_descr_t* wlp);
 JSONNODE* json_wlparam_format_all(wlp_descr_t* wlp);

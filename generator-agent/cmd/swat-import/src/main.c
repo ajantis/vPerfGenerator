@@ -25,18 +25,25 @@ extern char experiment_dir[];
 
 extern boolean_t conv_endianess;
 
+extern swat_command_t command;
+extern uint64_t swat_stat_device;
+
 void usage() {
-	fprintf(stderr, "command line: \n"
-					"\trun-tsload [-c] -f <flatfile.bin.gz> -e <experiment directory> -m <dev=path>\n"
+	fprintf(stderr, "swat-import - tool for converting flatfile.bin => run-tsload format"
+					"command line: \n"
+					"\tswat-import [-c] -f <flatfile.bin.gz> -e <experiment directory> -m <dev=path>\n"
 					"\t\t process flatfile\n"
 					"\t\t -c - convert endianess\n"
-					"\trun-tsload -h \n"
+					"\tswat-import [-c] -f <flatfile.bin.gz> -s <dev>\n"
+					"\t\tprint statistics from swat-file\n"
+					"\tswat-import -h \n"
 					"\t\thelp\n");
 }
 
 void parse_options(int argc, const char* argv[]) {
 	boolean_t eflag = B_FALSE;
 	boolean_t fflag = B_FALSE;
+	boolean_t sflag = B_FALSE;
 	boolean_t ok = B_TRUE;
 
 	time_t now;
@@ -48,11 +55,16 @@ void parse_options(int argc, const char* argv[]) {
 
 	char logname[48];
 
-	while((c = plat_getopt(argc, argv, "e:f:m:ch")) != -1) {
+	while((c = plat_getopt(argc, argv, "e:f:m:chs:")) != -1) {
 		switch(c) {
 		case 'h':
 			usage();
 			exit(0);
+			break;
+		case 's':
+			sflag = B_TRUE;
+			swat_stat_device = atoll(optarg);
+			command = CMD_STAT;
 			break;
 		case 'c':
 			conv_endianess = B_TRUE;
@@ -60,12 +72,13 @@ void parse_options(int argc, const char* argv[]) {
 		case 'e':
 			eflag = B_TRUE;
 			strncpy(experiment_dir, optarg, PATHMAXLEN);
+			command = CMD_SER;
 			break;
 		case 'm':
 			eq_pos = strchr(optarg, '=');
 
 			if(eq_pos == NULL) {
-				fprintf(stderr, "-m argument should contain equal sign.\n", optopt);
+				fprintf(stderr, "-m argument should contain equal sign.\n");
 				ok = B_FALSE;
 				break;
 			}
@@ -80,7 +93,7 @@ void parse_options(int argc, const char* argv[]) {
 			strncpy(flat_filename, optarg, PATHMAXLEN);
 			break;
 		case '?':
-			if(optopt == 'e' || optopt == 'f')
+			if(optopt == 'e' || optopt == 'f' || optopt == 'm' || optopt == 's')
 				fprintf(stderr, "-%c option requires an argument\n", optopt);
 			else
 				fprintf(stderr, "Unknown option `-%c'.\n", optopt);
@@ -92,9 +105,11 @@ void parse_options(int argc, const char* argv[]) {
 			break;
 	}
 
-	if(!ok || !eflag || !fflag) {
-		if(!eflag || !fflag)
-			fprintf(stderr, "-e and -f flags should be used together\n");
+	if(!ok || !fflag || (!eflag && !sflag)) {
+		if(!fflag)
+			fprintf(stderr, "No -f was specified\n");
+		if(!eflag && !sflag)
+			fprintf(stderr, "-f should be used with -e or -s\n");
 		usage();
 		exit(1);
 	}
@@ -113,9 +128,11 @@ int main(int argc, const char* argv[]) {
 		goto exit;
 	}
 
-	if(swat_wl_serialize() != SWAT_OK) {
-		ret = 1;
-		goto exit;
+	if(command == CMD_SER) {
+		if(swat_wl_serialize() != SWAT_OK) {
+			ret = 1;
+			goto exit;
+		}
 	}
 
 exit:

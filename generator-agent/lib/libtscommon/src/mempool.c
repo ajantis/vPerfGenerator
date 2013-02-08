@@ -414,6 +414,8 @@ void* mp_frag_alloc(size_t size, short flags) {
 
 	descr = mp_frags + idx;
 
+	assert(descr->fd_type == FRAG_UNALLOCATED);
+
 	descr->fd_type = flags;
 	descr->fd_size = alloc_frags;
 
@@ -421,6 +423,8 @@ void* mp_frag_alloc(size_t size, short flags) {
 		++descr;
 
 		for(i = 1; i < alloc_frags; ++i, ++descr) {
+			assert(descr->fd_type == FRAG_UNALLOCATED);
+
 			descr->fd_type = FRAG_REFERENCE;
 			descr->fd_offset = i;
 		}

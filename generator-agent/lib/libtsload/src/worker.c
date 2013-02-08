@@ -33,7 +33,10 @@ thread_result_t control_thread(thread_arg_t arg) {
 	int ret = 0;
 	int tid = 0;
 
-	workload_step_t* step = mp_malloc(1 * sizeof(workload_step_t));;
+	workload_step_t* step = mp_malloc(1 * sizeof(workload_step_t));
+
+	int wi;
+	tp_worker_t* worker;
 
 	/* Synchronize all control-threads on all nodes to start
 	 * quantum at beginning of next second (real time synchronization
@@ -105,8 +108,8 @@ thread_result_t control_thread(thread_arg_t arg) {
 				continue;
 			}
 
-			wl_notify(wl, WLS_RUNNING, 0, "Running workload %s step #%ld",
-							wl->wl_name, wl->wl_current_step);
+			wl_notify(wl, WLS_RUNNING, 0, "Running workload %s step #%ld: %d requests",
+							wl->wl_name, wl->wl_current_step, step[wli].wls_rq_count);
 
 			/*FIXME: case if worker didn't started processing of requests for previous step yet */
 			tp_distribute_requests(step + wli, tp);
@@ -123,6 +126,10 @@ thread_result_t control_thread(thread_arg_t arg) {
 
 
 		/* = START WORKERS = */
+		for(wi = 0; wi < tp->tp_num_threads; ++wi) {
+			atomic_set(&tp->tp_workers[wi].w_state, INTERRUPT);
+		}
+
 		event_notify_all(&tp->tp_event);
 
 	quantum_sleep:
@@ -140,6 +147,8 @@ thread_result_t worker_thread(thread_arg_t arg) {
 	list_head_t* rq_chain;
 	request_t* rq;
 
+	boolean_t do_sleep = B_FALSE;
+
 	thread_pool_t* tp = worker->w_tp;
 
 	long worker_step = 0;
@@ -149,6 +158,9 @@ thread_result_t worker_thread(thread_arg_t arg) {
 
 	while(!worker->w_tp->tp_is_dead) {
 		mutex_lock(&worker->w_rq_mutex);
+
+		atomic_set(&worker->w_state, WORKING);
+		do_sleep = B_TRUE;
 
 		if(!list_empty(&worker->w_requests)) {
 			/*There are new requests on queue*/
@@ -160,9 +172,13 @@ thread_result_t worker_thread(thread_arg_t arg) {
 			list_splice_init(&worker->w_requests, list_head_node(rq_chain));
 			mutex_unlock(&worker->w_rq_mutex);
 
-			/*FIXME: quantum exhaustion*/
 			list_for_each_entry(request_t, rq, rq_chain, rq_node)  {
 				wl_run_request(rq);
+
+				if(atomic_read(&worker->w_state) == INTERRUPT) {
+					do_sleep = B_FALSE;
+					break;
+				}
 			}
 
 			/*Push chain of requests to global chain*/
@@ -173,7 +189,10 @@ thread_result_t worker_thread(thread_arg_t arg) {
 			mutex_unlock(&worker->w_rq_mutex);
 		}
 
-		event_wait(&tp->tp_event);
+		if(do_sleep) {
+			atomic_set(&worker->w_state, SLEEPING);
+			event_wait(&tp->tp_event);
+		}
 	}
 
 THREAD_END:
