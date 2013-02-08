@@ -25,6 +25,17 @@ PORT = 9090
 
 NANOSECOND = 1000 * 1000 * 1000
 
+WORKLOAD_DUMMY = {'module': 'dummy',
+                  'threadpool': '[DEFAULT]',
+                  'params': {'filesize': 134217728,
+                             'blocksize': 4096,
+                             'path': 'C:\\testfile',
+                             'test': 'read',
+                             'sparse': False}}
+WORKLOAD_BUSY_WAIT = { 'module': 'busy_wait',
+                       'threadpool': '[DEFAULT]',
+                       'params': {'num_cycles': 400000 } }
+
 class WorkloadConfigurator(Thread):
     finished = False
     daemon = True
@@ -49,13 +60,7 @@ class WorkloadConfigurator(Thread):
                 print >> sys.stderr, '-' * 20
     
     def configureWorkload(self, client):
-        workload = {'module': 'dummy',
-                    'threadpool': '[DEFAULT]',
-                    'params': {'filesize': 134217728,
-                               'blocksize': 4096,
-                               'path': 'C:\\testfile',
-                               'test': 'read',
-                               'sparse': False}}
+        workload = WORKLOAD_BUSY_WAIT
         
         client.invoke('configure_workload', 
                       workload_name='test', 

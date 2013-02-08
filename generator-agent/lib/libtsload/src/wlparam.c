@@ -142,8 +142,9 @@ int json_wlparam_strset_proc(JSONNODE* node, wlp_descr_t* wlp, void* param) {
 	return WLPARAM_JSON_OUTSIDE_RANGE;
 }
 
-#define WLPARAM_RANGE_CHECK(min, max) 							\
-		if(*p < wlp->range.min || *p > wlp->range.max)			\
+#define WLPARAM_RANGE_CHECK(min, max)						\
+		if(wlp->range.range &&								\
+			(*p < wlp->range.min || *p > wlp->range.max))	\
 					return WLPARAM_JSON_OUTSIDE_RANGE;
 
 #define WLPARAM_NO_RANGE_CHECK
