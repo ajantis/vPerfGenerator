@@ -20,6 +20,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+mp_cache_t	   tp_cache;
+mp_cache_t	   tp_worker_cache;
+
 thread_pool_t* default_pool = NULL;
 
 void* worker_thread(void* arg);
@@ -47,7 +50,14 @@ static void tp_destroy_worker(thread_pool_t* tp, int tid) {
 	mutex_destroy(&worker->w_rq_mutex);
 }
 
-thread_pool_t* tp_create(unsigned num_threads, const char* name, uint64_t quantum) {
+/**
+ * Create new thread pool
+ *
+ * @param num_threads Numbber of worker threads in this pool
+ * @param name Name of thread pool
+ * @param quantum Worker's quantum
+ * */
+thread_pool_t* tp_create(unsigned num_threads, const char* name, ts_time_t quantum) {
 	thread_pool_t* tp = NULL;
 	int tid;
 
@@ -58,18 +68,18 @@ thread_pool_t* tp_create(unsigned num_threads, const char* name, uint64_t quantu
 		return NULL;
 	}
 
-	tp = (thread_pool_t*) mp_malloc(sizeof(thread_pool_t));
+	tp = (thread_pool_t*) mp_cache_alloc(&tp_cache);
 
 	strncpy(tp->tp_name, name, TPNAMELEN);
 
 	tp->tp_num_threads = num_threads;
-	tp->tp_workers = mp_malloc(num_threads * sizeof(tp_worker_t));
+	tp->tp_workers = (tp_worker_t*) mp_cache_alloc_array(&tp_worker_cache, num_threads);
 
 	tp->tp_time	   = 0ll;	   /*Time is set by control thread*/
 	tp->tp_quantum = quantum;
 
-	tp->tp_is_dead = FALSE;
-	tp->tp_wl_changed = FALSE;
+	tp->tp_is_dead = B_FALSE;
+	tp->tp_wl_changed = B_FALSE;
 
 	tp->tp_wl_count = 0;
 
@@ -95,7 +105,7 @@ thread_pool_t* tp_create(unsigned num_threads, const char* name, uint64_t quantu
 void tp_destroy(thread_pool_t* tp) {
 	int tid;
 
-	tp->tp_is_dead = TRUE;
+	tp->tp_is_dead = B_TRUE;
 
 	/* Notify workers that we are done */
 	event_notify_all(&tp->tp_event);
@@ -109,8 +119,8 @@ void tp_destroy(thread_pool_t* tp) {
 	event_destroy(&tp->tp_event);
 	mutex_destroy(&tp->tp_mutex);
 
-	mp_free(tp->tp_workers);
-	mp_free(tp);
+	mp_cache_free_array(&tp_worker_cache, tp->tp_workers, tp->tp_num_threads);
+	mp_cache_free(&tp_cache, tp);
 }
 
 thread_pool_t* tp_search(const char* name) {
@@ -130,7 +140,7 @@ void tp_attach(thread_pool_t* tp, struct workload* wl) {
 
 	list_add_tail(&wl->wl_tp_node, &tp->tp_wl_head);
 	++tp->tp_wl_count;
-	tp->tp_wl_changed = TRUE;
+	tp->tp_wl_changed = B_TRUE;
 
 	mutex_unlock(&tp->tp_mutex);
 }
@@ -138,7 +148,7 @@ void tp_attach(thread_pool_t* tp, struct workload* wl) {
 void tp_detach_nolock(thread_pool_t* tp, struct workload* wl) {
 	list_del(&wl->wl_tp_node);
 	--tp->tp_wl_count;
-	tp->tp_wl_changed = TRUE;
+	tp->tp_wl_changed = B_TRUE;
 }
 
 /**
@@ -202,15 +212,20 @@ void tp_distribute_requests(workload_step_t* step, thread_pool_t* tp) {
 	unsigned rq_per_worker = step->wls_rq_count / tp->tp_num_threads;
 	unsigned extra_rqs = step->wls_rq_count % tp->tp_num_threads;
 
-	int* num_rqs = (int*) mp_malloc(tp->tp_num_threads * sizeof(int));
+	int* num_rqs = NULL;
 	request_t* rq;
 
 	int tid;
 
+	if(step->wls_rq_count == 0)
+		return;
+
+	num_rqs = (int*) mp_malloc(tp->tp_num_threads * sizeof(int));
+
 	distribute_requests(rq_per_worker, extra_rqs, tp->tp_num_threads, num_rqs);
 
 	for(tid = 0; tid < tp->tp_num_threads; ++tid) {
-		while(num_rqs[tid] >= 0) {
+		while(num_rqs[tid] > 0) {
 			rq = wl_create_request(step->wls_workload, tid);
 
 			list_add_tail(&rq->rq_node, &tp->tp_workers[tid].w_requests);
@@ -223,12 +238,18 @@ void tp_distribute_requests(workload_step_t* step, thread_pool_t* tp) {
 }
 
 int tp_init(void) {
+	mp_cache_init(&tp_cache, thread_pool_t);
+	mp_cache_init(&tp_worker_cache, tp_worker_t);
+
 	/*FIXME: default pool should have threads number num_of_phys_cores*/
-	default_pool = tp_create(4, DEFAULT_TP_NAME, 250 * MS);
+	default_pool = tp_create(4, DEFAULT_TP_NAME, T_SEC);
 
 	return 0;
 }
 
 void tp_fini(void) {
 	tp_destroy(default_pool);
+
+	mp_cache_destroy(&tp_worker_cache);
+	mp_cache_destroy(&tp_cache);
 }

@@ -1,6 +1,22 @@
+target = 'libtsagent'
+
 Import('env')
 
-lib = env.Clone(LIBS = ['c'])
+lib = env.Clone()
 
+# Add winsock2 library
+if lib.SupportedPlatform('win'):
+    lib.Append(LIBS = ['Ws2_32'])
+
+# Sockets and name services requires libraries
+if lib.SupportedPlatform('solaris'):
+    lib.Append(LIBS = ['socket', 'nsl'])
+
+
+lib.PreparePlatform()
 lib.AddDeps(('lib', 'libjson'), ('lib', 'libtscommon'), ('lib', 'libhostinfo'))
-lib.SharedLibrary(lib.Target('lib/libtsagent'), Glob("src/*.c"))
+
+objects = lib.CompileSharedLibrary()
+library = lib.LinkSharedLibrary(target, objects)
+
+lib.InstallTarget(lib['INSTALL_LIB'], library)

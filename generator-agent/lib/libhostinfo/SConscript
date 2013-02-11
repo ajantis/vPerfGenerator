@@ -1,6 +1,14 @@
+target = 'libhostinfo'
+
 Import('env')
 
 lib = env.Clone()
 
+lib.PreparePlatform()
+
 lib.AddDeps(('lib', 'libjson'), ('lib', 'libtscommon'))
-lib.SharedLibrary(lib.Target('lib/libhostinfo'), Glob("src/plat/posix/*.c"))
+
+objects = lib.CompileSharedLibrary()
+library = lib.LinkSharedLibrary(target, objects)
+
+lib.InstallTarget(lib['INSTALL_LIB'], library)

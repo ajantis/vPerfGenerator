@@ -1,0 +1,6 @@
+Import('env')
+
+mod = env.Clone()
+
+mod.PreparePlatform()
+mod.Module('load', 'simpleio')

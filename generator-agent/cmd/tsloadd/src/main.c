@@ -8,26 +8,32 @@
 #define LOG_SOURCE "tsloadd"
 #include <log.h>
 
-#include <modtsload.h>
+#include <loadagent.h>
+#include <modules.h>
 #include <cfgfile.h>
 #include <tsload.h>
+#include <getopt.h>
+#include <tsversion.h>
 
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 
-#include <signal.h>
-#include <unistd.h>
+LIBIMPORT int log_debug;
+LIBIMPORT int log_trace;
+
+LIBIMPORT int mod_type;
 
 char config_file_name[CONFPATHLEN];
 
-extern int log_debug;
-extern int log_trace;
-
+LIBEXPORT struct subsystem xsubsys[] = {
+	SUBSYSTEM("agent", agent_init, agent_fini)
+};
 
 void usage() {
-	fprintf(stderr, "command line: \n");
-	fprintf(stderr, "\ttsloadd -f <config-file> [-d|-t]\n");
+	fprintf(stderr, "command line: \n"
+					"\ttsloadd -f <config-file> [-d|-t]\n"
+					"\ttsloadd -v - tsload version\n");
 
 	exit(1);
 }
@@ -38,7 +44,7 @@ void parse_options(int argc, char* argv[]) {
 
 	int c;
 
-	while((c = getopt(argc, argv, "f:dt")) != -1) {
+	while((c = plat_getopt(argc, argv, "f:dtv")) != -1) {
 		switch(c) {
 		case 'f':
 			fflag = 1;
@@ -49,6 +55,10 @@ void parse_options(int argc, char* argv[]) {
 			/*FALLTHROUGH*/
 		case 'd':
 			log_debug = 1;
+			break;
+		case 'v':
+			print_ts_version("Loader agent (daemon)");
+			exit(0);
 			break;
 		case '?':
 			if(optopt == 'l' || optopt == 'm')
@@ -69,21 +79,19 @@ void parse_options(int argc, char* argv[]) {
 	}
 }
 
-void sigusr1_handler(int sig) {
-	t_dump_threads();
-}
 
 int main(int argc, char* argv[]) {
 	int err = 0;
 
-	set_mod_helper(MOD_TSLOAD, tsload_mod_helper);
+	mod_type = MOD_TSLOAD;
 	parse_options(argc, argv);
-
-	sigset(SIGUSR1, sigusr1_handler);
 
 	if((err = cfg_init(config_file_name)) != CFG_OK) {
 		return 1;
 	}
+
+	atexit(ts_finish);
+	tsload_init(xsubsys, 1);
 
 	tsload_start(argv[0]);
 

@@ -6,13 +6,14 @@
  */
 
 #include <defs.h>
+#include <uname.h>
 
 #include <sys/utsname.h>
 
-int uname_read = FALSE;
-struct utsname uname_data;
+static boolean_t uname_read = B_FALSE;
+static struct utsname uname_data;
 
-static inline struct utsname* hi_get_uname() {
+struct utsname* hi_get_uname() {
 	if(!uname_read)
 		uname(&uname_data);
 
@@ -20,27 +21,21 @@ static inline struct utsname* hi_get_uname() {
 }
 
 /* Returns operating system name and version */
-const char* hi_get_os_name() {
-	/*FIXME: Linux distibution names*/
+PLATAPI const char* hi_get_os_name() {
 	return hi_get_uname()->sysname;
 }
 
-const char* hi_get_os_release() {
+PLATAPI const char* hi_get_os_release() {
 	return hi_get_uname()->release;
 }
 
 /* Returns nodename and domain name of current host*/
-const char* hi_get_nodename() {
+PLATAPI const char* hi_get_nodename() {
 	return hi_get_uname()->nodename;
 }
 
-const char* hi_get_domainname() {
-	/*FIXME: solaris/bsd implementation*/
-	return hi_get_uname()->__domainname;
-}
-
 /* Returns machine architecture */
-const char* hi_get_mach() {
+PLATAPI const char* hi_get_mach() {
 	return hi_get_uname()->machine;
 }
 

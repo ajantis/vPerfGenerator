@@ -5,6 +5,7 @@
  *      Author: myaut
  */
 
+#include <defs.h>
 #include <disp.h>
 
 disptime_t simple_disp_interval(void) {
@@ -12,6 +13,6 @@ disptime_t simple_disp_interval(void) {
 }
 
 disp_t simple_disp = {
-	.disp_name = "simple",
-	.disp_interval = simple_disp_interval
+	SM_INIT(.disp_name, "simple"),
+	SM_INIT(.disp_interval, simple_disp_interval)
 };

@@ -5,6 +5,7 @@
  *      Author: myaut
  */
 
+#include <defs.h>
 #include <log.h>
 
 #include <libjson.h>
@@ -18,26 +19,29 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <unistd.h>
 
-char log_filename[LOGFNMAXLEN];
+LIBEXPORT char log_filename[LOGFNMAXLEN];
 
 /* By default, debug and tracing are disabled
  * */
-int log_debug 	= 0;
-int log_trace	= 0;
+LIBEXPORT int log_debug = 0;
+LIBEXPORT int log_trace	= 0;
 
 FILE* log_file;
+
+/* Allows to dump backtraces with messages */
+boolean_t log_trace_callers = B_FALSE;
 
 thread_mutex_t	log_mutex;
 
 const char* log_severity[] =
 	{"CRIT", "WARN", "INFO", "_DBG", "_TRC" };
 
-/*Used by libjson*/
+#ifdef JSON_DEBUG
 static void json_error_callback(const char* msg) {
 	logmsg_src(LOG_DEBUG, "JSON", msg);
 }
+#endif
 
 /* Rotate tsload logs
  *
@@ -46,11 +50,11 @@ static void json_error_callback(const char* msg) {
 int log_rotate() {
 	char old_log_filename[LOGFNMAXLEN + 4];
 	struct stat log_stat;
+	struct stat old_log_stat;
 
 	if(stat(log_filename, &log_stat) == -1) {
-		fprintf(stderr, "log_rotate -> stat error: %s\n", strerror(errno));
-
-		return errno;
+		/* Log doesn't exist, so we will create new file */
+		return 0;
 	}
 
 	if(log_stat.st_size < LOGMAXSIZE)
@@ -59,7 +63,7 @@ int log_rotate() {
 	strcpy(old_log_filename, log_filename);
 	strcat(old_log_filename, ".old");
 
-	if(access(old_log_filename, F_OK) != -1)
+	if(stat(old_log_filename, &old_log_stat) == 0)
 		remove(old_log_filename);
 
 	rename(log_filename, old_log_filename);
@@ -79,9 +83,17 @@ int log_init() {
 
 	if((ret = log_rotate()) != 0)
 		return ret;
+
 	log_file = fopen(log_filename, "a");
 
+	if(!log_file) {
+		fprintf(stderr, "Couldn't open log file '%s'\n", log_filename);
+		return -1;
+	}
+
+#	ifdef JSON_DEBUG
 	json_register_debug_callback(json_error_callback);
+#	endif
 
 	return 0;
 }
@@ -133,6 +145,14 @@ int logmsg_src(int severity, const char* source, const char* format, ...)
 	va_start(args, format);
 	ret += vfprintf(log_file, format, args);
 	va_end(args);
+
+	if(log_trace_callers) {
+		char* callers = malloc(512);
+		plat_get_callers(callers, 512);
+
+		fputs(callers, log_file);
+		free(callers);
+	}
 
 	fputc('\n', log_file);
 	fflush(log_file);

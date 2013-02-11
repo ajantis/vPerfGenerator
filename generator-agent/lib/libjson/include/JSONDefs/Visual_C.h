@@ -2,8 +2,15 @@
 #define JSON_VISUAL_C_HEADER
 
 #ifdef _MSC_VER
+	#ifdef __cplusplus
+		#define json_deprecated(method, warning) __declspec(deprecated(warning)) method
+	#else
+		#define json_deprecated(method, warning) method
+	#endif
 
-    #define json_deprecated(method, warning) __declspec(deprecated(warning)) method
+	#include <stdlib.h>
+	#define ATOLL	_atoi64
+	#define LLTOA	_i64toa
 
     #define json_nothrow
     #define json_throws(x)

@@ -1,0 +1,59 @@
+#!/usr/bin/stap
+
+/*
+ivolcs.stp - measures how many context switches caused by loader's agent service threads. 
+
+intrs - Number of times when system task was interrupted by loader involuntarily
+volcs - Number of times when loader interrupts another loader task voluntarily
+volcs - Number of times when loader interrupts another loader task involuntarily 
+*/
+
+global threads;
+global ivolcs;
+global volcs;
+global intrs;
+
+probe process("lib/libtscommon.so").function("t_post_init") {
+	threads[tid()] = user_string($t->t_name);
+}
+
+probe scheduler.ctxswitch {
+	if(prevtsk_state == 0) {
+		/* This context switch is not voluntary
+		   because previous task was runnable (state == 0) */
+		ivolcs[prev_tid, next_tid] <<< 1
+		intrs[next_tid] <<< 1
+	}
+	else {
+		volcs[prev_tid, next_tid] <<< 1
+	}
+}
+
+probe end {
+	total_intrs = 0
+	total_volcs = 0
+	total_ivolcs = 0
+
+	/* Calculate number of voluntary and involuntary context switches when one loader's thread
+	   evicts another from cpu*/
+	foreach (tid1 in threads) {
+		t_ivolcs = 0
+		t_volcs = 0
+		
+		foreach (tid2 in threads) {
+			t_ivolcs += @count(ivolcs[tid1, tid2]);
+			t_volcs += @count(volcs[tid1, tid2]);
+		}
+		
+		t_intrs = @count(intrs[tid1]);
+		
+		printf("%s: intrs: %d volcs: %d ivolcs: %d\n", threads[tid1], 
+					t_intrs, t_volcs, t_ivolcs);
+		
+		total_intrs += t_intrs
+		total_volcs += t_volcs
+		total_ivolcs += t_ivolcs
+	}
+	
+	printf("TOTAL: intrs: %d volcs: %d ivolcs: %d\n", total_intrs, total_volcs, total_ivolcs);
+}

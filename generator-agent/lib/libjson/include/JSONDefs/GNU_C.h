@@ -3,6 +3,20 @@
 
 #ifdef __GNUC__
 
+	#if defined(PLAT_SOLARIS)
+		#define _LONGLONG_TYPE
+	#endif
+
+	#if defined(__cplusplus) && !defined(PLAT_SOLARIS)
+		#include <cstdlib>
+		#define ATOLL	std::atoll
+		#define LLTOA	std::lltoa
+	#else
+		#include <stdlib.h>
+		#define ATOLL	atoll
+		#define LLTOA	lltoa
+	#endif
+
     #define json_deprecated(method, warning) method __attribute__((deprecated))
 
     #if (__GNUC__ >= 3)

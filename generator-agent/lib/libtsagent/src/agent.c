@@ -48,7 +48,7 @@ void agent_response_msg(JSONNODE* response) {
 	clnt_add_response(RT_RESPONSE, node);
 }
 
-void agent_error_msg(agent_errcode_t code, const char* format, ...) {
+void agent_error_msg(ts_errcode_t code, const char* format, ...) {
 	JSONNODE* node = json_new(JSON_NODE);
 	char error_msg[256];
 	va_list args;
@@ -100,11 +100,11 @@ void agent_process_command(char* command, JSONNODE* n_msg) {
 			n_arg = json_get(n_msg, arg_name);
 
 			if(n_arg == NULL) {
-				return agent_error_msg(AE_MESSAGE_FORMAT, "Missing argument %s!", arg_name);
+				return agent_error_msg(TSE_MESSAGE_FORMAT, "Missing argument %s!", arg_name);
 			}
 
 			if(arg_type != JSON_NULL && json_type(n_arg) != arg_type) {
-				return agent_error_msg(AE_MESSAGE_FORMAT, "Invalid type of argument %s!", arg_name);
+				return agent_error_msg(TSE_MESSAGE_FORMAT, "Invalid type of argument %s!", arg_name);
 			}
 
 			argv[i] = n_arg;
@@ -114,7 +114,7 @@ void agent_process_command(char* command, JSONNODE* n_msg) {
 		return;
 	}
 
-	agent_error_msg(AE_COMMAND_NOT_FOUND, "Not found command %s!", command);
+	agent_error_msg(TSE_COMMAND_NOT_FOUND, "Not found command %s!", command);
 }
 
 int agent_hello() {

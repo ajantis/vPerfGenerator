@@ -1,6 +1,14 @@
+target = 'libtsload'
+
 Import('env')
 
-lib = env.Clone(LIBS = ['c'])
+lib = env.Clone()
 
-lib.AddDeps(('lib', 'libjson'), ('lib', 'libtscommon'), ('lib', 'libtsagent'))
-lib.SharedLibrary(lib.Target('lib/libtsload'), Glob("src/*.c") + Glob("src/disp/*.c"))
+lib.AddDeps(('lib', 'libjson'), 
+            ('lib', 'libtscommon'), 
+            ('lib', 'libhostinfo'))
+
+objects = lib.CompileSharedLibrary(Glob("src/disp/*.c"))
+library = lib.LinkSharedLibrary(target, objects)
+
+lib.InstallTarget(lib['INSTALL_LIB'], library)

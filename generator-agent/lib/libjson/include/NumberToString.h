@@ -60,7 +60,7 @@ public:
 	   bool negative;
 
 	   START_MEM_SCOPE
-	   long value = (long)val;
+	   T value = (T) val;
 	   //first thing, check if it's negative, if so, make it positive
 	   if (value < 0){
 		  value = -value;

@@ -11,19 +11,19 @@
 #include <assert.h>
 
 /* Helper routines for hash map */
-static inline void* hm_next(hashmap_t* hm, void* obj) {
-	return *((void**) (obj + hm->hm_off_next));
+STATIC_INLINE hm_item_t* hm_next(hashmap_t* hm, hm_item_t* obj) {
+	return *((hm_item_t**) (obj + hm->hm_off_next));
 }
 
-static inline void hm_set_next(hashmap_t* hm, void* obj, void* next) {
-	*((void**) (obj + hm->hm_off_next)) = next;
+STATIC_INLINE void hm_set_next(hashmap_t* hm, hm_item_t* obj, hm_item_t* next) {
+	*((hm_item_t**) (obj + hm->hm_off_next)) = next;
 }
 
-static inline void* hm_get_key(hashmap_t* hm, void* obj) {
+STATIC_INLINE hm_key_t* hm_get_key(hashmap_t* hm, hm_item_t* obj) {
 	return (obj + hm->hm_off_key);
 }
 
-static inline unsigned hm_hash_object(hashmap_t* hm, void* obj) {
+STATIC_INLINE unsigned hm_hash_object(hashmap_t* hm, hm_item_t* obj) {
 	return hm->hm_hash_key(hm_get_key(hm, obj));
 }
 
@@ -48,8 +48,16 @@ void hash_map_init(hashmap_t* hm, const char* name) {
 
 /**
  * Destroy hash map
+ *
+ * It shouldn't contain objects (or assertion will rise)
  */
 void hash_map_destroy(hashmap_t* hm) {
+	int i = 0;
+
+	for(i = 0; i < hm->hm_size; ++i) {
+		assert(hm->hm_heads[i] == NULL);
+	}
+
 	mutex_destroy(&hm->hm_mutex);
 }
 
@@ -62,13 +70,13 @@ void hash_map_destroy(hashmap_t* hm) {
  * @return HASH_MAP_OK if object was successfully inserted or HASH_MAP_DUPLICATE if \
  * object with same key (not hash!) already exists in hash map
  * */
-int hash_map_insert(hashmap_t* hm, void* object) {
+int hash_map_insert(hashmap_t* hm, hm_item_t* object) {
 	unsigned hash = hm_hash_object(hm, object);
 	int ret = HASH_MAP_OK;
 
-	void** head = hm->hm_heads + hash;
-	void* iter;
-	void* next;
+	hm_item_t** head = hm->hm_heads + hash;
+	hm_item_t* iter;
+	hm_item_t* next;
 
 	mutex_lock(&hm->hm_mutex);
 	if(*head == NULL) {
@@ -79,12 +87,16 @@ int hash_map_insert(hashmap_t* hm, void* object) {
 		next = hm_next(hm, iter);
 
 		/* Walk through chain until reach tail */
-		while(next != NULL) {
+		while(B_TRUE) {
 			if(hm->hm_compare(hm_get_key(hm, iter),
-			                  hm_get_key(hm, object)) == 0) {
+			                  hm_get_key(hm, object))) {
 				ret = HASH_MAP_DUPLICATE;
 				goto done;
 			}
+
+			/* Found tail */
+			if(next == NULL)
+				break;
 
 			iter = next;
 			next = hm_next(hm, iter);
@@ -109,13 +121,13 @@ done:
  * @return HASH_MAP_OK if object was successfully remove or HASH_MAP_NOT_FOUND if \
  * object is not
  * */
-int hash_map_remove(hashmap_t* hm, void* object) {
+int hash_map_remove(hashmap_t* hm, hm_item_t* object) {
 	unsigned hash = hm_hash_object(hm, object);
 	int ret = HASH_MAP_OK;
 
-	void** head = hm->hm_heads + hash;
-	void* iter;
-	void* next;
+	hm_item_t** head = hm->hm_heads + hash;
+	hm_item_t* iter;
+	hm_item_t* next;
 
 	mutex_lock(&hm->hm_mutex);
 
@@ -153,14 +165,14 @@ done:
 /**
  * Find object in hash map by key
  */
-void* hash_map_find(hashmap_t* hm, const void* key) {
+void* hash_map_find(hashmap_t* hm, const hm_key_t* key) {
 	unsigned hash = hm->hm_hash_key(key);
-	void* iter = hm->hm_heads[hash];
+	hm_item_t* iter = hm->hm_heads[hash];
 
 	mutex_lock(&hm->hm_mutex);
 
 	while(iter != NULL) {
-		if(hm->hm_compare(hm_get_key(hm, iter), key) == 0)
+		if(hm->hm_compare(hm_get_key(hm, iter), key))
 			break;
 
 		iter =  hm_next(hm, iter);
@@ -188,19 +200,47 @@ void* hash_map_find(hashmap_t* hm, const void* key) {
  *
  * @return NULL or object where func returned STOP
  */
-void* hash_map_walk(hashmap_t* hm, int (*func)(void* object, void* arg), void* arg) {
+void* hash_map_walk(hashmap_t* hm, int (*func)(hm_item_t* object, void* arg), void* arg) {
 	int i = 0;
-	void* iter = NULL;
+	int ret = 0;
+	hm_item_t* iter = NULL;
+	hm_item_t* next = NULL;
+	hm_item_t* prev = NULL;
 
 	mutex_lock(&hm->hm_mutex);
 	for(i = 0; i < hm->hm_size; ++i) {
+		prev = NULL;
+		next = NULL;
 		iter = hm->hm_heads[i];
 
 		while(iter != NULL) {
-			if(func(iter, arg) == HM_WALKER_STOP)
+			next = hm_next(hm, iter);
+
+			ret = func(iter, arg);
+
+			if(ret & HM_WALKER_REMOVE) {
+				if(prev == NULL) {
+					/* Entire chain before iter was removed, so this is head */
+					hm->hm_heads[i] = next;
+				}
+				else {
+					hm_set_next(hm, prev, next);
+				}
+			}
+			else {
+				/* Save prev pointer */
+				prev = iter;
+			}
+
+			if(ret & HM_WALKER_STOP)
 				goto done;
 
-			iter =  hm_next(hm, iter);
+			iter = next;
+		}
+
+		if(prev == NULL) {
+			/* Entire chain was removed */
+			hm->hm_heads[i] = NULL;
 		}
 	}
 

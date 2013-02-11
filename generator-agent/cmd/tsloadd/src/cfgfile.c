@@ -7,15 +7,16 @@
 
 #include <log.h>
 #include <modules.h>
+#include <client.h>
+
+#include <defs.h>
 
 #include <cfgfile.h>
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
-
-extern char log_filename[];
-extern char mod_search_path[];
 
 /**
  * config.c
@@ -28,15 +29,21 @@ extern char mod_search_path[];
  * Variables:
  * MODPATH - path to modules
  * LOGFILE - log file destination (may be - for stdout)
+ * CLIENTHOST, CLIENTPORT - Path to vPerfGenerator server
  *
  * NOTE: because config file is read before logging is configured
  * it writes all error messages directly to stderr
  */
 
+LIBIMPORT char log_filename[LOGFNMAXLEN];
+LIBIMPORT char mod_search_path[MODPATHLEN];
+LIBIMPORT int clnt_port;
+LIBIMPORT char clnt_host[CLNTHOSTLEN];
+
 /**
  * Process single config file's option:
  *
- * @return CFG_OK or CFG_ERR_INVALID_OPTION if option is unknown
+ * @return CFG_OK or aq if option is unknown
  * */
 int cfg_option(char* name, char* value) {
 	if(strcmp(name, "MODPATH") == 0) {
@@ -44,6 +51,12 @@ int cfg_option(char* name, char* value) {
 	}
 	else if(strcmp(name, "LOGFILE") == 0) {
 		strncpy(log_filename, value, LOGFNMAXLEN);
+	}
+	else if(strcmp(name, "CLIENTHOST") == 0) {
+		strncpy(clnt_host, value, CLNTHOSTLEN);
+	}
+	else if(strcmp(name, "CLIENTPORT") == 0) {
+		clnt_port = atoi(value);
 	}
 	else {
 		return CFG_ERR_INVALID_OPTION;
@@ -59,24 +72,24 @@ int cfg_read(FILE* cfg_file) {
 	char line[CONFLINELEN];
 	char* eq_pos = NULL;		/*Position of '=' sign*/
 	size_t len;
-	int line_num = 0;
+	int line_num = 1;
 
-	while(!feof(cfg_file)) {
-		fgets(line, CONFLINELEN, cfg_file);
+	while(fgets(line, CONFLINELEN, cfg_file) != NULL) {
 		len = strlen(line);
 
 		/*Remove whitespaces from end of the line*/
 		while(isspace(line[--len]) && len != 0);
 		line[len + 1] = 0;
 
-		if(line[0] == '#')
+		/* If line is comment or just empty */
+		if(line[0] == '#' || len == 0)
 			continue;
 
 		eq_pos = strchr(line, '=');
 
 		/*Line does not contain =*/
 		if(eq_pos == NULL) {
-			fprintf(stderr, "Not found '=' on line %d", line_num);
+			fprintf(stderr, "Not found '=' on line %d\n", line_num);
 			return CFG_ERR_MISSING_EQ;
 		}
 
@@ -84,7 +97,7 @@ int cfg_read(FILE* cfg_file) {
 		*eq_pos = '\0';
 
 		if(cfg_option(line, eq_pos + 1) != 0) {
-			fprintf(stderr, "Invalid option %s on line %d", line, line_num);
+			fprintf(stderr, "Invalid option %s on line %d\n", line, line_num);
 			return CFG_ERR_INVALID_OPTION;
 		}
 

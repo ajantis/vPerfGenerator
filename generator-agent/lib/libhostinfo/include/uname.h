@@ -8,15 +8,17 @@
 #ifndef UNAME_H_
 #define UNAME_H_
 
+#include <defs.h>
+
 /* Returns operating system name and version */
-const char* hi_get_os_name();
-const char* hi_get_os_release();
+LIBEXPORT PLATAPI const char* hi_get_os_name();
+LIBEXPORT PLATAPI const char* hi_get_os_release();
 
 /* Returns nodename and domain name of current host*/
-const char* hi_get_nodename();
-const char* hi_get_domainname();
+LIBEXPORT PLATAPI const char* hi_get_nodename();
+LIBEXPORT PLATAPI const char* hi_get_domainname();
 
 /* Returns machine architecture */
-const char* hi_get_mach();
+LIBEXPORT PLATAPI const char* hi_get_mach();
 
 #endif /* UNAME_H_ */

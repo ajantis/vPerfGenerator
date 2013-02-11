@@ -14,8 +14,10 @@
 #include <threadpool.h>
 #include <wlparam.h>
 #include <modules.h>
-#include <modtsload.h>
+#include <wltype.h>
 #include <tstime.h>
+
+#define WL_NOTIFICATIONS_PER_SEC	20
 
 #define WLHASHSIZE	8
 #define WLHASHMASK	(WLHASHSIZE - 1)
@@ -59,29 +61,33 @@ typedef struct workload_step {
 
 /*Sibling to TSWorkloadStatusCode*/
 typedef enum {
+	WLS_NEW = 0,
 	WLS_CONFIGURING = 1,
 	WLS_SUCCESS = 2,
 	WLS_FAIL = 3,
-	WLS_FINISHED = 4
+	WLS_FINISHED = 4,
+	WLS_RUNNING	= 5
 } wl_status_t;
 
 typedef struct workload {
 	char 			 wl_name[WLNAMELEN];
 
-	module_t*		 wl_mod;
-	tsload_module_t* wl_ts_mod;
+	wl_type_t*		 wl_type;
 
 	thread_pool_t*	 wl_tp;
 	void*			 wl_params;
 
 	thread_t		 wl_cfg_thread;		/**< Thread responsible for configuration*/
 
-	int 			 wl_is_configured;
+	boolean_t		 wl_is_configured;
+	wl_status_t 	 wl_status;
 
 	int				 wl_current_rq;
 
 	ts_time_t		 wl_start_time;
-	int 			 wl_is_started;
+	boolean_t		 wl_is_started;
+
+	ts_time_t		 wl_notify_time;
 
 	/* Requests queue */
 	thread_mutex_t	 wl_rq_mutex;		/**< Mutex that protects wl_requests*/
@@ -98,12 +104,20 @@ typedef struct workload {
 	list_node_t		 wl_tp_node;		/**< thread pool wl list*/
 } workload_t;
 
-void wl_notify(workload_t* wl, wl_status_t status, int done, char* format, ...) ;
+typedef struct {
+	workload_t* wl;
+	wl_status_t status;
+	long progress;
 
-workload_t* wl_search(const char* name);
+	char msg[256];
+} wl_notify_msg_t;
 
-void wl_config(workload_t* wl);
-void wl_unconfig(workload_t* wl);
+LIBEXPORT void wl_notify(workload_t* wl, wl_status_t status, long progress, char* format, ...) ;
+
+LIBEXPORT workload_t* wl_search(const char* name);
+
+LIBEXPORT void wl_config(workload_t* wl);
+LIBEXPORT void wl_unconfig(workload_t* wl);
 
 int wl_is_started(workload_t* wl);
 int wl_provide_step(workload_t* wl, long step_id, unsigned num_rqs);
@@ -114,8 +128,8 @@ void wl_run_request(request_t* rq);
 void wl_request_free(request_t* rq);
 void wl_rq_chain_push(list_head_t* rq_chain);
 
-int wl_init(void);
-void wl_fini(void);
+LIBEXPORT int wl_init(void);
+LIBEXPORT void wl_fini(void);
 
 #define WL_STEP_OK				0
 #define WL_STEP_QUEUE_FULL		-1
@@ -124,8 +138,7 @@ void wl_fini(void);
 #ifndef NO_JSON
 #include <libjson.h>
 
-JSONNODE* json_request_format_all(list_head_t* rq_list);
-void json_workload_proc_all(JSONNODE* node, list_head_t* wl_List);
+LIBEXPORT JSONNODE* json_request_format_all(list_head_t* rq_list);
 workload_t* json_workload_proc(const char* wl_name, JSONNODE* node);
 #endif
 

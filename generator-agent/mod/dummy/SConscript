@@ -1,4 +1,0 @@
-Import('env')
-
-mod = env.Clone(LIBS = ['c'])
-mod.Module('dummy')

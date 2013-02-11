@@ -11,64 +11,44 @@
 #include <threads.h>
 #include <hashmap.h>
 #include <defs.h>
+#include <atomic.h>
 
 #include <stdio.h>
 #include <string.h>
-
 #include <stdarg.h>
-#include <sys/types.h>
-#include <sys/syscall.h>
-#include <sys/time.h>
-
 #include <assert.h>
 
 /* Thread hash map. Maps pthread to our thread */
-DECLARE_HASH_MAP(thread_hash_map, thread_t, THASHSIZE, t_thread, t_next,
+DECLARE_HASH_MAP(thread_hash_map, thread_t, THASHSIZE, t_id, t_next,
 	/*hash*/ {
-		pthread_t tid = * (pthread_t*) key;
+		thread_id_t tid = * (thread_id_t*) key;
 
-		unsigned hash = 0;
-
-		while(tid != 0) {
-			hash += tid & THAHSMASK;
-			tid = tid >> THASHSHIFT;
-		}
-
-		return hash % THASHSIZE;
+		return tid % THASHMASK;
 	},
 	/*compare*/ {
-		pthread_t* tid1 = (pthread_t*) key1;
-		pthread_t* tid2 = (pthread_t*) key2;
+		thread_id_t tid1 = * (thread_id_t*) key1;
+		thread_id_t tid2 = * (thread_id_t*) key2;
 
-		if(pthread_equal(*tid1, *tid2))
-			return 0;
-
-		return 1;
+		return tid1 == tid2;
 	});
 
 /*End of thread_hash_map declaration*/
 
-pthread_key_t thread_key;
-
-static void thread_key_destructor(void* key) {
-	/* threads are freed by their spawners so simply
-	 * do nothing*/
-}
+thread_key_t thread_key;
 
 /**
- * returns pointer to current thread
- *
+ * returns pointer to current thread *
  * Used to monitor mutex/event deadlock and starvation (see tutil.c)
  *  */
 thread_t* t_self() {
-	return (thread_t*) pthread_getspecific(thread_key);
+	return (thread_t*) tkey_get(&thread_key);
 }
 
 /*
  * Generate next thread id
  * */
-int t_assign_id() {
-	static int tid = 0;
+thread_id_t t_assign_id() {
+	static thread_id_t tid = 0;
 
 	return ++tid;
 }
@@ -77,7 +57,7 @@ int t_assign_id() {
  * Initialize and run thread
  * */
 void t_init(thread_t* thread, void* arg,
-		void* (*start)(void*),
+		thread_start_func start,
 		const char* namefmt, ...) {
 	va_list va;
 
@@ -87,9 +67,6 @@ void t_init(thread_t* thread, void* arg,
 	va_start(va, namefmt);
 	vsnprintf(thread->t_name, TNAMELEN, namefmt, va);
 	va_end(va);
-
-	pthread_attr_init(&thread->t_attr);
-	pthread_attr_setdetachstate(&thread->t_attr, PTHREAD_CREATE_JOINABLE);
 
 	thread->t_event = NULL;
 	thread->t_arg = arg;
@@ -101,11 +78,11 @@ void t_init(thread_t* thread, void* arg,
 
 	thread->t_system_id = 0;
 
-	logmsg(LOG_DEBUG, "Created thread #%d '%s'", thread->t_id, thread->t_name);
+	thread->t_ret_code = 0;
 
-	pthread_create(&thread->t_thread,
-			       &thread->t_attr,
-			       start, (void*) thread);
+	logmsg(LOG_DEBUG, "Created thread %d '%s'", thread->t_id, thread->t_name);
+
+	plat_thread_init(&thread->t_impl, (void*) thread, start);
 }
 
 /*
@@ -116,12 +93,17 @@ void t_init(thread_t* thread, void* arg,
  * @return t (for THREAD_ENTRY)
  * */
 thread_t* t_post_init(thread_t* t) {
-	t->t_system_id = syscall(__NR_gettid);
-	t->t_state = TS_RUNNABLE;
+	t->t_system_id = plat_gettid();
+	atomic_set(&t->t_state_atomic, TS_RUNNABLE);
 
 	hash_map_insert(&thread_hash_map, t);
 
-	pthread_setspecific(thread_key, (void*) t);
+	tkey_set(&thread_key, (void*) t);
+
+	if(t->t_event) {
+		event_notify_all(t->t_event);
+		t->t_event = NULL;
+	}
 
 	return t;
 }
@@ -131,21 +113,38 @@ thread_t* t_post_init(thread_t* t) {
  * and remove thread from hash_map
  * */
 void t_exit(thread_t* t) {
-	t->t_state = TS_DEAD;
+	atomic_set(&t->t_state_atomic, TS_DEAD);
 
-	hash_map_remove(&thread_hash_map, t);
+	logmsg(LOG_DEBUG, "Thread %d '%s' exited", t->t_id, t->t_name);
 
 	if(t->t_event)
 		event_notify_all(t->t_event);
 }
 
+/*
+ * Wait until thread starts
+ * */
+void t_wait_start(thread_t* thread) {
+	thread_event_t event;
+	event_init(&event, "(t_wait_start)");
+
+	thread->t_event = &event;
+
+	if(atomic_read(&thread->t_state_atomic) != TS_RUNNABLE) {
+		event_wait(&event);
+	}
+
+	event_destroy(&event);
+	thread->t_event = NULL;
+}
 
 /*
- * Wait until thread finishes (should be called with t_attach)
+ * Wait until thread finishes
  * */
 void t_join(thread_t* thread, thread_event_t* event) {
-	if(thread->t_state != TS_DEAD) {
-		thread->t_event = event;
+	thread->t_event = event;
+
+	if(atomic_read(&thread->t_state_atomic) != TS_DEAD) {
 		event_wait(thread->t_event);
 	}
 }
@@ -155,18 +154,18 @@ void t_join(thread_t* thread, thread_event_t* event) {
  * @note blocks until thread exits from itself!
  * */
 void t_destroy(thread_t* thread) {
-	if(thread->t_state != TS_DEAD) {
-		/*XXX: shouldn't this cause race condition with t_exit?*/
+	if(atomic_read(&thread->t_state_atomic) != TS_DEAD) {
 		thread_event_t event;
 		event_init(&event, "(t_destroy)");
 
 		t_join(thread, &event);
+
+		event_destroy(&event);
 	}
 
 	hash_map_remove(&thread_hash_map, thread);
 
-	pthread_attr_destroy(&thread->t_attr);
-	pthread_detach(thread->t_thread);
+	plat_thread_destroy(&thread->t_impl);
 }
 
 /*
@@ -174,22 +173,7 @@ void t_destroy(thread_t* thread) {
  *
  * @param tv - time interwal
  * */
-void t_get_wait_time(thread_t* t, struct timeval* tv) {
-	/*FIXME: Use tstime*/
-	gettimeofday(tv, NULL);
-
-	if (t->t_block_time.tv_usec < tv->tv_usec) {
-		int nsec = (tv->tv_usec - t->t_block_time.tv_usec) / 1000000 + 1;
-		tv->tv_usec -= 1000000 * nsec;
-		tv->tv_sec += nsec;
-	}
-	if (t->t_block_time.tv_usec - tv->tv_usec > 1000000) {
-		int nsec = (tv->tv_usec - t->t_block_time.tv_usec) / 1000000;
-		tv->tv_usec += 1000000 * nsec;
-		tv->tv_sec -= nsec;
-	}
-}
-
+#if 0
 static int t_dump_thread(void* object, void* arg) {
 	const char* t_state_name[] = {
 			"INIT",
@@ -235,9 +219,10 @@ void t_dump_threads() {
 
 	(void) hash_map_walk(&thread_hash_map, t_dump_thread, NULL);
 }
+#endif
 
 int threads_init(void) {
-	pthread_key_create(&thread_key, thread_key_destructor);
+	tkey_init(&thread_key, "thread_key");
 
 	hash_map_init(&thread_hash_map, "thread_hash_map");
 
@@ -247,5 +232,5 @@ int threads_init(void) {
 void threads_fini(void) {
 	hash_map_destroy(&thread_hash_map);
 
-	pthread_key_delete(thread_key);
+	tkey_destroy(&thread_key);
 }

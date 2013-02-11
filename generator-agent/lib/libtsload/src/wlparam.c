@@ -10,7 +10,7 @@
 
 #include <modules.h>
 #include <wlparam.h>
-#include <agent.h>
+#include <tsload.h>
 
 #include <libjson.h>
 
@@ -142,8 +142,9 @@ int json_wlparam_strset_proc(JSONNODE* node, wlp_descr_t* wlp, void* param) {
 	return WLPARAM_JSON_OUTSIDE_RANGE;
 }
 
-#define WLPARAM_RANGE_CHECK(min, max) 							\
-		if(*p < wlp->range.min || *p > wlp->range.max)			\
+#define WLPARAM_RANGE_CHECK(min, max)						\
+		if(wlp->range.range &&								\
+			(*p < wlp->range.min || *p > wlp->range.max))	\
 					return WLPARAM_JSON_OUTSIDE_RANGE;
 
 #define WLPARAM_NO_RANGE_CHECK
@@ -185,30 +186,71 @@ int json_wlparam_proc(JSONNODE* node, wlp_descr_t* wlp, void* param) {
 	return WLPARAM_JSON_OK;
 }
 
+int wlparam_set_default(wlp_descr_t* wlp, void* param) {
+	if(!wlp->defval.enabled)
+		return WLPARAM_NO_DEFAULT;
+
+	switch(wlp->type) {
+	case WLP_BOOL:
+		(*(wlp_bool_t*) param) = wlp->defval.b;
+		break;
+	case WLP_INTEGER:
+		(*(wlp_integer_t*) param) = wlp->defval.i;
+		break;
+	case WLP_FLOAT:
+		(*(wlp_float_t*) param) = wlp->defval.f;
+		break;
+	case WLP_SIZE:
+		(*(wlp_size_t*) param) = wlp->defval.sz;
+		break;
+	case WLP_RAW_STRING:
+		/* Not checking length of default value here*/
+		strcpy((char*) param, wlp->defval.s);
+	case WLP_STRING_SET:
+		(*(wlp_strset_t*) param) = wlp->defval.ssi;
+	}
+
+	return WLPARAM_DEFAULT_OK;
+}
+
 int json_wlparam_proc_all(JSONNODE* node, wlp_descr_t* wlp, void* params) {
 	int ret;
+	void* param;
 
 	while(wlp->type != WLP_NULL) {
 		JSONNODE_ITERATOR i_param = json_find(node, wlp->name),
 						  i_end = json_end(node);
+		param = ((char*) params) + wlp->off;
 
 		if(i_param == i_end) {
-			agent_error_msg(AE_INVALID_DATA, "Workload parameter %s not specified", wlp->name);
+			/* If parameter is optional, try to assign it to default value */
+			if(wlp->flags & WLPF_OPTIONAL) {
+				ret = wlparam_set_default(wlp, param);
+
+				if(ret == WLPARAM_NO_DEFAULT) {
+					tsload_error_msg(TSE_INTERNAL_ERROR, "Missing default value for %s", wlp->name);
+					return WLPARAM_JSON_NOT_FOUND;
+				}
+
+				wlp++;
+				continue;
+			}
+
+			tsload_error_msg(TSE_INVALID_DATA, "Workload parameter %s not specified", wlp->name);
 			return WLPARAM_JSON_NOT_FOUND;
 		}
 
-		ret = json_wlparam_proc(*i_param, wlp, params + wlp->off);
+		ret = json_wlparam_proc(*i_param, wlp, param);
 
 		if(ret == WLPARAM_JSON_WRONG_TYPE) {
-			agent_error_msg(AE_INVALID_DATA, "Workload parameter %s has wrong type", wlp->name);
+			tsload_error_msg(TSE_INVALID_DATA, "Workload parameter %s has wrong type", wlp->name);
 			return ret;
 		}
 
 		if(ret == WLPARAM_JSON_OUTSIDE_RANGE) {
-			agent_error_msg(AE_INVALID_DATA, "Workload parameter %s outside defined range", wlp->name);
+			tsload_error_msg(TSE_INVALID_DATA, "Workload parameter %s outside defined range", wlp->name);
 			return ret;
 		}
-
 
 		wlp++;
 	}

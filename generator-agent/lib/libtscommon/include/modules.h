@@ -10,6 +10,9 @@
 
 #include <modapi.h>
 
+#include <defs.h>
+#include <plat/modules.h>
+
 #define MODPATHLEN	256
 #define MODSTATUSMSG 512
 
@@ -33,7 +36,7 @@ typedef enum mod_status {
 
 typedef struct module {
 	char mod_path[MODPATHLEN];
-	void* mod_library;		/**< Handle provided by dlopen() */
+	plat_mod_library_t mod_library;		/**< Handle provided by dlopen() */
 
 	char* mod_name;
 
@@ -43,29 +46,32 @@ typedef struct module {
 	mod_config_func mod_config;
 	mod_config_func mod_unconfig;
 
-	void* mod_helper;
-
 	void* mod_private;		/**< Allocated when module is configured*/
 
 	struct module* mod_next;
 } module_t;
 
-int load_modules();
-void unload_modules(void);
+LIBEXPORT module_t* mod_search(const char* name);
+LIBEXPORT int mod_error(module_t* mod, char* fmtstr, ...);
 
-module_t* mod_search(const char* name);
-int mod_error(module_t* mod, char* fmtstr, ...);
+LIBEXPORT void* mod_load_symbol(module_t* mod, const char* name);
 
-void* mod_load_symbol(module_t* mod, const char* name);
+LIBEXPORT module_t* mod_get_first();
 
-#define MOD_LOAD_SYMBOL(type, mod, name, flag) 				\
-		(type) ({ void* ret = mod_load_symbol(mod, name); 	\
-			if(ret == NULL)	{			 					\
-				logmsg(LOG_WARN, "Required parameter(s) %s is undefined", name); \
-				flag = TRUE;			 					\
-			}							 					\
-			ret; })
+#define MOD_LOAD_SYMBOL(dest, mod, name, flag) 					   		   \
+	   do { void* sym = mod_load_symbol(mod, name); 				   	   \
+			if(sym == NULL)	{			 								   \
+				logmsg(LOG_WARN, "Required symbol %s is undefined", name); \
+				flag = B_TRUE;			 								   \
+			}							 								   \
+			dest = sym; } while(0)
 
-void set_mod_helper(int type, int (*helper)(module_t* mod));
+/* Platform-dependent functions */
+PLATAPI int plat_mod_open(plat_mod_library_t* lib, const char* path);
+PLATAPI int plat_mod_close(plat_mod_library_t* lib);
+PLATAPI void* plat_mod_load_symbol(plat_mod_library_t* lib, const char* name);
+
+LIBEXPORT int mod_init(void);
+LIBEXPORT void mod_fini(void);
 
 #endif /* MODULES_H_ */

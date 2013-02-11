@@ -16,8 +16,8 @@
 #include <threads.h>
 #include <threadpool.h>
 #include <workload.h>
-#include <modtsload.h>
-#include <loadagent.h>
+#include <wltype.h>
+#include <tsload.h>
 #include <tstime.h>
 
 #include <libjson.h>
@@ -29,8 +29,13 @@
 #include <stdarg.h>
 
 squeue_t	wl_requests;
+squeue_t	wl_notifications;
 
 thread_t	t_wl_requests;
+thread_t	t_wl_notify;
+
+mp_cache_t	wl_cache;
+mp_cache_t	wl_rq_cache;
 
 DECLARE_HASH_MAP(workload_hash_map, workload_t, WLHASHSIZE, wl_name, wl_hm_next,
 	{
@@ -43,7 +48,7 @@ DECLARE_HASH_MAP(workload_hash_map, workload_t, WLHASHSIZE, wl_name, wl_hm_next,
 		return hash & WLHASHMASK;
 	},
 	{
-		return strcmp(key1, key2);
+		return strcmp((char*) key1, (char*) key2) == 0;
 	}
 )
 
@@ -52,20 +57,14 @@ DECLARE_HASH_MAP(workload_hash_map, workload_t, WLHASHSIZE, wl_name, wl_hm_next,
  *
  * @return NULL if malloc had failed or new workload object
  */
-workload_t* wl_create(const char* name, module_t* mod, thread_pool_t* tp) {
-	workload_t* wl = (workload_t*) mp_malloc(sizeof(workload_t));
-	tsload_module_t* tmod = NULL;
-
-	assert(mod->mod_helper != NULL);
-
-	tmod = (tsload_module_t*) mod->mod_helper;
+workload_t* wl_create(const char* name, wl_type_t* wlt, thread_pool_t* tp) {
+	workload_t* wl = (workload_t*) mp_cache_alloc(&wl_cache);
 
 	if(wl == NULL)
 		return NULL;
 
 	strncpy(wl->wl_name, name, WLNAMELEN);
-	wl->wl_mod = mod;
-	wl->wl_ts_mod = tmod;
+	wl->wl_type = wlt;
 
 	wl->wl_tp = tp;
 
@@ -78,18 +77,19 @@ workload_t* wl_create(const char* name, module_t* mod, thread_pool_t* tp) {
 	list_node_init(&wl->wl_chain);
 	list_node_init(&wl->wl_tp_node);
 
-	wl->wl_params = mp_malloc(tmod->mod_params_size);
+	wl->wl_params = mp_malloc(wlt->wlt_params_size);
 
-	wl->wl_is_configured = FALSE;
+	wl->wl_is_configured = B_FALSE;
+	wl->wl_is_started = B_FALSE;
+	wl->wl_status = WLS_NEW;
 
-	wl->wl_is_started = FALSE;
 	wl->wl_start_time = TS_TIME_MAX;
+
+	wl->wl_notify_time = 0;
 
 	mutex_init(&wl->wl_rq_mutex, "wl-%s-rq", name);
 
 	hash_map_insert(&workload_hash_map, wl);
-
-	tp_attach(tp, wl);
 
 	return wl;
 }
@@ -107,7 +107,7 @@ void wl_destroy(workload_t* wl) {
 	mutex_destroy(&wl->wl_rq_mutex);
 
 	mp_free(wl->wl_params);
-	mp_free(wl);
+	mp_cache_free(&wl_cache, wl);
 }
 
 /**
@@ -116,7 +116,7 @@ void wl_destroy(workload_t* wl) {
 void wl_destroy_all(list_head_t* wl_head) {
 	workload_t *wl, *wl_tmp;
 
-	list_for_each_entry_safe(wl, wl_tmp, wl_head, wl_chain) {
+	list_for_each_entry_safe(workload_t, wl, wl_tmp, wl_head, wl_chain) {
 		wl_destroy(wl);
 	}
 }
@@ -136,56 +136,98 @@ workload_t* wl_search(const char* name) {
  * @param done configuration progress (in percent)
  * @param format message format string
  */
-void wl_notify(workload_t* wl, wl_status_t status, int done, char* format, ...) {
-	char config_msg[512];
+void wl_notify(workload_t* wl, wl_status_t status, long progress, char* format, ...) {
+	wl_notify_msg_t* msg = NULL;
 	va_list args;
+
+	ts_time_t now = tm_get_time();
+
+	/* Ignore intermediate progress messages if they are going too fasy */
+	if( status == WLS_CONFIGURING && progress > 2 && progress < 98 &&
+		(now - wl->wl_notify_time) < (T_SEC / WL_NOTIFICATIONS_PER_SEC)) {
+		return;
+	}
+
+	wl->wl_notify_time = now;
 
 	switch(status) {
 	case WLS_CONFIGURING:
 		/* 146% and -5% are awkward */
-		if(done < 0) done = 0;
-		if(done > 100) done = 100;
+		if(progress < 0) progress = 0;
+		if(progress > 100) progress = 100;
 	break;
 	case WLS_FAIL:
-		done = -1;
+		progress = -1;
 	break;
 	case WLS_SUCCESS:
-	case WLS_FINISHED:
-		done = 100;
+		progress = 100;
 	break;
+	case WLS_RUNNING:
+	case WLS_FINISHED:
+		progress = wl->wl_current_step;
+		break;
 	default:
 		assert(status == WLS_CONFIGURING);
 	break;
 	}
 
+	wl->wl_status = status;
+
+	msg = mp_malloc(sizeof(wl_notify_msg_t));
+
 	va_start(args, format);
-	vsnprintf(config_msg, 512, format, args);
+	vsnprintf(msg->msg, 512, format, args);
 	va_end(args);
 
 	logmsg((status == WLS_FAIL)? LOG_WARN : LOG_INFO,
-			"Workload %s status: %s", wl->wl_name, config_msg);
+			"Workload %s status: %s", wl->wl_name, msg->msg);
 
-	agent_workload_status(wl->wl_name, status, done, config_msg);
+	msg->wl = wl;
+	msg->status = status;
+	msg->progress = progress;
+
+	squeue_push(&wl_notifications, msg);
 }
 
-void* wl_config_thread(void* arg) {
+thread_result_t wl_notification_thread(thread_arg_t arg) {
+	THREAD_ENTRY(arg, void, unused);
+
+	wl_notify_msg_t* msg = NULL;
+
+	while(B_TRUE) {
+		msg = (wl_notify_msg_t*) squeue_pop(&wl_notifications);
+
+		if(msg == NULL) {
+			THREAD_EXIT(0);
+		}
+
+		tsload_workload_status(msg->wl->wl_name, msg->status, msg->progress, msg->msg);
+
+		mp_free(msg);
+	}
+
+THREAD_END:
+	THREAD_FINISH(arg);
+}
+
+thread_result_t wl_config_thread(thread_arg_t arg) {
 	THREAD_ENTRY(arg, workload_t, wl);
 	int ret;
 
 	logmsg(LOG_INFO, "Started configuring of workload %s", wl->wl_name);
 
-	ret = wl->wl_ts_mod->mod_wl_config(wl);
+	ret = wl->wl_type->wlt_wl_config(wl);
 
 	if(ret != 0) {
 		logmsg(LOG_WARN, "Failed to configure workload %s", wl->wl_name);
 
-		THREAD_EXIT();
+		THREAD_EXIT(ret);
 	}
 
-	wl->wl_is_configured = TRUE;
+	tp_attach(wl->wl_tp, wl);
+	wl->wl_is_configured = B_TRUE;
 
 	wl_notify(wl, WLS_SUCCESS, 100, "Successfully configured workload %s", wl->wl_name);
-
 
 
 THREAD_END:
@@ -198,21 +240,22 @@ void wl_config(workload_t* wl) {
 }
 
 void wl_unconfig(workload_t* wl) {
-	wl->wl_ts_mod->mod_wl_unconfig(wl);
+	wl->wl_type->wlt_wl_unconfig(wl);
 }
 
 int wl_is_started(workload_t* wl) {
 	if(wl->wl_is_started)
-		return TRUE;
+		return B_TRUE;
 
-	if(tm_get_time() >= wl->wl_start_time) {
-		logmsg("Starting workload %s...", wl->wl_name);
+	if(wl->wl_is_configured &&
+	   tm_get_time() >= wl->wl_start_time) {
+		logmsg(LOG_INFO, "Starting workload %s...", wl->wl_name);
 
-		wl->wl_is_started = TRUE;
-		return TRUE;
+		wl->wl_is_started = B_TRUE;
+		return B_TRUE;
 	}
 
-	return FALSE;
+	return B_FALSE;
 }
 
 /**
@@ -241,7 +284,7 @@ int wl_provide_step(workload_t* wl, long step_id, unsigned num_rqs) {
 
 	if(step_id != (wl->wl_last_step + 1)) {
 		/*Provided incorrect step*/
-		agent_error_msg(AE_INVALID_DATA, "Step %ld is not correct, last step was %ld!", step_id, wl->wl_last_step);
+		tsload_error_msg(TSE_INVALID_DATA, "Step %ld is not correct, last step was %ld!", step_id, wl->wl_last_step);
 
 		ret = WL_STEP_INVALID;
 		goto done;
@@ -281,7 +324,7 @@ int wl_advance_step(workload_step_t* step) {
 
 	if(wl->wl_current_step > wl->wl_last_step) {
 		/* No steps on queue */
-		logmsg(LOG_WARN, "No steps on queue %s, step #%d!", wl->wl_name, wl->wl_current_step);
+		logmsg(LOG_WARN, "No steps on queue %s, step #%ld!", wl->wl_name, wl->wl_current_step);
 
 		ret = -1;
 		goto done;
@@ -303,7 +346,7 @@ done:
  * @param thread_id id of thread that will execute thread
  * */
 request_t* wl_create_request(workload_t* wl, int thread_id) {
-	request_t* rq = (request_t*) mp_malloc(sizeof(request_t));
+	request_t* rq = (request_t*) mp_cache_alloc(&wl_rq_cache);
 
 	rq->rq_step = wl->wl_current_step;
 	rq->rq_id = wl->wl_current_rq++;
@@ -323,17 +366,22 @@ request_t* wl_create_request(workload_t* wl, int thread_id) {
 }
 
 /**
- * Run request for execution
- */
+ * Free request's memory */
+void wl_request_free(request_t* rq) {
+	mp_cache_free(&wl_rq_cache, rq);
+}
+
+/**
+ * Run request for execution */
 void wl_run_request(request_t* rq) {
 	int ret;
 	workload_t* wl = rq->rq_workload;
 
 	rq->rq_flags |= RQF_STARTED;
 
-	rq->rq_start_time = tm_get_time();
-	ret = wl->wl_ts_mod->mod_run_request(rq);
-	rq->rq_end_time = tm_get_time();
+	rq->rq_start_time = tm_get_clock();
+	ret = wl->wl_type->wlt_run_request(rq);
+	rq->rq_end_time = tm_get_clock();
 
 	/* FIXME: on-time condition*/
 	if(rq->rq_end_time < (wl->wl_tp->tp_time + wl->wl_tp->tp_quantum))
@@ -353,14 +401,14 @@ void wl_rq_chain_destroy(void *p_rq_chain) {
 	list_head_t* rq_chain = (list_head_t*) p_rq_chain;
 	request_t *rq, *rq_tmp;
 
-	list_for_each_entry_safe(rq, rq_tmp, rq_chain, rq_node) {
+	list_for_each_entry_safe(request_t, rq, rq_tmp, rq_chain, rq_node) {
 		wl_request_free(rq);
 	}
 
 	mp_free(p_rq_chain);
 }
 
-void* wl_requests_thread(void* arg) {
+thread_result_t wl_requests_thread(thread_arg_t arg) {
 	THREAD_ENTRY(arg, void, unused);
 	list_head_t* rq_chain;
 
@@ -368,14 +416,14 @@ void* wl_requests_thread(void* arg) {
 
 	request_t *rq, *rq_tmp;
 
-	while(TRUE) {
+	while(B_TRUE) {
 		rq_chain =  (list_head_t*) squeue_pop(&wl_requests);
 
-		if(rq_chain == NULL)
-			THREAD_EXIT();
+		if(rq_chain == NULL) {
+			THREAD_EXIT(0);
+		}
 
-		j_rq_chain = json_request_format_all(rq_chain);
-		agent_requests_report(j_rq_chain);
+		tsload_requests_report(rq_chain);
 
 		wl_rq_chain_destroy(rq_chain);
 	}
@@ -384,18 +432,16 @@ THREAD_END:
 	THREAD_FINISH(arg);
 }
 
-void wl_request_free(request_t* rq) {
-	mp_free(rq);
-}
-
 JSONNODE* json_request_format_all(list_head_t* rq_list) {
 	JSONNODE* jrq;
 	JSONNODE* j_rq_list = json_new(JSON_ARRAY);
 
 	request_t* rq;
 
-	list_for_each_entry(rq, rq_list, rq_node) {
+	list_for_each_entry(request_t, rq, rq_list, rq_node) {
 		jrq = json_new(JSON_NODE);
+
+		json_push_back(jrq, json_new_a("workload_name", rq->rq_workload->wl_name));
 
 		json_push_back(jrq, json_new_i("step", rq->rq_step));
 		json_push_back(jrq, json_new_i("request", rq->rq_id));
@@ -412,63 +458,34 @@ JSONNODE* json_request_format_all(list_head_t* rq_list) {
 	return j_rq_list;
 }
 
-void json_workload_proc_all(JSONNODE* node, list_head_t* wl_list) {
-	JSONNODE_ITERATOR iter = json_begin(node),
-			          end = json_end(node);
-	workload_t* wl;
-	char* wl_name;
-
-	while(iter != end) {
-		wl_name = json_name(*iter);
-
-		wl = json_workload_proc(wl_name, *iter);
-		++iter;
-
-		json_free(wl_name);
-
-		/* json_workload_proc failed to process workload,
-		 * free all workloads that are already parsed and return NULL*/
-		if(wl == NULL) {
-			logmsg(LOG_WARN, "Failed to process workloads from JSON, discarding all of them");
-			wl_destroy_all(wl_list);
-
-			return;
-		}
-
-		/* Insert workload into workload chain */
-		list_add_tail(&wl->wl_chain, wl_list);
-	}
-}
-
-
 #define JSON_GET_VALIDATE_PARAM(iter, name, req_type)	\
-	({											\
+	{											\
 		iter = json_find(node, name);			\
 		if(iter == i_end) {						\
-			agent_error_msg(AE_MESSAGE_FORMAT,	\
+			tsload_error_msg(TSE_MESSAGE_FORMAT,	\
 					"Failed to parse workload, missing parameter %s", name);	\
 			goto fail;							\
 		}										\
 		if(json_type(*iter) != req_type) {		\
-			agent_error_msg(AE_MESSAGE_FORMAT,	\
+			tsload_error_msg(TSE_MESSAGE_FORMAT,	\
 					"Expected that " name " is " #req_type );	\
 			goto fail;							\
 		}										\
-	})
+	}
 
-#define SEARCH_OBJ(iter, type, search) 		\
-	({										\
+#define SEARCH_OBJ(dest, iter, type, search) 		\
+	do {									\
 		type* obj = NULL;					\
 		char* name = json_as_string(*iter);	\
 		obj = search(name);					\
 		json_free(name);					\
 		if(obj == NULL) {					\
-			agent_error_msg(AE_INVALID_DATA,				\
+			tsload_error_msg(TSE_INVALID_DATA,				\
 					"Invalid " #type " name %s", name);		\
 			goto fail;						\
 		}									\
-		obj;								\
-	});
+		dest = obj;							\
+	} while(0);
 
 
 /**
@@ -482,50 +499,45 @@ void json_workload_proc_all(JSONNODE* node, list_head_t* wl_list) {
  * so returns NULL in case of error and invokes agent_error_msg
  * */
 workload_t* json_workload_proc(const char* wl_name, JSONNODE* node) {
-	JSONNODE_ITERATOR i_mod = NULL;
+	JSONNODE_ITERATOR i_wlt = NULL;
 	JSONNODE_ITERATOR i_tp = NULL;
 	JSONNODE_ITERATOR i_params = NULL;
 	JSONNODE_ITERATOR i_end = json_end(node);
 
 	workload_t* wl = NULL;
-	module_t* mod = NULL;
-	tsload_module_t* tmod = NULL;
+	wl_type_t* wlt = NULL;
 	thread_pool_t* tp = NULL;
 
 	int ret;
 
 	/* Get threadpool and module from incoming message
 	 * and find corresponding objects*/
-	JSON_GET_VALIDATE_PARAM(i_mod, "module", JSON_STRING);
+	JSON_GET_VALIDATE_PARAM(i_wlt, "wltype", JSON_STRING);
 	JSON_GET_VALIDATE_PARAM(i_tp, "threadpool", JSON_STRING);
 	JSON_GET_VALIDATE_PARAM(i_params, "params", JSON_NODE);
 
-	mod = SEARCH_OBJ(i_mod, module_t, mod_search);
-	tp = SEARCH_OBJ(i_tp, thread_pool_t, tp_search);
-
-	/* Save tmod interface */
-	assert(mod->mod_helper != NULL);
-	tmod = (tsload_module_t*) mod->mod_helper;
+	SEARCH_OBJ(wlt, i_wlt, wl_type_t, wl_type_search);
+	SEARCH_OBJ(tp, i_tp, thread_pool_t, tp_search);
 
 	/* Get workload's name */
 	logmsg(LOG_DEBUG, "Parsing workload %s", wl_name);
 
 	if(strlen(wl_name) == 0) {
-		agent_error_msg(AE_MESSAGE_FORMAT,"Failed to parse workload, no name was defined");
+		tsload_error_msg(TSE_MESSAGE_FORMAT,"Failed to parse workload, no name was defined");
 		goto fail;
 	}
 
 	if(wl_search(wl_name) != NULL) {
-		agent_error_msg(AE_INVALID_DATA, "Workload %s already exists %s", wl_name);
+		tsload_error_msg(TSE_INVALID_DATA, "Workload %s already exists", wl_name);
 		goto fail;
 	}
 
 	/* Create workload */
-	wl = wl_create(wl_name, mod, tp);
+	wl = wl_create(wl_name, wlt, tp);
 
 	/* Process params from i_params to wl_params, where mod_params contains
 	 * parameters descriptions (see wlparam) */
-	ret = json_wlparam_proc_all(*i_params, tmod->mod_params, wl->wl_params);
+	ret = json_wlparam_proc_all(*i_params, wlt->wlt_params, wl->wl_params);
 
 	if(ret != WLPARAM_JSON_OK) {
 		goto fail;
@@ -546,6 +558,12 @@ int wl_init(void) {
 	squeue_init(&wl_requests, "wl-requests");
 	t_init(&t_wl_requests, NULL, wl_requests_thread, "wl_requests");
 
+	squeue_init(&wl_notifications, "wl-notify");
+	t_init(&t_wl_notify, NULL, wl_notification_thread, "wl_notification");
+
+	mp_cache_init(&wl_rq_cache, request_t);
+	mp_cache_init(&wl_cache, workload_t);
+
 	return 0;
 }
 
@@ -553,5 +571,11 @@ void wl_fini(void) {
 	squeue_destroy(&wl_requests, wl_rq_chain_destroy);
 	t_destroy(&t_wl_requests);
 
+	squeue_destroy(&wl_notifications, mp_free);
+	t_destroy(&t_wl_notify);
+
 	hash_map_destroy(&workload_hash_map);
+
+	mp_cache_destroy(&wl_rq_cache);
+	mp_cache_destroy(&wl_cache);
 }

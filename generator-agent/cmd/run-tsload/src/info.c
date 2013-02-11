@@ -5,20 +5,21 @@
  *      Author: myaut
  */
 
-#include <modules.h>
+#include <tsload.h>
 
 #include <libjson.h>
 
 #include <stdio.h>
 
 int do_info() {
-	JSONNODE* node = json_modules_info();
+	JSONNODE* node = tsload_get_modules_info();
 	char* info = json_write_formatted(node);
 
 	fputs(info, stdout);
 	fputc('\n', stdout);
 
 	json_free(info);
+	json_delete(node);
 
 	return 0;
 }

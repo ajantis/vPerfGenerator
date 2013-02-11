@@ -8,10 +8,10 @@
 #define LOG_SOURCE "worker"
 #include <log.h>
 
-#include <util.h>
+#include <defs.h>
+
 #include <mempool.h>
 #include <workload.h>
-#include <defs.h>
 #include <tstime.h>
 #include <threads.h>
 #include <threadpool.h>
@@ -22,10 +22,10 @@ void tp_detach_nolock(thread_pool_t* tp, struct workload* wl);
 
 /* Control thread
  *
- * Control thread notifies workers after on each quantum ending
+ * Control thread notifies workers after each quantum ending
  * and processes each step for each workload on thread pool
  * */
-void* control_thread(void* arg) {
+thread_result_t control_thread(thread_arg_t arg) {
 	THREAD_ENTRY(arg, thread_pool_t, tp);
 	ts_time_t tm = tm_get_time();
 	workload_t *wl;
@@ -33,19 +33,22 @@ void* control_thread(void* arg) {
 	int ret = 0;
 	int tid = 0;
 
-	workload_step_t* step = mp_malloc(1 * sizeof(workload_step_t));;
+	workload_step_t* step = mp_malloc(1 * sizeof(workload_step_t));
+
+	int wi;
+	tp_worker_t* worker;
 
 	/* Synchronize all control-threads on all nodes to start
 	 * quantum at beginning of next second (real time synchronization
 	 * is provided by NTP) */
-	tm_sleep(tm_ceil_diff(tm, SEC));
+	tm_sleep_nano(tm_ceil_diff(tm, T_SEC));
 
 	logmsg(LOG_DEBUG, "Started control thread (tpool: %s)", tp->tp_name);
 
 	while(!tp->tp_is_dead) {
 		tp->tp_time = tm_get_time();
 
-		logmsg(LOG_TRACE, "Control thread %s is running (tm: %llu)",
+		logmsg(LOG_TRACE, "Control thread %s is running (tm: %lld)",
 					tp->tp_name, tp->tp_time);
 
 		mutex_lock(&tp->tp_mutex);
@@ -63,14 +66,14 @@ void* control_thread(void* arg) {
 
 			/*Re-initialize step's workloads*/
 			wli = 0;
-			list_for_each_entry(wl, &tp->tp_wl_head, wl_tp_node) {
+			list_for_each_entry(workload_t, wl, &tp->tp_wl_head, wl_tp_node) {
+				assert(wli < wl_count);
+
 				step[wli].wls_workload = wl;
 				++wli;
-
-				assert(wli < wl_count);
 			}
 
-			tp->tp_wl_changed = FALSE;
+			tp->tp_wl_changed = B_FALSE;
 		}
 
 		wl_count_prev = wl_count;
@@ -96,12 +99,17 @@ void* control_thread(void* arg) {
 			ret = wl_advance_step(step + wli);
 
 			if(ret == -1) {
+				wl_notify(wl, WLS_FINISHED, 0, "Finished workload %s on step #%ld",
+								wl->wl_name, wl->wl_current_step);
+
 				/*If steps was not provided, detach workload from threadpool*/
 				tp_detach_nolock(wl->wl_tp, wl);
 
-				/*FIXME: unconfig detached works*/
 				continue;
 			}
+
+			wl_notify(wl, WLS_RUNNING, 0, "Running workload %s step #%ld: %d requests",
+							wl->wl_name, wl->wl_current_step, step[wli].wls_rq_count);
 
 			/*FIXME: case if worker didn't started processing of requests for previous step yet */
 			tp_distribute_requests(step + wli, tp);
@@ -118,22 +126,28 @@ void* control_thread(void* arg) {
 
 
 		/* = START WORKERS = */
+		for(wi = 0; wi < tp->tp_num_threads; ++wi) {
+			atomic_set(&tp->tp_workers[wi].w_state, INTERRUPT);
+		}
+
 		event_notify_all(&tp->tp_event);
 
 	quantum_sleep:
 		mutex_unlock(&tp->tp_mutex);
 
-		tm_sleep(tm_ceil_diff(tm_get_time(), tp->tp_quantum));
+		tm_sleep_nano(tm_ceil_diff(tm_get_time(), tp->tp_quantum));
 	}
 
 THREAD_END:
 	THREAD_FINISH(arg);
 }
 
-void* worker_thread(void* arg) {
+thread_result_t worker_thread(thread_arg_t arg) {
 	THREAD_ENTRY(arg, tp_worker_t, worker);
 	list_head_t* rq_chain;
 	request_t* rq;
+
+	boolean_t do_sleep = B_FALSE;
 
 	thread_pool_t* tp = worker->w_tp;
 
@@ -145,6 +159,9 @@ void* worker_thread(void* arg) {
 	while(!worker->w_tp->tp_is_dead) {
 		mutex_lock(&worker->w_rq_mutex);
 
+		atomic_set(&worker->w_state, WORKING);
+		do_sleep = B_TRUE;
+
 		if(!list_empty(&worker->w_requests)) {
 			/*There are new requests on queue*/
 
@@ -155,9 +172,13 @@ void* worker_thread(void* arg) {
 			list_splice_init(&worker->w_requests, list_head_node(rq_chain));
 			mutex_unlock(&worker->w_rq_mutex);
 
-			/*FIXME: quantum exhaustion*/
-			list_for_each_entry(rq, rq_chain, rq_node)  {
+			list_for_each_entry(request_t, rq, rq_chain, rq_node)  {
 				wl_run_request(rq);
+
+				if(atomic_read(&worker->w_state) == INTERRUPT) {
+					do_sleep = B_FALSE;
+					break;
+				}
 			}
 
 			/*Push chain of requests to global chain*/
@@ -168,7 +189,10 @@ void* worker_thread(void* arg) {
 			mutex_unlock(&worker->w_rq_mutex);
 		}
 
-		event_wait(&tp->tp_event);
+		if(do_sleep) {
+			atomic_set(&worker->w_state, SLEEPING);
+			event_wait(&tp->tp_event);
+		}
 	}
 
 THREAD_END:

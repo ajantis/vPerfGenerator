@@ -1,6 +1,17 @@
+target = 'libjson'
+
 Import('env')
 
-lib = env.Clone(LIBS = ['stdc++'],
-                CXXFLAGS = ['-Os', '-ffast-math', '-DJSON_LESS_MEMORY'])
+lib = env.Clone()
 
-lib.SharedLibrary(lib.Target('lib/libjson'), Glob("src/*.cpp"))
+if lib['CXX'] == 'gcc':
+    lib.Append(LIBS = ['stdc++'])
+    lib.Append(CXXFLAGS = ['-Os', '-ffast-math'])
+elif lib['CXX'] == 'cl':
+    # To disallow C++ exceptions pass C++ code in libJSON and go to C code in other libraries
+    lib.Append(CXXFLAGS = ['/EHsc'])
+
+objects = lib.CompileSharedLibrary(Glob("src/*.cpp"), ctfconvert = False)
+library = lib.LinkSharedLibrary(target, objects, ctfmerge = False)
+
+lib.InstallTarget(lib['INSTALL_LIB'], library)

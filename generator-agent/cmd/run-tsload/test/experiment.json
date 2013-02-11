@@ -1,0 +1,31 @@
+{
+	"name": "test",
+	"steps": {
+		"test1": "test1.tss",
+		"test2": "test2.tss"
+	},
+	"workloads" :	{
+		"test1" : {
+			"module": "dummy",
+			"threadpool": "[DEFAULT]",
+			"params": {
+				"filesize": 16777216,
+				"blocksize": 4096,
+				"path": "/tmp/testfile1",
+				"test": "read",
+				"sparse": false
+			}
+		},
+		"test2" : {
+			"module": "dummy",
+			"threadpool": "[DEFAULT]",
+			"params": {
+				"filesize": 16777216,
+				"blocksize": 8192,
+				"path": "/tmp/testfile2",
+				"test": "write",
+				"sparse": false
+			}
+		}
+	}
+}

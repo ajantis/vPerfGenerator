@@ -1,15 +1,44 @@
-import os
+from pathutil import *
+
+tgtdir = 'bin'
+target = 'tsloadd'
 
 Import('env')
 
-cmd = env.Clone(LIBS = ['c'])
+cmd = env.Clone()
+
+def CreateConfig(target, source, env):
+    tsload_cfg = file(str(target[0]), 'w')
+    
+    tsload_log = env['LOAD_LOGFILE']
+    mod_path = env['LOAD_MODPATH']
+    server = GetOption('tsload_server').split(':')
+    
+    if len(server) != 2:
+        raise StopError('Wrong --tsload-server argument! Should be formatted as localhost:9090.')
+    
+    srv_host, srv_port = server
+    
+    if not PathIsAbs(tsload_log):
+        tsload_log = PathJoin(env['PREFIX'], env['INSTALL_VAR'], tsload_log)
+    
+    print >> tsload_cfg, 'MODPATH=' + mod_path
+    print >> tsload_cfg, 'LOGFILE=' + tsload_log
+    print >> tsload_cfg, 'CLIENTHOST=' + srv_host
+    print >> tsload_cfg, 'CLIENTPORT=' + srv_port
+        
 
 cmd.AddDeps(('lib', 'libtsagent'), 
             ('lib', 'libtscommon'), 
             ('lib', 'libjson'), 
             ('lib', 'libhostinfo'), 
             ('lib', 'libtsload'))
-tsloadd = cmd.Program(cmd.Target('bin/tsloadd'), Glob("src/*.c"))
+objects = cmd.CompileProgram()
+tsloadd = cmd.Program(target, objects)
 
+cmd.InstallTarget(cmd['INSTALL_BIN'], tsloadd)
+
+# Generate tsload.cfg
+cmd.Command('tsload.cfg', [], CreateConfig)
 cmd.Depends(tsloadd, 'tsload.cfg')
-cmd.InstallFile('etc', 'tsload.cfg')
+cmd.InstallTarget(cmd['INSTALL_ETC'], File('tsload.cfg'))

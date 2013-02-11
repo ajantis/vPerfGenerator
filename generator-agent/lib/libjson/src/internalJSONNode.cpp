@@ -189,7 +189,7 @@ void internalJSONNode::FetchNumber(void) const json_nothrow {
     #ifdef JSON_STRICT
 		_value._number = NumberToString::_atof(_string.c_str());
 		/*FIXME: should be JSON_STRICT implementation*/
-		_value._integer = (json_int_t) std::atoll(_string.c_str());
+		_value._integer = (json_int_t) ATOLL(_string.c_str());
     #else 
 	   #ifdef JSON_UNICODE
 		  const size_t len = _string.length();
@@ -216,10 +216,10 @@ void internalJSONNode::FetchNumber(void) const json_nothrow {
 		  #endif 
 		  temp.ptr[res] = '\0';
 		  _value._number = (json_number)std::atof(temp.ptr);
-		  _value._integer = (json_int_t) std::atoll(temp.ptr);
+		  _value._integer = (json_int_t) ATOLL(temp.ptr);
 	   #else
 		  _value._number = (json_number)std::atof(_string.c_str());
-		  _value._integer = (json_int_t) std::atoll(_string.c_str());
+		  _value._integer = (json_int_t) ATOLL(_string.c_str());
 	   #endif
     #endif
     #if((!defined(JSON_CASTABLE) && defined(JSON_LESS_MEMORY)) && !defined(JSON_WRITE_PRIORITY))
@@ -267,6 +267,7 @@ void internalJSONNode::Set(const json_string & val) json_nothrow {
 	   makeNotContainer();
 	   _type = JSON_NUMBER;
 	   _value._number = (json_number)val;
+	   _value._integer = val;
 	   #if(defined(JSON_CASTABLE) || !defined(JSON_LESS_MEMORY) || defined(JSON_WRITE_PRIORITY))
 		  _string = NumberToString::_itoa<json_int_t>(val);
 	   #else
