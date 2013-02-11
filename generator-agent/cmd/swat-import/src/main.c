@@ -48,7 +48,7 @@ void parse_options(int argc, const char* argv[]) {
 
 	time_t now;
 
-	char* eq_pos;
+	char* map_arg;
 	uint64_t dev;
 
 	int c;
@@ -63,6 +63,7 @@ void parse_options(int argc, const char* argv[]) {
 			break;
 		case 's':
 			sflag = B_TRUE;
+			/* FIXME: atoll not supports uint64_t */
 			swat_stat_device = atoll(optarg);
 			command = CMD_STAT;
 			break;
@@ -75,17 +76,18 @@ void parse_options(int argc, const char* argv[]) {
 			command = CMD_SER;
 			break;
 		case 'm':
-			eq_pos = strchr(optarg, '=');
+			map_arg = strchr(optarg, '=');
 
-			if(eq_pos == NULL) {
+			if(map_arg == NULL) {
 				fprintf(stderr, "-m argument should contain equal sign.\n");
 				ok = B_FALSE;
 				break;
 			}
 
-			*eq_pos++ = '\0';
+			*map_arg++ = '\0';
+			/* FIXME: atoll not supports uint64_t */
 			dev = atoll(optarg);
-			swat_add_mapping(dev, eq_pos);
+			swat_add_mapping(dev, map_arg);
 
 			break;
 		case 'f':
@@ -123,7 +125,7 @@ int main(int argc, const char* argv[]) {
 
 	parse_options(argc, argv);
 
-	if(swat_read() != SWAT_OK) {
+	if(swat_read(command == CMD_STAT) != SWAT_OK) {
 		ret = 1;
 		goto exit;
 	}

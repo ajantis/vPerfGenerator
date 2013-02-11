@@ -46,8 +46,6 @@ typedef struct module {
 	mod_config_func mod_config;
 	mod_config_func mod_unconfig;
 
-	void* mod_helper;
-
 	void* mod_private;		/**< Allocated when module is configured*/
 
 	struct module* mod_next;
@@ -67,8 +65,6 @@ LIBEXPORT module_t* mod_get_first();
 				flag = B_TRUE;			 								   \
 			}							 								   \
 			dest = sym; } while(0)
-
-LIBEXPORT void set_mod_helper(int type, int (*helper)(module_t* mod));
 
 /* Platform-dependent functions */
 PLATAPI int plat_mod_open(plat_mod_library_t* lib, const char* path);

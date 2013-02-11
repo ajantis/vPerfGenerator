@@ -25,14 +25,14 @@ PORT = 9090
 
 NANOSECOND = 1000 * 1000 * 1000
 
-WORKLOAD_DUMMY = {'module': 'dummy',
-                  'threadpool': '[DEFAULT]',
-                  'params': {'filesize': 134217728,
-                             'blocksize': 4096,
-                             'path': 'C:\\testfile',
-                             'test': 'read',
-                             'sparse': False}}
-WORKLOAD_BUSY_WAIT = { 'module': 'busy_wait',
+WORKLOAD_SIMPLEIO = {'wltype': 'simpleio_read',
+                     'threadpool': '[DEFAULT]',
+                     'params': {'filesize': 134217728,
+                                'blocksize': 4096,
+                                'path': 'C:\\testfile',
+                                'sparse': False,
+                                'sync': True}}
+WORKLOAD_BUSY_WAIT = { 'wltype': 'busy_wait',
                        'threadpool': '[DEFAULT]',
                        'params': {'num_cycles': 400000 } }
 
@@ -60,7 +60,7 @@ class WorkloadConfigurator(Thread):
                 print >> sys.stderr, '-' * 20
     
     def configureWorkload(self, client):
-        workload = WORKLOAD_BUSY_WAIT
+        workload = WORKLOAD_SIMPLEIO
         
         client.invoke('configure_workload', 
                       workload_name='test', 

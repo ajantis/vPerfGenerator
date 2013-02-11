@@ -12,7 +12,7 @@
 
 #define MODNAMELEN			    32
 
-#define MOD_API_VERSION		0x0001
+#define MOD_API_VERSION		0x0002
 
 #define MOD_TSLOAD		1
 #define MOD_MONITOR		2
@@ -28,5 +28,8 @@
 
 struct module;
 typedef int (* mod_config_func)(struct module* mod);
+
+#define	MOD_OK			0
+#define MOD_ERROR		-1
 
 #endif /* MODAPI_H_ */

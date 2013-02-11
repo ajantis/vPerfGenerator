@@ -10,7 +10,6 @@
 
 #include <mempool.h>
 #include <modules.h>
-#include <modtsload.h>
 #include <tsload.h>
 #include <threads.h>
 #include <getopt.h>
@@ -32,6 +31,8 @@ extern char experiment_dir[];
 LIBIMPORT char log_filename[];
 LIBIMPORT int log_debug;
 LIBIMPORT int log_trace;
+
+LIBIMPORT int mod_type;
 
 LIBIMPORT char mod_search_path[];
 
@@ -151,7 +152,7 @@ int main(int argc, char* argv[]) {
 		usage();
 	}
 
-	set_mod_helper(MOD_TSLOAD, tsload_mod_helper);
+	mod_type = MOD_TSLOAD;
 
 	atexit(ts_finish);
 	tsload_init(xsubsys, 1);

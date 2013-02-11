@@ -16,7 +16,7 @@
 #include <threads.h>
 #include <threadpool.h>
 #include <workload.h>
-#include <modtsload.h>
+#include <wltype.h>
 #include <tsload.h>
 #include <tstime.h>
 
@@ -57,20 +57,14 @@ DECLARE_HASH_MAP(workload_hash_map, workload_t, WLHASHSIZE, wl_name, wl_hm_next,
  *
  * @return NULL if malloc had failed or new workload object
  */
-workload_t* wl_create(const char* name, module_t* mod, thread_pool_t* tp) {
+workload_t* wl_create(const char* name, wl_type_t* wlt, thread_pool_t* tp) {
 	workload_t* wl = (workload_t*) mp_cache_alloc(&wl_cache);
-	tsload_module_t* tmod = NULL;
-
-	assert(mod->mod_helper != NULL);
-
-	tmod = (tsload_module_t*) mod->mod_helper;
 
 	if(wl == NULL)
 		return NULL;
 
 	strncpy(wl->wl_name, name, WLNAMELEN);
-	wl->wl_mod = mod;
-	wl->wl_ts_mod = tmod;
+	wl->wl_type = wlt;
 
 	wl->wl_tp = tp;
 
@@ -83,7 +77,7 @@ workload_t* wl_create(const char* name, module_t* mod, thread_pool_t* tp) {
 	list_node_init(&wl->wl_chain);
 	list_node_init(&wl->wl_tp_node);
 
-	wl->wl_params = mp_malloc(tmod->mod_params_size);
+	wl->wl_params = mp_malloc(wlt->wlt_params_size);
 
 	wl->wl_is_configured = B_FALSE;
 	wl->wl_is_started = B_FALSE;
@@ -220,7 +214,7 @@ thread_result_t wl_config_thread(thread_arg_t arg) {
 
 	logmsg(LOG_INFO, "Started configuring of workload %s", wl->wl_name);
 
-	ret = wl->wl_ts_mod->mod_wl_config(wl);
+	ret = wl->wl_type->wlt_wl_config(wl);
 
 	if(ret != 0) {
 		logmsg(LOG_WARN, "Failed to configure workload %s", wl->wl_name);
@@ -244,7 +238,7 @@ void wl_config(workload_t* wl) {
 }
 
 void wl_unconfig(workload_t* wl) {
-	wl->wl_ts_mod->mod_wl_unconfig(wl);
+	wl->wl_type->wlt_wl_unconfig(wl);
 }
 
 int wl_is_started(workload_t* wl) {
@@ -384,7 +378,7 @@ void wl_run_request(request_t* rq) {
 	rq->rq_flags |= RQF_STARTED;
 
 	rq->rq_start_time = tm_get_clock();
-	ret = wl->wl_ts_mod->mod_run_request(rq);
+	ret = wl->wl_type->wlt_run_request(rq);
 	rq->rq_end_time = tm_get_clock();
 
 	/* FIXME: on-time condition*/
@@ -503,30 +497,25 @@ JSONNODE* json_request_format_all(list_head_t* rq_list) {
  * so returns NULL in case of error and invokes agent_error_msg
  * */
 workload_t* json_workload_proc(const char* wl_name, JSONNODE* node) {
-	JSONNODE_ITERATOR i_mod = NULL;
+	JSONNODE_ITERATOR i_wlt = NULL;
 	JSONNODE_ITERATOR i_tp = NULL;
 	JSONNODE_ITERATOR i_params = NULL;
 	JSONNODE_ITERATOR i_end = json_end(node);
 
 	workload_t* wl = NULL;
-	module_t* mod = NULL;
-	tsload_module_t* tmod = NULL;
+	wl_type_t* wlt = NULL;
 	thread_pool_t* tp = NULL;
 
 	int ret;
 
 	/* Get threadpool and module from incoming message
 	 * and find corresponding objects*/
-	JSON_GET_VALIDATE_PARAM(i_mod, "module", JSON_STRING);
+	JSON_GET_VALIDATE_PARAM(i_wlt, "wltype", JSON_STRING);
 	JSON_GET_VALIDATE_PARAM(i_tp, "threadpool", JSON_STRING);
 	JSON_GET_VALIDATE_PARAM(i_params, "params", JSON_NODE);
 
-	SEARCH_OBJ(mod, i_mod, module_t, mod_search);
+	SEARCH_OBJ(wlt, i_wlt, wl_type_t, wl_type_search);
 	SEARCH_OBJ(tp, i_tp, thread_pool_t, tp_search);
-
-	/* Save tmod interface */
-	assert(mod->mod_helper != NULL);
-	tmod = (tsload_module_t*) mod->mod_helper;
 
 	/* Get workload's name */
 	logmsg(LOG_DEBUG, "Parsing workload %s", wl_name);
@@ -542,11 +531,11 @@ workload_t* json_workload_proc(const char* wl_name, JSONNODE* node) {
 	}
 
 	/* Create workload */
-	wl = wl_create(wl_name, mod, tp);
+	wl = wl_create(wl_name, wlt, tp);
 
 	/* Process params from i_params to wl_params, where mod_params contains
 	 * parameters descriptions (see wlparam) */
-	ret = json_wlparam_proc_all(*i_params, tmod->mod_params, wl->wl_params);
+	ret = json_wlparam_proc_all(*i_params, wlt->wlt_params, wl->wl_params);
 
 	if(ret != WLPARAM_JSON_OK) {
 		goto fail;

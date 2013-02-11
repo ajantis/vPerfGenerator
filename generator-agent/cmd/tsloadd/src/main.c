@@ -9,7 +9,7 @@
 #include <log.h>
 
 #include <loadagent.h>
-#include <modtsload.h>
+#include <modules.h>
 #include <cfgfile.h>
 #include <tsload.h>
 #include <getopt.h>
@@ -21,6 +21,8 @@
 
 LIBIMPORT int log_debug;
 LIBIMPORT int log_trace;
+
+LIBIMPORT int mod_type;
 
 char config_file_name[CONFPATHLEN];
 
@@ -81,7 +83,7 @@ void parse_options(int argc, char* argv[]) {
 int main(int argc, char* argv[]) {
 	int err = 0;
 
-	set_mod_helper(MOD_TSLOAD, tsload_mod_helper);
+	mod_type = MOD_TSLOAD;
 	parse_options(argc, argv);
 
 	if((err = cfg_init(config_file_name)) != CFG_OK) {

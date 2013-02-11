@@ -1,5 +1,0 @@
-Import('env')
-
-mod = env.Clone()
-
-mod.Module('load', 'dummy')

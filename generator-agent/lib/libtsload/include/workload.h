@@ -14,7 +14,7 @@
 #include <threadpool.h>
 #include <wlparam.h>
 #include <modules.h>
-#include <modtsload.h>
+#include <wltype.h>
 #include <tstime.h>
 
 #define WL_NOTIFICATIONS_PER_SEC	20
@@ -72,8 +72,7 @@ typedef enum {
 typedef struct workload {
 	char 			 wl_name[WLNAMELEN];
 
-	module_t*		 wl_mod;
-	tsload_module_t* wl_ts_mod;
+	wl_type_t*		 wl_type;
 
 	thread_pool_t*	 wl_tp;
 	void*			 wl_params;

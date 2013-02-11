@@ -157,6 +157,16 @@ swat_workload_t* swat_wl_create(swl_key_t* key) {
 	return wl;
 }
 
+/**
+ * Approximate transfer size.
+ *
+ * For small blocks (< 4 KB) use previous 2 ** n value
+ * For medium blocks (< 1 MB) round up it to nearest 2 ** n value
+ * For large blocks (> 1 MB) use 1 MB blocks
+ *
+ * This allows to reduce number of workloads. Approximation rules are completely
+ * heuristic
+ * */
 STATIC_INLINE int32_t swat_xfer_approx(int32_t xfersize) {
 	int msb = __msb32(xfersize);
 
@@ -166,9 +176,11 @@ STATIC_INLINE int32_t swat_xfer_approx(int32_t xfersize) {
 		/* Round up */
 		return (((xfersize & ((1 << msb) - 1)) == 0) ? 1 : 2) << msb;
 
-	return xfersize / (1 * SZ_MB);
+	return SZ_MB;
 }
 
+/**
+ * Reset swat statistics counters */
 void swat_stat_reset(void) {
 	swat_stat.total_io = 0;
 	swat_stat.read_count = 0;
@@ -186,6 +198,8 @@ void swat_stat_init(void) {
 	swat_stat_reset();
 }
 
+/**
+ * Report swat step */
 void swat_stat_report(void) {
 	long io_count = swat_stat.read_count + swat_stat.write_count;
 
@@ -198,6 +212,7 @@ void swat_stat_report(void) {
 
 	int ri;
 
+	/* Calculate mean/max */
 	for(ri = 0; ri < swat_stat.resp_times_cnt; ++ri) {
 		resp_time = ((double) swat_stat.resp_times[ri]) / (T_MS / T_US);
 
@@ -209,6 +224,7 @@ void swat_stat_report(void) {
 
 	r_mean /= swat_stat.resp_times_cnt;
 
+	/* Calculate stddev */
 	for(ri = 0; ri < swat_stat.resp_times_cnt; ++ri) {
 		resp_time = ((double) swat_stat.resp_times[ri]) / (T_MS / T_US);
 
@@ -217,6 +233,7 @@ void swat_stat_report(void) {
 
 	r_stddev = sqrt(r_stddev / swat_stat.resp_times_cnt);
 
+	/* Dump statistics onto screen */
 	printf("%8ld %8ld %8.3f %8ld %8.3f %8.3f %8.3f %8.3f\n",
 				swat_stat.step_id, io_count,
 				(double) swat_stat.total_io / SZ_MB,
@@ -267,6 +284,7 @@ void swat_add_entry(struct swat_record* sr) {
 		return;
 	}
 
+	/* command == CMD_SER (serialization) */
 	key.swl_device = sr->sr_device;
 	key.swl_xfersize = swat_xfer_approx(sr->sr_xfersize);
 	key.swl_flag = sr->sr_flag;
@@ -311,7 +329,7 @@ JSONNODE* json_swat_wl_format(const char* dev_path, swat_workload_t* wl) {
 	json_set_name(node, wl->swl_name);
 	json_set_name(params, "params");
 
-	json_push_back(node, json_new_a("module", "dummy"));
+	json_push_back(node, json_new_a("module", "simpleio"));
 	json_push_back(node, json_new_a("threadpool", "[DEFAULT]"));
 	json_push_back(node, params);
 

@@ -13,6 +13,7 @@
 #include <mempool.h>
 #include <workload.h>
 #include <modules.h>
+#include <wltype.h>
 #include <threadpool.h>
 #include <tstime.h>
 #include <uname.h>
@@ -32,13 +33,14 @@ struct subsystem subsys[] = {
 	SUBSYSTEM("log", log_init, log_fini),
 	SUBSYSTEM("mempool", mempool_init, mempool_fini),
 	SUBSYSTEM("threads", threads_init, threads_fini),
+	SUBSYSTEM("wl_type", wlt_init, wlt_fini),
 	SUBSYSTEM("modules", mod_init, mod_fini),
 	SUBSYSTEM("workload", wl_init, wl_fini),
 	SUBSYSTEM("threadpool", tp_init, tp_fini)
 };
 
 JSONNODE* tsload_get_modules_info(void) {
-	return json_modules_info();
+	return json_wl_type_format_all();
 }
 
 void tsload_configure_workload(const char* wl_name, JSONNODE* wl_params) {

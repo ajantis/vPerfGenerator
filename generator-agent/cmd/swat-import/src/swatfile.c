@@ -39,7 +39,7 @@ void swat_record_endianess(swat_record_t* sr) {
 	sr->sr_flag = SWAT_64_ENDIANESS(sr->sr_flag);
 }
 
-int swat_read(void) {
+int swat_read(boolean_t do_report) {
 	uint64_t control;
 	swat_record_t sr;
 	unsigned length, type, version;
@@ -82,17 +82,20 @@ int swat_read(void) {
 		swat_add_entry(&sr);
 		++entry_count;
 
-		/* Report */
-		/*
-		cur_off = gztell(flat_gz);
-		if((cur_off - last_off) > report_threshold) {
-			printf("%8ldM ", cur_off / SZ_MB);
-			fflush(stdout);
-			last_off = cur_off;
-		} */
+		if(do_report) {
+			/* Report */
+			cur_off = gztell(flat_gz);
+
+			if((cur_off - last_off) > report_threshold) {
+				printf("%8ldM ", cur_off / SZ_MB);
+				fflush(stdout);
+				last_off = cur_off;
+			}
+		}
 	}
 
-	/* printf("\nProcessed %ld entries\n", entry_count); */
+	if(do_report)
+		printf("\nProcessed %ld entries\n", entry_count);
 
 	gzclose(flat_gz);
 

@@ -10,6 +10,13 @@
 
 list_head_t swat_dev_map;
 
+/** SWAT mappings
+ *
+ * Maps swat device ids (for Solaris i.e. dev_t values) to paths on target system
+ * Uses linked list because it is simpler than hashmap  */
+
+/**
+ * Add mapping from dev to path */
 int swat_add_mapping(uint64_t dev, const char* path) {
 	swat_map_item_t *item;
 
@@ -26,6 +33,8 @@ int swat_add_mapping(uint64_t dev, const char* path) {
 	return 0;
 }
 
+/**
+ * Get mapping for dev*/
 const char* swat_get_mapping(uint64_t dev) {
 	swat_map_item_t *item;
 

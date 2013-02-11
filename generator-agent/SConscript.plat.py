@@ -91,3 +91,5 @@ PlatSrcBuilder = Builder(action = '%s tools/plat/proc-source.py $SOURCE > $TARGE
                          src_suffix = '.c')
 env.Append(BUILDERS = {'PlatIncBuilder': PlatIncBuilder, 
                        'PlatSrcBuilder': PlatSrcBuilder})
+
+Export('env')

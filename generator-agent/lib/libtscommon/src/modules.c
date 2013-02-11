@@ -29,7 +29,6 @@ mp_cache_t mod_cache;
 module_t* first_module = NULL;
 
 int mod_type = -1;
-int (*mod_load_helper)(module_t* mod) = NULL;
 
 module_t* mod_load(const char* path_name);
 void mod_destroy(module_t* mod);
@@ -74,7 +73,6 @@ void unload_modules(void) {
 module_t* mod_create() {
 	module_t* mod = (module_t*) mp_malloc(sizeof(module_t));
 
-	mod->mod_helper = NULL;
 	mod->mod_status = MOD_UNITIALIZED;
 
 	mod->mod_next = NULL;
@@ -107,9 +105,6 @@ void mod_destroy(module_t* mod) {
 		if((err = plat_mod_close(&mod->mod_library)) != 0) {
 			logmsg(LOG_WARN, "Failed to close module %s. platform-specific error code: %d", mod->mod_name, err);
 		}
-
-		if(mod->mod_helper)
-			mp_free(mod->mod_helper);
 
 		logmsg(LOG_INFO, "Destroying module %s", mod->mod_name);
 	}
@@ -146,7 +141,6 @@ module_t* mod_load(const char* path_name) {
 
 	boolean_t flag = B_FALSE;
 
-	assert(mod_load_helper != NULL);
 	assert(mod != NULL);
 
 	logmsg(LOG_INFO, "Loading module %s ...", path_name);
@@ -193,8 +187,11 @@ module_t* mod_load(const char* path_name) {
 	/*Call helper*/
 	mod->mod_status = MOD_UNCONFIGURED;
 
-	if(mod_load_helper(mod) == 1)
+	if(mod->mod_config(mod) != MOD_OK) {
+		logmsg(LOG_INFO, "Failed to configure module %s (path: %s)", mod->mod_name, path_name);
+
 		goto fail;
+	}
 
 	logmsg(LOG_INFO, "Loaded module %s (path: %s)", mod->mod_name, path_name);
 
@@ -229,11 +226,6 @@ int mod_error(module_t* mod, char* fmtstr, ...) {
 	mod->mod_status_msg = strdup(status);
 
 	return 0;
-}
-
-void set_mod_helper(int type, int (*helper)(module_t* mod)) {
-	mod_type = type;
-	mod_load_helper = helper;
 }
 
 int mod_init(void) {
