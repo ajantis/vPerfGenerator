@@ -154,6 +154,8 @@ module_t* mod_load(const char* path_name) {
 		goto fail;
 	}
 
+	strcpy(mod->mod_path, path_name);
+
 	/*Load module api version and name*/
 
 	MOD_LOAD_SYMBOL(api_version, mod, "mod_api_version", flag);

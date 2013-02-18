@@ -13,7 +13,7 @@ class Agent extends MongoRecord[Agent] with ObjectIdPk[Agent] with CreatedUpdate
     override def defaultValue = false
   }
 
-  object modules extends BsonRecordListField(this, ModuleInfo)
+  object wltypes extends BsonRecordListField(this, WLTypeInfo)
 
   import com.foursquare.rogue.Rogue._
 
@@ -26,16 +26,17 @@ object Agent extends Agent with MongoMetaRecord[Agent]{
   val baseAgentsUrl = "/agents"
 }
 
-class ModuleInfo private () extends BsonRecord[ModuleInfo] {
-  def meta = ModuleInfo
+class WLTypeInfo private () extends BsonRecord[WLTypeInfo] {
+  def meta = WLTypeInfo
 
   object name extends StringField(this, 256)
+  object module extends StringField(this, 256)
   object path extends StringField(this, 1024)
 
   object params extends BsonRecordListField(this, WorkloadParamInfo)
 }
 
-object ModuleInfo extends ModuleInfo with BsonMetaRecord[ModuleInfo]
+object WLTypeInfo extends WLTypeInfo with BsonMetaRecord[WLTypeInfo]
 
 class WorkloadParamInfo private () extends BsonRecord[WorkloadParamInfo]{
   def meta = WorkloadParamInfo

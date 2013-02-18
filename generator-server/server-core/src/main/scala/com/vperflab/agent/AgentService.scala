@@ -4,11 +4,12 @@ import com.foursquare.rogue.Rogue._
 import net.liftweb.common._
 import org.springframework.stereotype.Component
 import com.vperflab.tsserver._
-import com.vperflab.model.{WorkloadParamInfo, ModuleInfo, Agent}
+import com.vperflab.model.{WorkloadParamInfo, WLTypeInfo, Agent}
 import org.bson.types.ObjectId
 import net.liftweb.common.Full
 import scala.Some
 import com.vperflab.tsserver.TSClientError
+import scala.reflect.Manifest
 
 @Component
 class AgentService extends Loggable{
@@ -60,30 +61,38 @@ class AgentService extends Loggable{
   def listAgents: List[Agent] = Agent.findAll
 
   def prefetchAgentInfo(agent: Agent) = {
-    tsLoadServer.fetchModulesInfo(agent.id.get.toString) match {
+    tsLoadServer.fetchWorkloadTypes(agent.id.get.toString) match {
       case Some(info) => {
+	    def nullableToMap(name: String, param: Any): Map[String, String] = param match {
+	      case x: Any => Map(name -> x.toString)
+	      case _ => Map()
+	    }
+        
         logger info "Module info is fetched for agent " + agent.hostName.is + ". Updating..."
-        val modules = info.modules
-        val modulesInfo = for {
-          module <- modules
-          params: List[WorkloadParamInfo] = (module._2.params.map {
+        val wltypes = info.wltypes
+        val wltypesInfo = for {
+          wltype <- wltypes
+          params: List[WorkloadParamInfo] = (wltype._2.params.map {
             case (name: String, paramData: TSWorkloadParamInfo) => {
               val paramsInfo: Map[String, String] =
                 paramData match {
-                  case i: TSWLParamIntegerInfo => Map(("min" -> i.min.toString), ("max" -> i.max.toString))
-                  case i: TSWLParamFloatInfo => Map(("min" -> i.min.toString), ("max" -> i.max.toString))
-                  case i: TSWLParamSizeInfo => Map(("min" -> i.min.toString), ("max" -> i.max.toString))
-                  case i: TSWLParamStringInfo => Map(("length" -> i.len.toString))
+                  case i: TSWLParamBooleanInfo => nullableToMap("default", i.default)
+                  case i: TSWLParamIntegerInfo => nullableToMap("min", i.min) ++ nullableToMap("max", i.max) ++ nullableToMap("default", i.default)
+                  case i: TSWLParamFloatInfo => nullableToMap("min", i.min) ++ nullableToMap("max", i.max) ++ nullableToMap("default", i.default)
+                  case i: TSWLParamSizeInfo => nullableToMap("min", i.min) ++ nullableToMap("max", i.max) ++ nullableToMap("default", i.default)
+                  case i: TSWLParamStringInfo => Map("length" -> i.len.toString) ++ nullableToMap("default", i.default)
                   case i: TSWLParamStringSetInfo => Map(("values" -> i.strset.mkString(",")))
                   case _ => Map()
                 }
-              WorkloadParamInfo.createRecord.name(name).description(paramData.description).
+              WorkloadParamInfo.createRecord.
+              	name(name).
+                description(paramData.description).
                 additionalData(paramsInfo)
             }
           }).toList
-        } yield ModuleInfo.createRecord.name(module._1).path(module._2.path).params(params)
+        } yield WLTypeInfo.createRecord.name(wltype._1).module(wltype._2.module).path(wltype._2.path).params(params)
 
-        agent.modules(modulesInfo.toList).save
+        agent.wltypes(wltypesInfo.toList).save
       }
       case _ => logger.error("Modules info is not fetched for agent " + agent.hostName.is)
     }

@@ -35,7 +35,7 @@ TSLOAD_IMPORT tsload_workload_status_func tsload_workload_status;
 TSLOAD_IMPORT tsload_requests_report_func tsload_requests_report;
 
 /* TSLoad calls */
-LIBEXPORT JSONNODE* tsload_get_modules_info(void);
+LIBEXPORT JSONNODE* tsload_get_workload_types(void);
 
 LIBEXPORT void tsload_configure_workload(const char* wl_name, JSONNODE* wl_params);
 LIBEXPORT int tsload_provide_step(const char* wl_name, long step_id, unsigned num_rqs);

@@ -39,7 +39,7 @@ struct subsystem subsys[] = {
 	SUBSYSTEM("threadpool", tp_init, tp_fini)
 };
 
-JSONNODE* tsload_get_modules_info(void) {
+JSONNODE* tsload_get_workload_types(void) {
 	return json_wl_type_format_all();
 }
 

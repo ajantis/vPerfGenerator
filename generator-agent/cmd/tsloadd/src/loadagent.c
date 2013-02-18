@@ -18,12 +18,12 @@
 #include <tsload.h>
 
 /* = Agent's handlers = */
-void agent_get_modules_info(JSONNODE* argv[]) {
+void agent_get_workload_types(JSONNODE* argv[]) {
 	JSONNODE* response = json_new(JSON_NODE);
 
-	JSONNODE* mod_info = tsload_get_modules_info();
+	JSONNODE* mod_info = tsload_get_workload_types();
 
-	json_set_name(mod_info, "modules");
+	json_set_name(mod_info, "wltypes");
 	json_push_back(response, mod_info);
 
 	return agent_response_msg(response);
@@ -76,7 +76,7 @@ void agent_provide_step(JSONNODE* argv[]) {
 	/* Send response if no error encountered */
 	if(!clnt_proc_error()) {
 		response = json_new(JSON_NODE);
-		json_push_back(response, json_new_i("result", ret));
+		json_push_back(response, json_new_b("success", ret == WL_STEP_OK));
 		agent_response_msg(response);
 	}
 }
@@ -86,7 +86,7 @@ void agent_workload_status(const char* wl_name, int status, int progress, const 
 	JSONNODE* message = json_new(JSON_NODE);
 	JSONNODE* response;
 
-	json_push_back(message, json_new_a("workload", wl_name));
+	json_push_back(message, json_new_a("workload_name", wl_name));
 	json_push_back(message, json_new_i("status", status));
 	json_push_back(message, json_new_i("progress", progress));
 	json_push_back(message, json_new_a("message", config_msg));
@@ -114,9 +114,9 @@ void agent_requests_report(list_head_t* rq_list) {
 }
 
 static agent_dispatch_t loadagent_table[] = {
-	AGENT_METHOD("get_modules_info",
+	AGENT_METHOD("get_workload_types",
 		ADT_ARGS(),
-		agent_get_modules_info),
+		agent_get_workload_types),
 	AGENT_METHOD("configure_workload",
 		ADT_ARGS(
 			ADT_ARGUMENT("workload_name", JSON_STRING),

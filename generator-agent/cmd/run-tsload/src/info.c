@@ -12,7 +12,7 @@
 #include <stdio.h>
 
 int do_info() {
-	JSONNODE* node = tsload_get_modules_info();
+	JSONNODE* node = tsload_get_workload_types();
 	char* info = json_write_formatted(node);
 
 	fputs(info, stdout);

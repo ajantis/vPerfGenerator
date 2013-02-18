@@ -51,6 +51,7 @@ static JSONNODE* json_wl_type_format_impl(wl_type_t* wlt) {
 	json_set_name(wlt_node, wlt->wlt_name);
 
 	json_push_back(wlt_node, json_new_a("module", wlt->wlt_module->mod_name));
+	json_push_back(wlt_node, json_new_a("path", wlt->wlt_module->mod_path));
 	json_push_back(wlt_node, json_wlparam_format_all(wlt->wlt_params));
 
 	return wlt_node;
