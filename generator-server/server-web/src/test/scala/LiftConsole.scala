@@ -1,5 +1,5 @@
 
-import _root_.com.vperflab.generator.web.Boot
+import _root_.com.vperflab.web.Boot
 import _root_.scala.tools.nsc.MainGenericRunner
 
 object LiftConsole {

@@ -102,6 +102,8 @@ void wl_destroy(workload_t* wl) {
 
 	list_del(&wl->wl_chain);
 
+	tp_detach(wl->wl_tp, wl);
+
 	mutex_destroy(&wl->wl_rq_mutex);
 
 	mp_free(wl->wl_params);
