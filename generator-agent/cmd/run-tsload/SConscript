@@ -57,8 +57,7 @@ i_run_tsload = cmd.InstallTarget(cmd['INSTALL_BIN'], run_tsload)
 # Install test experiment files
 for file in Dir('test').glob('*'):
     cmd.Depends(run_tsload,  file)
-
-cmd.InstallTarget(cmd['INSTALL_VAR'], Dir('test'))
+    cmd.InstallTarget(PathJoin(cmd['INSTALL_VAR'], 'test'), file)
 
 # Generate run-tsload script
 if env.SupportedPlatform('posix'):

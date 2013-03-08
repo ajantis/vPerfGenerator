@@ -4,7 +4,7 @@ import com.foursquare.rogue.Rogue._
 import net.liftweb.common._
 import org.springframework.stereotype.Component
 import com.vperflab.tsserver._
-import com.vperflab.model.{WorkloadParamInfo, WLTypeInfo, Agent}
+import com.vperflab.model.{WorkloadParamInfo, WLTypeInfo, ThreadPoolInfo, Agent}
 import org.bson.types.ObjectId
 import net.liftweb.common.Full
 import scala.Some
@@ -68,7 +68,7 @@ class AgentService extends Loggable{
 	      case _ => Map()
 	    }
         
-        logger info "Module info is fetched for agent " + agent.hostName.is + ". Updating..."
+        logger info "Workload type info is fetched for agent " + agent.hostName.is + ". Updating..."
         val wltypes = info.wltypes
         val wltypesInfo = for {
           wltype <- wltypes
@@ -90,13 +90,32 @@ class AgentService extends Loggable{
                 additionalData(paramsInfo)
             }
           }).toList
-        } yield WLTypeInfo.createRecord.name(wltype._1).module(wltype._2.module).path(wltype._2.path).params(params)
+        } yield WLTypeInfo.createRecord
+        				.name(wltype._1)
+        				.module(wltype._2.module)
+        				.path(wltype._2.path).params(params)
 
-        agent.wltypes(wltypesInfo.toList).save
+        agent.workloadTypes(wltypesInfo.toList).save
       }
-      case _ => logger.error("Modules info is not fetched for agent " + agent.hostName.is)
+      case _ => logger.error("Workload type info is not fetched for agent " + agent.hostName.is)
     }
 
+    tsLoadServer.fetchThreadPools(agent.id.get.toString) match {
+      case Some(info) => {
+        logger info "Threadpool info is fetched for agent " + agent.hostName.is
+        val threadPools = info.threadpools
+        val threadPoolsInfo = for {
+          threadPool <- threadPools
+        } yield ThreadPoolInfo.createRecord
+        					.name(threadPool._1)
+        					.numThreads(threadPool._2.num_threads)
+        					.quantum(threadPool._2.quantum)
+        					.workloadCount(threadPool._2.wl_count)
+        
+        agent.threadPools(threadPoolsInfo.toList).save
+      }
+      case _ => logger error "Threadpool info is not fetched for agent " + agent.hostName.is
+    }
   }
 }
 

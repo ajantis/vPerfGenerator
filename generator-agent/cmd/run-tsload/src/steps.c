@@ -16,13 +16,7 @@
 
 DECLARE_HASH_MAP(steps_hash_map, steps_file_t, WLHASHSIZE, sf_wl_name, sf_next,
 	{
-		char* p = (char*) key;
-		unsigned hash = 0;
-
-		while(*p != 0)
-			hash += *p++;
-
-		return hash & WLHASHMASK;
+		return hm_string_hash(key, WLHASHMASK);
 	},
 	{
 		return strcmp((char*) key1, (char*) key2) == 0;

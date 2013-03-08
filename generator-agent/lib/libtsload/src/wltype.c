@@ -14,13 +14,7 @@
 
 DECLARE_HASH_MAP(wl_type_hash_map, wl_type_t, WLTHASHSIZE, wlt_name, wlt_next,
 	{
-		char* p = (char*) key;
-		unsigned hash = 0;
-
-		while(*p != 0)
-			hash += *p++;
-
-		return hash & WLTHASHMASK;
+		return hm_string_hash(key, WLTHASHMASK);
 	},
 	{
 		return strcmp((char*) key1, (char*) key2) == 0;
@@ -45,7 +39,8 @@ struct json_wl_type_context {
 	JSONNODE* node;
 };
 
-static JSONNODE* json_wl_type_format_impl(wl_type_t* wlt) {
+static JSONNODE* json_wl_type_format_impl(hm_item_t* object) {
+	wl_type_t* wlt = (wl_type_t*) object;
 	JSONNODE* wlt_node = json_new(JSON_NODE);
 
 	json_set_name(wlt_node, wlt->wlt_name);
@@ -58,35 +53,13 @@ static JSONNODE* json_wl_type_format_impl(wl_type_t* wlt) {
 }
 
 JSONNODE* json_wl_type_format(const char* name) {
-	void* object = hash_map_find(&wl_type_hash_map, name);
-	wl_type_t* wlt = (wl_type_t*) object;
-
-	if(!object)
-		return NULL;
-
-	return json_wl_type_format_impl(wlt);
+	return json_hm_format_bykey(&wl_type_hash_map, json_wl_type_format_impl, (void*) name);
 }
 
-int json_wl_type_walk_fmt(hm_item_t* object, void* arg) {
-	struct json_wl_type_context* context = (struct json_wl_type_context*) arg;
-	wl_type_t* wlt = (wl_type_t*) object;
-	JSONNODE* wlt_node = json_wl_type_format_impl(wlt);
-
-	json_push_back(context->node, wlt_node);
-
-	return HM_WALKER_CONTINUE;
+JSONNODE* json_wl_type_format_all(void) {
+	return json_hm_format_all(&wl_type_hash_map, json_wl_type_format_impl);
 }
 
-JSONNODE* json_wl_type_format_all() {
-	JSONNODE* node = json_new(JSON_NODE);
-	struct json_wl_type_context context;
-
-	context.node = node;
-
-	hash_map_walk(&wl_type_hash_map, json_wl_type_walk_fmt, &context);
-
-	return node;
-}
 
 int wlt_init(void) {
 	hash_map_init(&wl_type_hash_map, "wl_type_hash_map");

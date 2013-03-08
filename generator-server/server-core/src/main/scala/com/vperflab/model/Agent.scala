@@ -2,7 +2,7 @@ package com.vperflab.model
 
 import net.liftweb.mongodb.record.{BsonMetaRecord, BsonRecord, MongoMetaRecord, MongoRecord}
 import net.liftweb.mongodb.record.field.{BsonRecordListField, MongoMapField, ObjectIdPk}
-import net.liftweb.record.field.{BooleanField, StringField}
+import net.liftweb.record.field.{BooleanField, StringField, LongField}
 
 class Agent extends MongoRecord[Agent] with ObjectIdPk[Agent] with CreatedUpdated[Agent] {
   thisAgent =>
@@ -13,7 +13,8 @@ class Agent extends MongoRecord[Agent] with ObjectIdPk[Agent] with CreatedUpdate
     override def defaultValue = false
   }
 
-  object wltypes extends BsonRecordListField(this, WLTypeInfo)
+  object workloadTypes extends BsonRecordListField(this, WLTypeInfo)
+  object threadPools extends BsonRecordListField(this, ThreadPoolInfo)
 
   import com.foursquare.rogue.Rogue._
 
@@ -50,3 +51,15 @@ class WorkloadParamInfo private () extends BsonRecord[WorkloadParamInfo]{
 }
 
 object WorkloadParamInfo extends WorkloadParamInfo with BsonMetaRecord[WorkloadParamInfo]
+
+class ThreadPoolInfo private () extends BsonRecord[ThreadPoolInfo] {
+  def meta = ThreadPoolInfo
+  
+  object name extends StringField(this, 64)
+  
+  object numThreads extends LongField(this)
+  object quantum extends LongField(this)
+  object workloadCount extends LongField(this)
+}
+
+object ThreadPoolInfo extends ThreadPoolInfo with BsonMetaRecord[ThreadPoolInfo]

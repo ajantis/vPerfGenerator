@@ -12,7 +12,6 @@
 
 /**
  * Use standard library allocator for mempool
- *
  * It is faster than mempool, but not autonomous
  * */
 

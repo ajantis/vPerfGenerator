@@ -95,8 +95,8 @@ class TSWorkloadType extends TSObject {
 }
 
 class TSWorkloadTypeList extends TSObject {
-  @TSObjContainer(elementClass = classOf[TSSingleModuleInfo])
-  var wltypes: Map[String, TSSingleModuleInfo] = _
+  @TSObjContainer(elementClass = classOf[TSWorkloadType])
+  var wltypes: Map[String, TSWorkloadType] = _
 }
 
 /* configureWorkload() */
@@ -153,6 +153,24 @@ class TSRequestReport extends TSObject {
   @TSObjContainer(elementClass = classOf[TSRequest])
   var requests: List[TSRequest] = _
 }
+
+/* getThreadPools() */
+
+class TSThreadPool extends TSObject {
+  var num_threads: Long = _
+  var quantum: Long = _
+  
+  var wl_count: Long = _
+  
+  @TSObjContainer(elementClass = classOf[String])
+  var wl_list: List[String] = _
+}
+
+class TSThreadPoolList extends TSObject {
+  @TSObjContainer(elementClass = classOf[TSThreadPool])
+  var threadpools: Map[String, TSThreadPool] = _
+}
+
 /* END OF TYPES */
 
 trait TSLoadClient extends TSClientInterface{
@@ -172,6 +190,19 @@ trait TSLoadClient extends TSClientInterface{
   @TSClientMethod(name = "provide_step", 
                   argNames = Array("workload_name", "step_id", "num_requests"))
   def provideStep(workloadName: String, stepId: Long, numRequests: Long) : TSProvideStepResult
+  
+  @TSClientMethod(name = "get_threadpools")
+  def getThreadPools : TSThreadPoolList
+  
+  @TSClientMethod(name = "create_threadpool", 
+                  argNames = Array("num_requests", "tp_name", "quantum"),
+                  noReturn = true)
+  def createThreadPool(numThreads: Long, threadpoolName: String, quantum: Long)
+  
+  @TSClientMethod(name = "destroy_threadpool", 
+                  argNames = Array("tp_name"),
+                  noReturn = true)
+  def destroyThreadPool(threadpoolName: String)
 }
 
 class TSLoadServer(port: Int, agentService: AgentService) extends TSServer[TSLoadClient](port) {
@@ -209,6 +240,10 @@ class TSLoadServer(port: Int, agentService: AgentService) extends TSServer[TSLoa
 
   def fetchWorkloadTypes(clientId: String): Option[TSWorkloadTypeList] = {
     clientForId(clientId).map(_.getInterface.getWorkloadTypes)
+  }
+  
+  def fetchThreadPools(clientId: String): Option[TSThreadPoolList] = {
+    clientForId(clientId).map(_.getInterface.getThreadPools)
   }
 
   private def clientForId(clientId: String): Option[TSClient[TSLoadClient]] = clients.get(clientId)

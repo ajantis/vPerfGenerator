@@ -50,10 +50,13 @@ thread_mutex_t	output_lock;
 thread_mutex_t	rqreport_lock;
 thread_event_t	workload_event;
 
-char**			wl_name_array;		/* Names of configured workload */
+char**			wl_name_array = NULL;	/* Names of configured workloads */
 long 			wl_count = 0;
 atomic_t		wl_cfg_count;
 atomic_t		wl_run_count;
+
+char**			tp_name_array = NULL;	/* Names of configured threadpools */
+int				tp_count = 0;
 
 boolean_t		load_error = B_FALSE;
 
@@ -184,6 +187,7 @@ static int load_steps(const char* wl_name, JSONNODE* steps_node) {
 int load_provide_step(const char* wl_name) {
 	unsigned num_rqs = 0;
 	long step_id = -1;
+	int status;
 	int ret = step_get_step(wl_name, &step_id, &num_rqs);
 
 	if(ret == STEP_ERROR) {
@@ -194,7 +198,7 @@ int load_provide_step(const char* wl_name) {
 	}
 
 	if(ret == STEP_OK)
-		tsload_provide_step(wl_name, step_id, num_rqs);
+		tsload_provide_step(wl_name, step_id, num_rqs, &status);
 
 	return ret;
 }
@@ -220,8 +224,8 @@ static int configure_all_wls(JSONNODE* steps_node, JSONNODE* wl_node) {
 	char* wl_name;
 
 	int num = json_size(wl_node);
-
 	int steps_err;
+	int tsload_ret;
 
 	load_fprintf(stdout, "\n\n==== CONFIGURING WORKLOADS ====\n");
 
@@ -230,14 +234,14 @@ static int configure_all_wls(JSONNODE* steps_node, JSONNODE* wl_node) {
 	while(iter != end) {
 		wl_name = json_name(*iter);
 		tsload_configure_workload(wl_name, *iter);
+
 		load_fprintf(stdout, "Initialized workload %s\n", wl_name);
 		wl_name_array[wl_count++] = wl_name;
 
 		steps_err = load_steps(wl_name, steps_node);
 
 		if(load_error || steps_err != LOAD_OK) {
-			/* Error encountered during configuration - do
-		     * not configure other workloads */
+			/* Error encountered during configuration - do not configure other workloads */
 			return LOAD_ERR_CONFIGURE;
 		}
 
@@ -256,6 +260,8 @@ static void unconfigure_all_wls(void) {
 		tsload_unconfigure_workload(wl_name_array[i]);
 		json_free(wl_name_array[i]);
 	}
+
+	mp_free(wl_name_array);
 }
 
 /**
@@ -297,7 +303,69 @@ static void start_all_wls(void) {
 	}
 }
 
-#define CONFIGURE_PARAM(iter, name)													\
+#define CONFIGURE_TP_PARAM(i_node, name, type) 											\
+	i_node = json_find(*iter, name);													\
+	if(i_node == i_end || json_type(*i_node) != type) {								 	\
+		load_fprintf(stderr, "Missing or invalid param '%s' in threadpool '%s'\n", tp_name);	\
+		json_free(tp_name);																\
+		return LOAD_ERR_CONFIGURE;														\
+	}
+
+static int configure_threadpools(JSONNODE* tp_node) {
+	JSONNODE_ITERATOR iter = json_begin(tp_node),
+				      end = json_end(tp_node);
+	JSONNODE_ITERATOR i_num_threads, i_quantum, i_end;
+	unsigned num_threads;
+	ts_time_t quantum;
+
+	char* tp_name;
+	int num = json_size(tp_node);
+
+	int tsload_ret;
+	int i;
+
+	load_fprintf(stdout, "\n\n==== CONFIGURING THREADPOOLS ====\n");
+	tp_name_array = mp_malloc(num * sizeof(char*));
+
+	while(iter != end) {
+		i_end = json_end(*iter);
+		tp_name = json_name(*iter);
+
+		CONFIGURE_TP_PARAM(i_num_threads, "num_threads", JSON_NUMBER);
+		CONFIGURE_TP_PARAM(i_quantum, "quantum", JSON_NUMBER);
+
+		num_threads = json_as_int(*i_num_threads);
+		quantum = json_as_int(*i_quantum);
+
+		tsload_ret = tsload_create_threadpool(num_threads, tp_name, quantum);
+
+		if(tsload_ret != TSLOAD_OK) {
+			return LOAD_ERR_CONFIGURE;
+		}
+
+		load_fprintf(stdout, "Configured thread pool '%s' with %u threads and %lld ns quantum\n",
+						tp_name, num_threads, quantum);
+
+		tp_name_array[tp_count++] = tp_name;
+
+		++iter;
+	}
+
+	return LOAD_OK;
+}
+
+static void unconfigure_threadpools(void) {
+	int i;
+
+	for(i = 0; i < tp_count; ++i) {
+		tsload_destroy_threadpool(tp_name_array[i]);
+		json_free(tp_name_array[i]);
+	}
+
+	mp_free(tp_name_array);
+}
+
+#define CONFIGURE_EXPERIMENT_PARAM(iter, name)													\
 	iter = json_find(experiment, name);												\
 	if(iter == i_end) {																\
 		load_fprintf(stderr, "Missing parameter '%s' in experiment's config\n", name);	\
@@ -305,7 +373,7 @@ static void start_all_wls(void) {
 	}																				\
 
 static int prepare_experiment(void) {
-	JSONNODE_ITERATOR i_end, i_name, i_steps, i_workloads;
+	JSONNODE_ITERATOR i_end, i_name, i_steps, i_threadpools, i_workloads;
 
 	int err = LOAD_OK;
 	char* name;
@@ -317,22 +385,24 @@ static int prepare_experiment(void) {
 
 	i_end = json_end(experiment);
 
-	CONFIGURE_PARAM(i_name, "name");
-	CONFIGURE_PARAM(i_steps, "steps");
-	CONFIGURE_PARAM(i_workloads, "workloads");
+	CONFIGURE_EXPERIMENT_PARAM(i_name, "name");
+	CONFIGURE_EXPERIMENT_PARAM(i_steps, "steps");
+	CONFIGURE_EXPERIMENT_PARAM(i_workloads, "workloads");
+	CONFIGURE_EXPERIMENT_PARAM(i_threadpools, "threadpools");
 
 	name = json_as_string(*i_name);
 	strncpy(experiment_name, name, EXPNAMELEN);
 	json_free(name);
 
 	load_fprintf(stdout, "=== CONFIGURING EXPERIMENT '%s' === \n", experiment_name);
+	load_fprintf(stdout, "Found %d threadpools\n", json_size(*i_threadpools));
 	load_fprintf(stdout, "Found %d workloads\n", json_size(*i_workloads));
 	load_fprintf(stdout, "Log path: %s\n", log_filename);
 	load_fprintf(stdout, "Requests report path: %s\n", rqreport_filename);
 
-	i_workloads = json_find(experiment, "workloads");
-
-	err = configure_all_wls(*i_steps, *i_workloads);
+	err = configure_threadpools(*i_threadpools);
+	if(err == LOAD_OK)
+		err = configure_all_wls(*i_steps, *i_workloads);
 
 	return err;
 }
@@ -467,6 +537,7 @@ int do_load() {
 	load_fprintf(stdout, "\n\n=== FINISHING EXPERIMENT '%s' === \n", experiment_name);
 
 	unconfigure_all_wls();
+	unconfigure_threadpools();
 
 	json_delete(experiment);
 

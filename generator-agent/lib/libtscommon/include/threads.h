@@ -209,8 +209,7 @@ LIBEXPORT thread_t* t_post_init(thread_t* t);
 LIBEXPORT void t_exit(thread_t* t);
 LIBEXPORT void t_destroy(thread_t* thread);
 LIBEXPORT void t_wait_start(thread_t* thread);
-
-LIBEXPORT void t_join(thread_t* thread, thread_event_t* event);
+LIBEXPORT void t_join(thread_t* thread);
 
 LIBEXPORT int threads_init(void);
 LIBEXPORT void threads_fini(void);
@@ -222,6 +221,7 @@ LIBEXPORT PLATAPI void t_eternal_wait(void);
 PLATAPI void plat_thread_init(plat_thread_t* thread, void* arg,
 							  thread_start_func start);
 PLATAPI void plat_thread_destroy(plat_thread_t* thread);
+PLATAPI void plat_thread_join(plat_thread_t* thread);
 PLATAPI unsigned long plat_gettid();
 
 PLATAPI void plat_mutex_init(plat_thread_mutex_t* mutex, boolean_t recursive);

@@ -29,6 +29,10 @@ PLATAPI void plat_thread_destroy(plat_thread_t* thread) {
 	CloseHandle(thread->t_handle);
 }
 
+PLATAPI void plat_thread_join(plat_thread_t* thread) {
+	WaitForSingleObject(thread->t_handle, INFINITE);
+}
+
 PLATAPI unsigned long plat_gettid() {
 	return GetCurrentThreadId();
 }

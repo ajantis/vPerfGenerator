@@ -3,7 +3,7 @@ package com.vperflab.web.snippet
 import xml.Text
 import net.liftweb.sitemap.Loc.{Link, LinkText}
 import net.liftweb.common.{Loggable, Full, Box}
-import com.vperflab.model.{WorkloadParamInfo, WLTypeInfo, Agent}
+import com.vperflab.model.{WorkloadParamInfo, WLTypeInfo, ThreadPoolInfo, Agent}
 import loc.ItemRewriteLoc
 import org.bson.types.ObjectId
 import net.liftweb.util.BindHelpers._
@@ -46,17 +46,22 @@ class AgentPage(data: AgentPageData) extends Loggable{
     }) &
     ".update_info_btn *" #> SHtml.ajaxButton(<img src="/images/agent-refresh.png" alt="Update info" /> , 
     		() => {agentService.prefetchAgentInfo(data.agent); JsCmds._Noop}) &
-    ".wltype *" #> (data.agent.wltypes.get.map { wltype: WLTypeInfo =>
-      ".name *" #> wltype.name.is &
-      ".module *" #> wltype.module.is &
-      ".path *" #> wltype.path.is &
-      ".params *" #> (wltype.params.get.map { param: WorkloadParamInfo =>
+    ".wltype *" #> (data.agent.workloadTypes.get.map { workloadType: WLTypeInfo =>
+      ".name *" #> workloadType.name.is &
+      ".module *" #> workloadType.module.is &
+      ".path *" #> workloadType.path.is &
+      ".params *" #> (workloadType.params.get.map { param: WorkloadParamInfo =>
         ".name *" #> param.name.is &
         ".description *" #> param.description.is &
         ".additional *" #> (param.additionalData.get.map {
           case (key, data) => ".key *" #> key & ".data *" #> data
         })
       })
+    }) &
+    ".threadpool *" #> (data.agent.threadPools.get.map { threadPool: ThreadPoolInfo =>
+      ".name *" #> threadPool.name.is &
+      ".num_threads *" #> threadPool.numThreads.is &
+      ".quantum *" #> threadPool.quantum.is
     })
   }
 }

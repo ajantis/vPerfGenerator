@@ -8,6 +8,7 @@
 #ifndef THREADPOOL_H_
 #define THREADPOOL_H_
 
+#include <defs.h>
 #include <list.h>
 #include <tstime.h>
 #include <threads.h>
@@ -16,6 +17,11 @@
 
 #define TPNAMELEN		64
 #define TPMAXTHREADS 	64
+
+#define TPHASHSIZE		4
+#define	TPHASHMASK		3
+
+#define TP_MIN_QUANTUM	10 * T_MS
 
 #define DEFAULT_TP_NAME	"[DEFAULT]"
 
@@ -70,6 +76,8 @@ typedef struct thread_pool {
 	list_head_t	   tp_wl_head;
 	int tp_wl_count;
 	boolean_t tp_wl_changed;
+
+	struct thread_pool* tp_next;
 } thread_pool_t;
 
 LIBEXPORT thread_pool_t* tp_create(unsigned num_threads, const char* name, ts_time_t quantum);
@@ -83,5 +91,11 @@ void tp_distribute_requests(struct workload_step* step, thread_pool_t* tp);
 
 LIBEXPORT int tp_init(void);
 LIBEXPORT void tp_fini(void);
+
+#ifndef NO_JSON
+#include <libjson.h>
+
+JSONNODE* json_tp_format_all(void);
+#endif
 
 #endif /* THREADPOOL_H_ */

@@ -18,22 +18,23 @@ import traceback
 
 from jsonts import *
 
-MAX_STEPS = 20
-MAX_REQUESTS = 100
+MAX_STEPS = 5
+MAX_REQUESTS = 20
 
 PORT = 9090
 
-NANOSECOND = 1000 * 1000 * 1000
+MILLISECOND = 1000 * 1000
+SECOND = 1000 * 1000 * 1000
 
 WORKLOAD_SIMPLEIO = {'wltype': 'simpleio_read',
-                     'threadpool': '[DEFAULT]',
+                     'threadpool': 'test',
                      'params': {'filesize': 134217728,
                                 'blocksize': 4096,
                                 'path': 'C:\\testfile',
                                 'sparse': False,
                                 'sync': True}}
 WORKLOAD_BUSY_WAIT = { 'wltype': 'busy_wait',
-                       'threadpool': '[DEFAULT]',
+                       'threadpool': 'test',
                        'params': {'num_cycles': 400000 } }
 
 class WorkloadConfigurator(Thread):
@@ -60,7 +61,12 @@ class WorkloadConfigurator(Thread):
                 print >> sys.stderr, '-' * 20
     
     def configureWorkload(self, client):
-        workload = WORKLOAD_SIMPLEIO
+        workload = WORKLOAD_BUSY_WAIT
+        
+        client.invoke('create_threadpool',
+                      num_threads=2,
+                      tp_name='test',
+                      quantum = 250 * MILLISECOND )
         
         client.invoke('configure_workload', 
                       workload_name='test', 
@@ -81,7 +87,7 @@ class WorkloadRunner(Thread):
         Thread.__init__(self)
         
     def run(self):
-        start_time = int((time.time() + 3) * NANOSECOND)
+        start_time = int((time.time() + 3) * SECOND)
         
         self.logger.info('Scheduling workload test on %d' % start_time)
         
@@ -89,11 +95,14 @@ class WorkloadRunner(Thread):
                            workload_name = 'test', 
                            start_time = start_time)
         
+        print self.client.invoke('get_threadpools')
+                
         while self.step < MAX_STEPS:
             numRequests = random.randint(0, MAX_REQUESTS)
-            provideStepResult = { 'result': 1 }
+            provideStepResult = { 'success': False }
             
-            while provideStepResult['result'] != 0:
+            #POLL
+            while not provideStepResult['success']:
                 provideStepResult = self.client.invoke('provide_step', 
                                                        workload_name = 'test', 
                                                        step_id = self.step,
@@ -124,8 +133,8 @@ class TSLoadServer(TSServer):
         else:
             raise TSException('Operation is not supported')
     
-    def workloadStatus(self, client, workload, status, progress, message):
-        self.logger.info('Workload %s status %d(%d): %s' % (workload,
+    def workloadStatus(self, client, workload_name, status, progress, message):
+        self.logger.info('Workload %s status %d(%d): %s' % (workload_name,
                                                             status,
                                                             progress,
                                                             message))
