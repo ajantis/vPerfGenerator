@@ -120,7 +120,7 @@ int tsload_unconfigure_workload(const char* wl_name) {
 	return TSLOAD_OK;
 }
 
-int tsload_create_threadpool(unsigned num_threads, const char* tp_name, ts_time_t quantum) {
+int tsload_create_threadpool(const char* tp_name, unsigned num_threads, ts_time_t quantum, const char* disp_name) {
 	thread_pool_t* tp = NULL;
 
 	if(num_threads > TPMAXTHREADS || num_threads == 0) {
@@ -142,7 +142,7 @@ int tsload_create_threadpool(unsigned num_threads, const char* tp_name, ts_time_
 		return TSLOAD_ERROR;
 	}
 
-	tp = tp_create(num_threads, tp_name, quantum);
+	tp = tp_create(tp_name, num_threads, quantum, disp_name);
 
 	if(tp == NULL) {
 		tsload_error_msg(TSE_INTERNAL_ERROR, "Internal error occured while creating threadpool");
@@ -154,6 +154,14 @@ int tsload_create_threadpool(unsigned num_threads, const char* tp_name, ts_time_
 
 JSONNODE* tsload_get_threadpools(void) {
 	return json_tp_format_all();
+}
+
+JSONNODE* tsload_get_dispatchers(void) {
+	JSONNODE* disps = json_new(JSON_ARRAY);
+
+	json_push_back(disps, json_new_a("simple", "simple"));
+
+	return disps;
 }
 
 int tsload_destroy_threadpool(const char* tp_name) {

@@ -80,7 +80,7 @@ typedef struct thread_pool {
 	struct thread_pool* tp_next;
 } thread_pool_t;
 
-LIBEXPORT thread_pool_t* tp_create(unsigned num_threads, const char* name, ts_time_t quantum);
+LIBEXPORT thread_pool_t* tp_create(const char* name, unsigned num_threads, ts_time_t quantum, const char* disp_name);
 
 LIBEXPORT thread_pool_t* tp_search(const char* name);
 
