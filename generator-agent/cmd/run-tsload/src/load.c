@@ -306,7 +306,8 @@ static void start_all_wls(void) {
 #define CONFIGURE_TP_PARAM(i_node, name, type) 											\
 	i_node = json_find(*iter, name);													\
 	if(i_node == i_end || json_type(*i_node) != type) {								 	\
-		load_fprintf(stderr, "Missing or invalid param '%s' in threadpool '%s'\n", tp_name);	\
+		load_fprintf(stderr, "Missing or invalid param '%s' in threadpool '%s'\n", 		\
+											name, tp_name);								\
 		json_free(tp_name);																\
 		return LOAD_ERR_CONFIGURE;														\
 	}
@@ -314,11 +315,12 @@ static void start_all_wls(void) {
 static int configure_threadpools(JSONNODE* tp_node) {
 	JSONNODE_ITERATOR iter = json_begin(tp_node),
 				      end = json_end(tp_node);
-	JSONNODE_ITERATOR i_num_threads, i_quantum, i_end;
+	JSONNODE_ITERATOR i_num_threads, i_quantum, i_end, i_disp_name;
 	unsigned num_threads;
 	ts_time_t quantum;
 
 	char* tp_name;
+	char* disp_name;
 	int num = json_size(tp_node);
 
 	int tsload_ret;
@@ -333,11 +335,13 @@ static int configure_threadpools(JSONNODE* tp_node) {
 
 		CONFIGURE_TP_PARAM(i_num_threads, "num_threads", JSON_NUMBER);
 		CONFIGURE_TP_PARAM(i_quantum, "quantum", JSON_NUMBER);
+		CONFIGURE_TP_PARAM(i_disp_name, "disp_name", JSON_STRING);
 
 		num_threads = json_as_int(*i_num_threads);
 		quantum = json_as_int(*i_quantum);
+		disp_name = json_as_string(*i_disp_name);
 
-		tsload_ret = tsload_create_threadpool(num_threads, tp_name, quantum);
+		tsload_ret = tsload_create_threadpool(tp_name, num_threads, quantum, disp_name);
 
 		if(tsload_ret != TSLOAD_OK) {
 			return LOAD_ERR_CONFIGURE;

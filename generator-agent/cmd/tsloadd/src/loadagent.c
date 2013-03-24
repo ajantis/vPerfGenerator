@@ -87,13 +87,17 @@ void agent_provide_step(JSONNODE* argv[]) {
 }
 
 void agent_create_threadpool(JSONNODE* argv[]) {
-	unsigned num_threads = json_as_int(argv[0]);
-	char* tp_name = json_as_string(argv[1]);
+	char* tp_name = json_as_string(argv[0]);
+	unsigned num_threads = json_as_int(argv[1]);
 	ts_time_t quantum = json_as_int(argv[2]);
+	char* disp_name = json_as_string(argv[3]);
 
 	int ret = 0;
 
-	ret = tsload_create_threadpool(num_threads, tp_name, quantum);
+	ret = tsload_create_threadpool(tp_name, num_threads, quantum, disp_name);
+
+	json_free(tp_name);
+	json_free(disp_name);
 
 	if(ret == TSLOAD_OK) {
 		agent_response_msg(json_new(JSON_NODE));
@@ -104,9 +108,13 @@ void agent_get_threadpools(JSONNODE* argv[]) {
 	JSONNODE* response = json_new(JSON_NODE);
 
 	JSONNODE* tp_info = tsload_get_threadpools();
+	JSONNODE* disp_info = tsload_get_dispatchers();
 
 	json_set_name(tp_info, "threadpools");
 	json_push_back(response, tp_info);
+
+	json_set_name(disp_info, "dispatchers");
+	json_push_back(response, disp_info);
 
 	return agent_response_msg(response);
 }
@@ -180,9 +188,10 @@ static agent_dispatch_t loadagent_table[] = {
 		agent_provide_step),
 	AGENT_METHOD("create_threadpool",
 		ADT_ARGS(
-			ADT_ARGUMENT("num_threads", JSON_NUMBER),
 			ADT_ARGUMENT("tp_name", JSON_STRING),
+			ADT_ARGUMENT("num_threads", JSON_NUMBER),
 			ADT_ARGUMENT("quantum", JSON_NUMBER),
+			ADT_ARGUMENT("disp_name", JSON_STRING),
 		),
 		agent_create_threadpool),
 	AGENT_METHOD("get_threadpools",

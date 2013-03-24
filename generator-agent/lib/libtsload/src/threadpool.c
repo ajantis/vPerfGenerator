@@ -70,7 +70,7 @@ static void tp_destroy_worker(thread_pool_t* tp, int tid) {
  * @param name Name of thread pool
  * @param quantum Worker's quantum
  * */
-thread_pool_t* tp_create(unsigned num_threads, const char* name, ts_time_t quantum) {
+thread_pool_t* tp_create(const char* name, unsigned num_threads, ts_time_t quantum, const char* disp_name) {
 	thread_pool_t* tp = NULL;
 	int tid;
 
@@ -272,11 +272,13 @@ void tp_distribute_requests(workload_step_t* step, thread_pool_t* tp) {
 	mp_free(num_rqs);
 }
 
-JSONNODE* json_tp_format(thread_pool_t* tp) {
+JSONNODE* json_tp_format(hm_item_t* object) {
 	JSONNODE* node = json_new(JSON_NODE);
 	JSONNODE* wl_list = json_new(JSON_ARRAY);
 	JSONNODE* jwl;
 	workload_t* wl;
+
+	thread_pool_t* tp = (thread_pool_t*) object;
 
 	json_push_back(node, json_new_i("num_threads", tp->tp_num_threads));
 	json_push_back(node, json_new_i("quantum", tp->tp_quantum));
@@ -317,7 +319,7 @@ int tp_init(void) {
 	mp_cache_init(&tp_worker_cache, tp_worker_t);
 
 	/*FIXME: default pool should have threads number num_of_phys_cores*/
-	default_pool = tp_create(4, DEFAULT_TP_NAME, T_SEC);
+	default_pool = tp_create(DEFAULT_TP_NAME, 4, T_SEC, "simple");
 
 	return 0;
 }

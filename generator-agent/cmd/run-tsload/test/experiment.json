@@ -7,11 +7,13 @@
 	"threadpools": {
 		"test1": {
 			"num_threads": 2,
-			"quantum": 250000000
+			"quantum": 250000000,
+			"disp_name": "simple"
 		},
 		"test2": {
 			"num_threads": 4,
-			"quantum": 500000000
+			"quantum": 500000000,
+			"disp_name": "simple"
 		}
 	},
 	"workloads" :	{

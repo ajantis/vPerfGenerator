@@ -64,9 +64,10 @@ class WorkloadConfigurator(Thread):
         workload = WORKLOAD_BUSY_WAIT
         
         client.invoke('create_threadpool',
-                      num_threads=2,
                       tp_name='test',
-                      quantum = 250 * MILLISECOND )
+                      num_threads=2,
+                      quantum = 250 * MILLISECOND,
+                      disp_name='simple' )
         
         client.invoke('configure_workload', 
                       workload_name='test', 

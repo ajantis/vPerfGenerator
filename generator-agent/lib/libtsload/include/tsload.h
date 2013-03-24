@@ -44,8 +44,9 @@ LIBEXPORT int tsload_provide_step(const char* wl_name, long step_id, unsigned nu
 LIBEXPORT int tsload_start_workload(const char* wl_name, ts_time_t start_time);
 LIBEXPORT int tsload_unconfigure_workload(const char* wl_name);
 
-LIBEXPORT int tsload_create_threadpool(unsigned num_threads, const char* tp_name, ts_time_t quantum);
+LIBEXPORT int tsload_create_threadpool(const char* tp_name, unsigned num_threads, ts_time_t quantum, const char* disp_name);
 LIBEXPORT JSONNODE* tsload_get_threadpools(void);
+LIBEXPORT JSONNODE* tsload_get_dispatchers(void);
 LIBEXPORT int tsload_destroy_threadpool(const char* tp_name);
 
 LIBEXPORT int tsload_init(struct subsystem* xsubsys, unsigned xs_count);

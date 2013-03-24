@@ -167,6 +167,9 @@ class TSThreadPool extends TSObject {
 }
 
 class TSThreadPoolList extends TSObject {
+  @TSObjContainer(elementClass = classOf[String])
+  var dispatchers: List[String] = _
+  
   @TSObjContainer(elementClass = classOf[TSThreadPool])
   var threadpools: Map[String, TSThreadPool] = _
 }
@@ -195,9 +198,9 @@ trait TSLoadClient extends TSClientInterface{
   def getThreadPools : TSThreadPoolList
   
   @TSClientMethod(name = "create_threadpool", 
-                  argNames = Array("num_requests", "tp_name", "quantum"),
+                  argNames = Array("tp_name", "num_requests", "quantum", "disp_name"),
                   noReturn = true)
-  def createThreadPool(numThreads: Long, threadpoolName: String, quantum: Long)
+  def createThreadPool(threadpoolName: String, numThreads: Long, quantum: Long, dispName: String)
   
   @TSClientMethod(name = "destroy_threadpool", 
                   argNames = Array("tp_name"),
