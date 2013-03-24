@@ -3,77 +3,120 @@ package com.vperflab.agent
 import com.foursquare.rogue.Rogue._
 import net.liftweb.common._
 import org.springframework.stereotype.Component
-import com.vperflab.tsserver.{TSClient, TSLoadServer, TSLoadClient, TSClientError}
-import com.vperflab.model.Agent
-import scala.collection.mutable.{Map => MutableMap}
+import com.vperflab.tsserver._
+import com.vperflab.model.{WorkloadParamInfo, WLTypeInfo, ThreadPoolInfo, Agent}
+import org.bson.types.ObjectId
+import net.liftweb.common.Full
+import scala.Some
+import com.vperflab.tsserver.TSClientError
+import scala.reflect.Manifest
 
 @Component
-class AgentService {
-  var tsLoadServer = new TSLoadServer(9090)
-  var tsLoadSrvThread = new Thread(tsLoadServer)
+class AgentService extends Loggable{
+  val tsLoadServer = new TSLoadServer(port = 9090, agentService = this)
+  val tsLoadSrvThread = new Thread(tsLoadServer)
 
-  tsLoadSrvThread.start()
-}
+  {
+    logger.info("Starting TS Load server ...")
+    tsLoadSrvThread.start()
+  }
 
-class ActiveAgent(hostName: String) {
-  var loadClient: TSClient[TSLoadClient] = _
+  def removeLoadAgent(agentId: String){
+    Agent.find("_id", new ObjectId(agentId)) match {
+      case Full(agent) if agent.isActive.is => {
+        logger.info("Agent " + agent.hostName.asString + " is set as inactive.")
+        agent.isActive(false).save
+      }
+      case Full(agent) if(!agent.isActive.is) =>
+        logger.info("Agent " + agent.hostName.asString + " is already inactive. Skipping...")
+      case _ => {
+        logger.error("Agent with id " + agentId + " is not found.")
+      }
+    }
+  }
 
-  def getLoadAgent =
-    loadClient.getInterface
-
-  def setLoadClient(client: TSClient[TSLoadClient]) =
-    loadClient = client
-}
-
-case class AgentStatus(hostName: String, isActive: Boolean)
-
-object AgentService {
-  var activeAgents = MutableMap[String, ActiveAgent]()
-
-  /**
-   * Registers agent and returns it's id
-   */
-  def registerAgent(hostName: String) : String = {
-
+  // Registers agent if necessary and returns it's id
+  def addLoadAgent(hostName: String, client: TSClient[TSLoadClient]): String = {
     val existingAgent: Box[Agent] = Agent.where(_.hostName eqs hostName).fetch().headOption
 
-    existingAgent match {
-      case Full(agent: Agent) => agent.id.asString
-      case Empty =>
+    val agentId = existingAgent match {
+      case Full(agent: Agent) => {
+        logger.info("Existing agent " + hostName + " is active again...")
+        agent.isActive(true).save.id.value
+      }
+      case Empty => {
         /*No such agent, create a new one*/
-        Agent.createRecord.hostName(hostName).save.id.asString
+        logger.info("Registering new agent " + hostName)
+        val newAgent = Agent.createRecord.hostName(hostName).isActive(true).save
 
+        newAgent.id.get
+      }
       case Failure(message, exception, chain) =>
         throw new TSClientError(message)
 
     }
+    agentId.toString
   }
 
-  def registerLoadAgent(hostName: String, client: TSClient[TSLoadClient]) : String = {
-    val agentId = registerAgent(hostName: String)
+  def listAgents: List[Agent] = Agent.findAll
 
-    activeAgents.synchronized {
-      if(!(activeAgents contains hostName)) {
-        var agent = new ActiveAgent(hostName)
-        agent.setLoadClient(client)
+  def prefetchAgentInfo(agent: Agent) = {
+    tsLoadServer.fetchWorkloadTypes(agent.id.get.toString) match {
+      case Some(info) => {
+	    def nullableToMap(name: String, param: Any): Map[String, String] = param match {
+	      case x: Any => Map(name -> x.toString)
+	      case _ => Map()
+	    }
+        
+        logger info "Workload type info is fetched for agent " + agent.hostName.is + ". Updating..."
+        val wltypes = info.wltypes
+        val wltypesInfo = for {
+          wltype <- wltypes
+          params: List[WorkloadParamInfo] = (wltype._2.params.map {
+            case (name: String, paramData: TSWorkloadParamInfo) => {
+              val paramsInfo: Map[String, String] =
+                paramData match {
+                  case i: TSWLParamBooleanInfo => nullableToMap("default", i.default)
+                  case i: TSWLParamIntegerInfo => nullableToMap("min", i.min) ++ nullableToMap("max", i.max) ++ nullableToMap("default", i.default)
+                  case i: TSWLParamFloatInfo => nullableToMap("min", i.min) ++ nullableToMap("max", i.max) ++ nullableToMap("default", i.default)
+                  case i: TSWLParamSizeInfo => nullableToMap("min", i.min) ++ nullableToMap("max", i.max) ++ nullableToMap("default", i.default)
+                  case i: TSWLParamStringInfo => Map("length" -> i.len.toString) ++ nullableToMap("default", i.default)
+                  case i: TSWLParamStringSetInfo => Map(("values" -> i.strset.mkString(",")))
+                  case _ => Map()
+                }
+              WorkloadParamInfo.createRecord.
+              	name(name).
+                description(paramData.description).
+                additionalData(paramsInfo)
+            }
+          }).toList
+        } yield WLTypeInfo.createRecord
+        				.name(wltype._1)
+        				.module(wltype._2.module)
+        				.path(wltype._2.path).params(params)
 
-        activeAgents += hostName -> agent
+        agent.workloadTypes(wltypesInfo.toList).save
       }
-      else {
-        /*Already registered?*/
-      }
+      case _ => logger.error("Workload type info is not fetched for agent " + agent.hostName.is)
     }
-    agentId
-  }
 
-  def listAgents : List[Agent] = {
-    println(Agent.findAll)
-    println(activeAgents)
-
-    Agent.findAll.map {
-      // this is just for example.
-      // TODO Make status update async
-      case agent: Agent => agent.isActive(activeAgents contains agent.hostName.asString).save
+    tsLoadServer.fetchThreadPools(agent.id.get.toString) match {
+      case Some(info) => {
+        logger info "Threadpool info is fetched for agent " + agent.hostName.is
+        val threadPools = info.threadpools
+        val threadPoolsInfo = for {
+          threadPool <- threadPools
+        } yield ThreadPoolInfo.createRecord
+        					.name(threadPool._1)
+        					.numThreads(threadPool._2.num_threads)
+        					.quantum(threadPool._2.quantum)
+        					.workloadCount(threadPool._2.wl_count)
+        
+        agent.threadPools(threadPoolsInfo.toList).save
+      }
+      case _ => logger error "Threadpool info is not fetched for agent " + agent.hostName.is
     }
   }
 }
+
+case class ActiveAgent(hostName: String, loadClient: TSClient[TSLoadClient])

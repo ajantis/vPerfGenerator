@@ -9,6 +9,7 @@
 #define LOG_SOURCE "tpool"
 #include <log.h>
 
+#include <hashmap.h>
 #include <mempool.h>
 #include <threads.h>
 #include <threadpool.h>
@@ -24,6 +25,18 @@ mp_cache_t	   tp_cache;
 mp_cache_t	   tp_worker_cache;
 
 thread_pool_t* default_pool = NULL;
+
+DECLARE_HASH_MAP(tp_hash_map, thread_pool_t, TPHASHSIZE, tp_name, tp_next,
+	{
+		return hm_string_hash(key, TPHASHMASK);
+	},
+	{
+		return strcmp((char*) key1, (char*) key2) == 0;
+	}
+)
+
+/* Minimum quantum duration. Should be set to system's tick */
+ts_time_t tp_min_quantum = TP_MIN_QUANTUM;
 
 void* worker_thread(void* arg);
 void* control_thread(void* arg);
@@ -45,7 +58,7 @@ static void tp_create_worker(thread_pool_t* tp, int tid) {
 static void tp_destroy_worker(thread_pool_t* tp, int tid) {
 	tp_worker_t* worker = tp->tp_workers + tid;
 
-	t_destroy(&worker->w_thread + tid);
+	t_destroy(&worker->w_thread);
 
 	mutex_destroy(&worker->w_rq_mutex);
 }
@@ -57,14 +70,19 @@ static void tp_destroy_worker(thread_pool_t* tp, int tid) {
  * @param name Name of thread pool
  * @param quantum Worker's quantum
  * */
-thread_pool_t* tp_create(unsigned num_threads, const char* name, ts_time_t quantum) {
+thread_pool_t* tp_create(const char* name, unsigned num_threads, ts_time_t quantum, const char* disp_name) {
 	thread_pool_t* tp = NULL;
 	int tid;
 
-	if(num_threads > TPMAXTHREADS) {
+	if(num_threads > TPMAXTHREADS || num_threads == 0) {
 		logmsg(LOG_WARN, "Failed to create thread_pool %s: maximum %d threads allowed (%d requested)",
 				name, TPMAXTHREADS, num_threads);
+		return NULL;
+	}
 
+	if(quantum < tp_min_quantum) {
+		logmsg(LOG_WARN, "Failed to create thread_pool %s: too small quantum %lld (%lld minimum)",
+						name, quantum, tp_min_quantum);
 		return NULL;
 	}
 
@@ -97,15 +115,27 @@ thread_pool_t* tp_create(unsigned num_threads, const char* name, ts_time_t quant
 		tp_create_worker(tp, tid);
 	}
 
+	hash_map_insert(&tp_hash_map, tp);
+
 	logmsg(LOG_INFO, "Created thread pool %s with %d threads", name, num_threads);
 
 	return tp;
 }
 
-void tp_destroy(thread_pool_t* tp) {
+static void tp_destroy_impl(thread_pool_t* tp) {
 	int tid;
+	workload_t *wl, *tmp;
 
 	tp->tp_is_dead = B_TRUE;
+
+	/* Destroy all workloads. No need to detach them,
+	 * because we destroy entire threadpool */
+	mutex_lock(&tp->tp_mutex);
+	list_for_each_entry_safe(workload_t, wl, tmp, &tp->tp_wl_head, wl_tp_node) {
+		wl_unconfig(wl);
+		wl_destroy_nodetach(wl);
+	}
+	mutex_unlock(&tp->tp_mutex);
 
 	/* Notify workers that we are done */
 	event_notify_all(&tp->tp_event);
@@ -123,11 +153,14 @@ void tp_destroy(thread_pool_t* tp) {
 	mp_cache_free(&tp_cache, tp);
 }
 
-thread_pool_t* tp_search(const char* name) {
-	if(strcmp(name, DEFAULT_TP_NAME) == 0)
-		return default_pool;
+void tp_destroy(thread_pool_t* tp) {
+	hash_map_remove(&tp_hash_map, tp);
 
-	return NULL;
+	tp_destroy_impl(tp);
+}
+
+thread_pool_t* tp_search(const char* name) {
+	return hash_map_find(&tp_hash_map, name);
 }
 
 /**
@@ -146,6 +179,8 @@ void tp_attach(thread_pool_t* tp, struct workload* wl) {
 }
 
 void tp_detach_nolock(thread_pool_t* tp, struct workload* wl) {
+	wl->wl_tp = NULL;
+
 	list_del(&wl->wl_tp_node);
 	--tp->tp_wl_count;
 	tp->tp_wl_changed = B_TRUE;
@@ -237,19 +272,63 @@ void tp_distribute_requests(workload_step_t* step, thread_pool_t* tp) {
 	mp_free(num_rqs);
 }
 
+JSONNODE* json_tp_format(hm_item_t* object) {
+	JSONNODE* node = json_new(JSON_NODE);
+	JSONNODE* wl_list = json_new(JSON_ARRAY);
+	JSONNODE* jwl;
+	workload_t* wl;
+
+	thread_pool_t* tp = (thread_pool_t*) object;
+
+	json_push_back(node, json_new_i("num_threads", tp->tp_num_threads));
+	json_push_back(node, json_new_i("quantum", tp->tp_quantum));
+	json_push_back(node, json_new_i("wl_count", tp->tp_wl_count));
+	json_push_back(node, json_new_a("disp_name", "simple"));
+
+	mutex_lock(&tp->tp_mutex);
+	list_for_each_entry(workload_t, wl, &tp->tp_wl_head, wl_tp_node) {
+		jwl = json_new(JSON_STRING);
+		json_set_a(jwl, wl->wl_name);
+		json_push_back(wl_list, jwl);
+	}
+	mutex_unlock(&tp->tp_mutex);
+
+	json_set_name(node, tp->tp_name);
+	json_set_name(wl_list, "wl_list");
+
+	json_push_back(node, wl_list);
+
+	return node;
+}
+
+JSONNODE* json_tp_format_all(void) {
+	return json_hm_format_all(&tp_hash_map, json_tp_format);
+}
+
+int tp_destroy_walk(hm_item_t* object, void* arg) {
+	thread_pool_t* tp = (thread_pool_t*) object;
+
+	tp_destroy_impl(tp);
+
+	return HM_WALKER_CONTINUE | HM_WALKER_REMOVE;
+}
+
 int tp_init(void) {
+	hash_map_init(&tp_hash_map, "tp_hash_map");
+
 	mp_cache_init(&tp_cache, thread_pool_t);
 	mp_cache_init(&tp_worker_cache, tp_worker_t);
 
 	/*FIXME: default pool should have threads number num_of_phys_cores*/
-	default_pool = tp_create(4, DEFAULT_TP_NAME, T_SEC);
+	default_pool = tp_create(DEFAULT_TP_NAME, 4, T_SEC, "simple");
 
 	return 0;
 }
 
 void tp_fini(void) {
-	tp_destroy(default_pool);
-
 	mp_cache_destroy(&tp_worker_cache);
 	mp_cache_destroy(&tp_cache);
+
+	hash_map_walk(&tp_hash_map, tp_destroy_walk, NULL);
+	hash_map_destroy(&tp_hash_map);
 }

@@ -47,33 +47,51 @@ JSONNODE* json_wlparam_format(wlp_descr_t* wlp) {
 	switch(wlp->type) {
 	case WLP_BOOL:
 		json_push_back(wlp_node, json_new_a("type", "bool"));
+		if(wlp->defval.enabled)
+			json_push_back(wlp_node, json_new_b("default", wlp->defval.b));
 		break;
 	case WLP_INTEGER:
 		json_push_back(wlp_node, json_new_a("type", "integer"));
-		json_push_back(wlp_node, json_new_i("min", wlp->range.i_min));
-		json_push_back(wlp_node, json_new_i("max", wlp->range.i_max));
+		if(wlp->range.range) {
+			json_push_back(wlp_node, json_new_i("min", wlp->range.i_min));
+			json_push_back(wlp_node, json_new_i("max", wlp->range.i_max));
+		}
+		if(wlp->defval.enabled)
+			json_push_back(wlp_node, json_new_i("default", wlp->defval.i));
 		break;
 	case WLP_FLOAT:
 		json_push_back(wlp_node, json_new_a("type", "float"));
-		json_push_back(wlp_node, json_new_f("min", wlp->range.d_min));
-		json_push_back(wlp_node, json_new_f("max", wlp->range.d_max));
+		if(wlp->range.range) {
+			json_push_back(wlp_node, json_new_f("min", wlp->range.d_min));
+			json_push_back(wlp_node, json_new_f("max", wlp->range.d_max));
+		}
+		if(wlp->defval.enabled)
+			json_push_back(wlp_node, json_new_f("default", wlp->defval.f));
 		break;
 	case WLP_SIZE:
 		json_push_back(wlp_node, json_new_a("type", "size"));
-		json_push_back(wlp_node, json_new_i("min", wlp->range.sz_min));
-		json_push_back(wlp_node, json_new_i("max", wlp->range.sz_max));
+		if(wlp->range.range) {
+			json_push_back(wlp_node, json_new_i("min", wlp->range.sz_min));
+			json_push_back(wlp_node, json_new_i("max", wlp->range.sz_max));
+		}
+		if(wlp->defval.enabled)
+			json_push_back(wlp_node, json_new_i("default", wlp->defval.sz));
 		break;
 	case WLP_RAW_STRING:
 		json_push_back(wlp_node, json_new_a("type", "string"));
 		json_push_back(wlp_node, json_new_i("len", wlp->range.str_length));
+		if(wlp->defval.enabled)
+			json_push_back(wlp_node, json_new_a("default", wlp->defval.s));
 		break;
 	case WLP_STRING_SET:
 		json_push_back(wlp_node, json_new_a("type", "strset"));
 		json_push_back(wlp_node, json_wlparam_strset_format(wlp));
-
+		if(wlp->defval.enabled)
+			json_push_back(wlp_node, json_new_i("default", wlp->defval.ssi));
 		break;
 	}
 
+	json_push_back(wlp_node, json_new_i("flags", wlp->flags));
 	json_push_back(wlp_node, json_new_a("description", wlp->description));
 
 	return wlp_node;

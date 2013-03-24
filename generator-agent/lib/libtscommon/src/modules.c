@@ -28,7 +28,7 @@ mp_cache_t mod_cache;
 /*First module in modules linked list*/
 module_t* first_module = NULL;
 
-int mod_type = -1;
+LIBEXPORT int mod_type = -1;
 
 module_t* mod_load(const char* path_name);
 void mod_destroy(module_t* mod);
@@ -153,6 +153,8 @@ module_t* mod_load(const char* path_name) {
 
 		goto fail;
 	}
+
+	strcpy(mod->mod_path, path_name);
 
 	/*Load module api version and name*/
 

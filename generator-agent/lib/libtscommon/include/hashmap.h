@@ -45,6 +45,8 @@ LIBEXPORT void* hash_map_find(hashmap_t* hm, const hm_key_t* key);
 LIBEXPORT void* hash_map_walk(hashmap_t* hm, int (*func)(hm_item_t* object, void* arg), void* arg);
 LIBEXPORT void hash_map_destroy(hashmap_t* hm);
 
+LIBEXPORT unsigned hm_string_hash(const hm_key_t* str, unsigned mask);
+
 /**
  * Declare hash map
  *
@@ -57,7 +59,7 @@ LIBEXPORT void hash_map_destroy(hashmap_t* hm);
  * @param hm_compare_body function body {} that compares to keys (params: const void* key1, const void* key2)
  */
 #define DECLARE_HASH_MAP(name, type, size, key_field, next_field, hm_hash_body, hm_compare_body) \
-	static int 										\
+	static boolean_t								\
 	hm_compare_##name(const hm_key_t* key1, 		\
 					  const hm_key_t* key2) 		\
 	hm_compare_body								    \
@@ -84,5 +86,20 @@ LIBEXPORT void hash_map_destroy(hashmap_t* hm);
 #define HM_WALKER_CONTINUE		0
 #define HM_WALKER_STOP			0x01
 #define HM_WALKER_REMOVE		0x02
+
+#ifndef NO_JSON
+#include <libjson.h>
+
+typedef JSONNODE* (*hm_json_formatter)(hm_item_t* object);
+
+struct hm_fmt_context {
+	JSONNODE* node;
+	hm_json_formatter formatter;
+};
+
+LIBEXPORT JSONNODE* json_hm_format_bykey(hashmap_t* hm, hm_json_formatter formatter, void* key);
+LIBEXPORT JSONNODE* json_hm_format_all(hashmap_t* hm, hm_json_formatter formatter);
+
+#endif
 
 #endif

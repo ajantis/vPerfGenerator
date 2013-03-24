@@ -141,11 +141,9 @@ void t_wait_start(thread_t* thread) {
 /*
  * Wait until thread finishes
  * */
-void t_join(thread_t* thread, thread_event_t* event) {
-	thread->t_event = event;
-
+void t_join(thread_t* thread) {
 	if(atomic_read(&thread->t_state_atomic) != TS_DEAD) {
-		event_wait(thread->t_event);
+		plat_thread_join(&thread->t_impl);
 	}
 }
 
@@ -154,17 +152,8 @@ void t_join(thread_t* thread, thread_event_t* event) {
  * @note blocks until thread exits from itself!
  * */
 void t_destroy(thread_t* thread) {
-	if(atomic_read(&thread->t_state_atomic) != TS_DEAD) {
-		thread_event_t event;
-		event_init(&event, "(t_destroy)");
-
-		t_join(thread, &event);
-
-		event_destroy(&event);
-	}
-
+	t_join(thread);
 	hash_map_remove(&thread_hash_map, thread);
-
 	plat_thread_destroy(&thread->t_impl);
 }
 

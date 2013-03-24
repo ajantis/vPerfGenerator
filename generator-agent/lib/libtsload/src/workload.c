@@ -39,13 +39,7 @@ mp_cache_t	wl_rq_cache;
 
 DECLARE_HASH_MAP(workload_hash_map, workload_t, WLHASHSIZE, wl_name, wl_hm_next,
 	{
-		char* p = (char*) key;
-		unsigned hash = 0;
-
-		while(*p != 0)
-			hash += *p++;
-
-		return hash & WLHASHMASK;
+		return hm_string_hash(key, WLHASHMASK);
 	},
 	{
 		return strcmp((char*) key1, (char*) key2) == 0;
@@ -95,19 +89,28 @@ workload_t* wl_create(const char* name, wl_type_t* wlt, thread_pool_t* tp) {
 }
 
 /**
- * wl_destroy - free memory for single workload_t object
+ * wl_destroy_nodetach - workload destructor
+ *
  * */
-void wl_destroy(workload_t* wl) {
+void wl_destroy_nodetach(workload_t* wl) {
 	hash_map_remove(&workload_hash_map, wl);
 
 	list_del(&wl->wl_chain);
-
-	tp_detach(wl->wl_tp, wl);
 
 	mutex_destroy(&wl->wl_rq_mutex);
 
 	mp_free(wl->wl_params);
 	mp_cache_free(&wl_cache, wl);
+}
+
+/**
+ * wl_destroy - destroy workload and detach it from threadpool
+ * */
+void wl_destroy(workload_t* wl) {
+	if(wl->wl_tp)
+		tp_detach(wl->wl_tp, wl);
+
+	wl_destroy_nodetach(wl);
 }
 
 /**
@@ -283,9 +286,6 @@ int wl_provide_step(workload_t* wl, long step_id, unsigned num_rqs) {
 	}
 
 	if(step_id != (wl->wl_last_step + 1)) {
-		/*Provided incorrect step*/
-		tsload_error_msg(TSE_INVALID_DATA, "Step %ld is not correct, last step was %ld!", step_id, wl->wl_last_step);
-
 		ret = WL_STEP_INVALID;
 		goto done;
 	}

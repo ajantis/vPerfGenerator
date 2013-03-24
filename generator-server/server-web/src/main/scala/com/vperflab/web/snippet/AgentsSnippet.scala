@@ -6,6 +6,7 @@ import net.liftweb.util._
 import Helpers._
 import com.vperflab.model.Agent
 import net.liftweb.http.{S, SHtml}
+import com.vperflab.web.lib.SpringAdapter._
 
 /**
  * Copyright iFunSoftware 2013
@@ -13,12 +14,17 @@ import net.liftweb.http.{S, SHtml}
  */
 class AgentsSnippet extends Loggable{
 
+  private val agentService = getBean(classOf[AgentService])
+
   def list = {
-    ".agent *" #> AgentService.listAgents.map {
+    ".agent *" #> agentService.listAgents.map {
       case agent: Agent =>
         "a *" #> agent.hostName &
-        "a [href]" #> agent.url &
-        ".status *" #> agent.isActive
+        "a [href]" #> agent.id.get.toString &
+        ".status *" #> (agent.isActive.is match {
+          case true => "Online"
+          case _ => "Offline"
+        })
     }
   }
 

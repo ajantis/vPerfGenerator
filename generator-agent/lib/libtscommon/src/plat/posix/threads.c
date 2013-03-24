@@ -30,6 +30,10 @@ PLATAPI void plat_thread_destroy(plat_thread_t* thread) {
 	pthread_detach(thread->t_thread);
 }
 
+PLATAPI void plat_thread_join(plat_thread_t* thread) {
+	pthread_join(thread->t_thread, NULL);
+}
+
 PLATAPI unsigned long plat_gettid() {
 	return (unsigned long) pthread_self();
 }

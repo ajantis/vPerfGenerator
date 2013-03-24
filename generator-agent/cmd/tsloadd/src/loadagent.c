@@ -18,13 +18,13 @@
 #include <tsload.h>
 
 /* = Agent's handlers = */
-void agent_get_modules_info(JSONNODE* argv[]) {
+void agent_get_workload_types(JSONNODE* argv[]) {
 	JSONNODE* response = json_new(JSON_NODE);
 
-	JSONNODE* mod_info = tsload_get_modules_info();
+	JSONNODE* wlt_info = tsload_get_workload_types();
 
-	json_set_name(mod_info, "modules");
-	json_push_back(response, mod_info);
+	json_set_name(wlt_info, "wltypes");
+	json_push_back(response, wlt_info);
 
 	return agent_response_msg(response);
 }
@@ -33,12 +33,14 @@ void agent_configure_workload(JSONNODE* argv[]) {
 	char* wl_name = json_as_string(argv[0]);
 	JSONNODE* wl_params = (JSONNODE*) argv[1];
 
-	tsload_configure_workload(wl_name, wl_params);
+	int ret;
+
+	ret = tsload_configure_workload(wl_name, wl_params);
 
 	json_free(wl_name);
 
 	/* Send response if no error encountered */
-	if(!clnt_proc_error()) {
+	if(ret == TSLOAD_OK) {
 		agent_response_msg(json_new(JSON_NODE));
 	}
 }
@@ -49,18 +51,21 @@ void agent_start_workload(JSONNODE* argv[]) {
 	ts_time_t start_time = (ts_time_t) json_as_int(argv[1]);
 	char* wl_name = json_as_string(argv[0]);
 
-	tsload_start_workload(wl_name, start_time);
+	int ret;
+
+	ret = tsload_start_workload(wl_name, start_time);
 
 	json_free(wl_name);
 
 	/* Send response if no error encountered */
-	if(!clnt_proc_error()) {
+	if(ret == TSLOAD_OK) {
 		agent_response_msg(json_new(JSON_NODE));
 	}
 }
 
 void agent_provide_step(JSONNODE* argv[]) {
 	int ret = 0;
+	int status;
 
 	char* wl_name = json_as_string(argv[0]);
 	long step_id = json_as_int(argv[1]);
@@ -69,24 +74,69 @@ void agent_provide_step(JSONNODE* argv[]) {
 	JSONNODE* response = NULL;
 
 	/* Call tsload function */
-	ret = tsload_provide_step(wl_name, step_id, num_rqs);
+	ret = tsload_provide_step(wl_name, step_id, num_rqs, &status);
 
 	json_free(wl_name);
 
 	/* Send response if no error encountered */
-	if(!clnt_proc_error()) {
+	if(ret == TSLOAD_OK) {
 		response = json_new(JSON_NODE);
-		json_push_back(response, json_new_i("result", ret));
+		json_push_back(response, json_new_b("success", status == WL_STEP_OK));
 		agent_response_msg(response);
 	}
 }
 
+void agent_create_threadpool(JSONNODE* argv[]) {
+	char* tp_name = json_as_string(argv[0]);
+	unsigned num_threads = json_as_int(argv[1]);
+	ts_time_t quantum = json_as_int(argv[2]);
+	char* disp_name = json_as_string(argv[3]);
+
+	int ret = 0;
+
+	ret = tsload_create_threadpool(tp_name, num_threads, quantum, disp_name);
+
+	json_free(tp_name);
+	json_free(disp_name);
+
+	if(ret == TSLOAD_OK) {
+		agent_response_msg(json_new(JSON_NODE));
+	}
+}
+
+void agent_get_threadpools(JSONNODE* argv[]) {
+	JSONNODE* response = json_new(JSON_NODE);
+
+	JSONNODE* tp_info = tsload_get_threadpools();
+	JSONNODE* disp_info = tsload_get_dispatchers();
+
+	json_set_name(tp_info, "threadpools");
+	json_push_back(response, tp_info);
+
+	json_set_name(disp_info, "dispatchers");
+	json_push_back(response, disp_info);
+
+	return agent_response_msg(response);
+}
+
+void agent_destroy_threadpool(JSONNODE* argv[]) {
+	char* tp_name = json_as_string(argv[0]);
+
+	int ret = 0;
+
+	ret = tsload_destroy_threadpool(tp_name);
+
+	if(ret == TSLOAD_OK) {
+		agent_response_msg(json_new(JSON_NODE));
+	}
+}
+
 /* = TSServer's methods = */
-void agent_workload_status(const char* wl_name, int status, int progress, const char* config_msg) {
+void agent_workload_status(const char* wl_name, int status, long progress, const char* config_msg) {
 	JSONNODE* message = json_new(JSON_NODE);
 	JSONNODE* response;
 
-	json_push_back(message, json_new_a("workload", wl_name));
+	json_push_back(message, json_new_a("workload_name", wl_name));
 	json_push_back(message, json_new_i("status", status));
 	json_push_back(message, json_new_i("progress", progress));
 	json_push_back(message, json_new_a("message", config_msg));
@@ -114,9 +164,9 @@ void agent_requests_report(list_head_t* rq_list) {
 }
 
 static agent_dispatch_t loadagent_table[] = {
-	AGENT_METHOD("get_modules_info",
+	AGENT_METHOD("get_workload_types",
 		ADT_ARGS(),
-		agent_get_modules_info),
+		agent_get_workload_types),
 	AGENT_METHOD("configure_workload",
 		ADT_ARGS(
 			ADT_ARGUMENT("workload_name", JSON_STRING),
@@ -136,6 +186,22 @@ static agent_dispatch_t loadagent_table[] = {
 			ADT_ARGUMENT("num_requests", JSON_NUMBER),
 		),
 		agent_provide_step),
+	AGENT_METHOD("create_threadpool",
+		ADT_ARGS(
+			ADT_ARGUMENT("tp_name", JSON_STRING),
+			ADT_ARGUMENT("num_threads", JSON_NUMBER),
+			ADT_ARGUMENT("quantum", JSON_NUMBER),
+			ADT_ARGUMENT("disp_name", JSON_STRING),
+		),
+		agent_create_threadpool),
+	AGENT_METHOD("get_threadpools",
+		ADT_ARGS(),
+		agent_get_threadpools),
+	AGENT_METHOD("destroy_threadpool",
+		ADT_ARGS(
+			ADT_ARGUMENT("tp_name", JSON_STRING),
+		),
+		agent_destroy_threadpool),
 
 	ADT_LAST_METHOD()
 };

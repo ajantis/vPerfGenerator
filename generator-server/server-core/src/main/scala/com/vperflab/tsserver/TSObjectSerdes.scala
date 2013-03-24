@@ -34,6 +34,14 @@ abstract class TSObjectSerdes {
       System.out.println(msg)
   }
   
+  /**
+   * Reads TSObjAbstract annotation and processes it
+   * 
+   * If isReverse == false, maps field values to class names
+   * Also returns name of the field which determine which field is used to instantiate an object
+   * 
+   * @return (fieldName, Map(field values and class names (order depends on isReverse))
+   * */
   def getAbstractClassMap(klass: Class[_], isReverse: Boolean) : (String, Map[String, String]) = {
     val annotation = klass.getAnnotation(classOf[TSObjAbstract])
     var classMap = MutableMap[String, String]() 
@@ -48,6 +56,7 @@ abstract class TSObjectSerdes {
       throw new TSClientError("TSObjAbstract.classMap should be pairs of key, className")
     }
     
+    /* In classMap even strings are values and odd are class names */
     for(i <- 0 until classMapLength / 2) {
       val fieldValue = annotation.classMap.apply(i * 2)
       val className = "com.vperflab.tsserver." + annotation.classMap.apply(i * 2 + 1)
@@ -61,6 +70,15 @@ abstract class TSObjectSerdes {
     }
     
     return (annotation.fieldName, classMap.toMap)
+  }
+  
+  /**
+   * Returns true if field has @TSOptional annotation
+   * */
+  def fieldIsOptional(field: Field) : Boolean = {
+    val annotation = field.getAnnotation(classOf[TSOptional])
+    
+    return (annotation != null)
   }
   
   /* Conversion functions. Because jerkson provides information in LinkedHashMap/ArrayList,
@@ -140,10 +158,12 @@ abstract class TSObjectSerdes {
       return serdesAbstractClass(obj, klass)
     }
     
-    return serdesInstantiableClass(obj, klass)
+    return serdesInstantiableClass(obj, klass, false)
   }
   
   def serdesNumber(num: Number, klass: Class[_]): Any =  {
+    doTraceMsg("NUM: " + num)
+    
     if(classOf[Double].isAssignableFrom(klass) ||
        classOf[Float].isAssignableFrom(klass)) {
       return num.doubleValue()
@@ -158,8 +178,8 @@ abstract class TSObjectSerdes {
     throw new TSClientMessageFormatError("Invalid number! Got " + num.getClass() + " instead of " + klass)
   }
   
-  /*
-   * Serialize/Desirealize object
+  /**
+   * Serialize/Deserialize object
    * 
    * @param obj - object, which should be ser/des
    * @param klass - desired class
@@ -188,7 +208,7 @@ abstract class TSObjectSerdes {
     throw new TSClientMessageFormatError("Invalid klass! Got " + obj.getClass() + " instead of " + klass)
   }
   
-  def serdesInstantiableClass(obj: Any, klass: Class[_]) : Any
+  def serdesInstantiableClass(obj: Any, klass: Class[_], doSuper: Boolean) : Any
   
   def serdesAbstractClass(obj: Any, klass: Class[_]) : Any
 }
@@ -197,27 +217,41 @@ object TSObjectDeserializer extends TSObjectSerdes {
   /*Map of loaded classes via classLoader (needed for abstract TSObject)*/
   var loadedClasses = MutableMap[String, Class[_]]()
   
-  def serdesInstantiableClass(obj: Any, klass: Class[_]) : Any = {
+  def serdesInstantiableClass(obj: Any, klass: Class[_], doSuper: Boolean) : Any = {
     val objMap = jsonMapToMap(obj)
     
     doTraceClass("class", klass)
     
 	var newObj = klass.newInstance()
-	  
-	for(field <- klass.getDeclaredFields) {
+	val fieldList = klass.getDeclaredFields ++ { doSuper match {
+      case true => klass.getSuperclass.getDeclaredFields
+      case _ => Nil
+    } }
+	
+	for(field <- fieldList) {
 	  val name = field.getName
 	  field.setAccessible(true)
 	   
 	  doTraceMsg("FIELD: " + name + " of " + field.getType())
 	    
-	  val value = serdesField(objMap(name), field)
-	  
-	  field.set(newObj, value)
+	  /* If field is @TSOptional and doesn't exist in passed map,
+	   * ignore it. Otherwise exception may be thrown */
+	  if((objMap contains name) || !fieldIsOptional(field)) {
+		  val value = serdesField(objMap(name), field)
+		  
+		  field.set(newObj, value)
+	  }
 	}
 	  
 	return newObj
   }
   
+  /**
+   * Helper for serdesAbstractClass
+   * 
+   * Searches class named name in same classloader as klass was loaded
+   * (klass should point to abstract class, while name to it's subclass)
+   * */
   def classForName(name: String, klass: Class[_]) : Class[_] = {
     try {
       return Class.forName(name)
@@ -237,6 +271,12 @@ object TSObjectDeserializer extends TSObjectSerdes {
     }
   }
   
+  /**
+   * Deserialize an abstract class
+   * 
+   * Chooses subclass according to map[field] and classMap provided by TSObjAbstract annotation
+   * than calls serdesInstantiableClass for it
+   * */
   def serdesAbstractClass(obj: Any, klass: Class[_]) : Any = {
     val objMap = jsonMapToMap(obj)
     
@@ -252,7 +292,7 @@ object TSObjectDeserializer extends TSObjectSerdes {
     var realClass = classForName(className, klass)
     var newObjMap = objMap - fieldName
     
-    return serdesInstantiableClass(newObjMap, realClass)
+    return serdesInstantiableClass(newObjMap, realClass, true)
   }
   
   /**
@@ -265,7 +305,8 @@ object TSObjectDeserializer extends TSObjectSerdes {
 }
 
 object TSObjectSerializer extends TSObjectSerdes {
-  def serdesInstantiableClass(obj: Any, klass: Class[_]) : Any = {
+  def serdesInstantiableClass(obj: Any, klass: Class[_], doSuper: Boolean) : Any = {
+    /* FIXME: not supports super class/optional fieldss*/
     doTraceClass("class", klass)
     
 	var objMap = MutableMap[String, Any]()
@@ -289,7 +330,7 @@ object TSObjectSerializer extends TSObjectSerdes {
     
     doTraceMsg("CLASS: " + classKey + " -> " + className)
     
-    val objMap = serdesInstantiableClass(obj, obj.getClass()).asInstanceOf[Map[String, Any]]
+    val objMap = serdesInstantiableClass(obj, obj.getClass(), true).asInstanceOf[Map[String, Any]]
     
     return Map(fieldName -> className) ++ objMap 
   }
