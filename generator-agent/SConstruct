@@ -14,6 +14,7 @@ sys.path.append(os.path.join('tools', 'build'))
 
 from pathutil import *
 from manager import AddBuildItem, AddModule, PrepareBuild, GetBuildTargets, BuildManagerPrint
+from tstest import TestSuite
 
 # ------------------------
 # ENVIRONMENT HELPERS
@@ -75,6 +76,11 @@ def LinkSharedLibrary(self, target, objects,
         # For Microsoft linker library contains .dll, .lib and .exp file
         # return only .dll file because only it needs to be installed
         library = filter(lambda f: str(f).endswith(env['SHLIBSUFFIX']), library)
+    
+    # XXX: LinkSharedLibrary called with context of cloned environment
+    # We need to modify global env, so we call it. It's working :)
+    # Another option is adding this line to each library SConscript 
+    env['TESTLIBS'][target] = library
     
     return library
 
@@ -158,6 +164,13 @@ AddOption('--tsload-server', dest='tsload_server', action='store', default='loca
 AddOption('--with-windows-sdk', dest='with_windows_sdk', action='store', default='',
           metavar='WINSDK', help='Path to windows SDK')
 
+# test options
+AddOption('--runner-threads',  dest='runner_threads', action="store", default='1',
+          metavar='COUNT', help='Number of threads in test suite runner')
+AddOption('--test_dir',  dest='test_directory', action="store", default='',
+          metavar='TESTDIR', help='Path to test directory')
+
+
 # Installation directories options are specified below
 
 # -------------------------
@@ -184,6 +197,9 @@ env['TSNAME'] =  '-'.join((env['TSPROJECT'], env['TSVERSION'], sys.platform))
 env.Append(CPPPATH = ['#include', 'include'])
 env.Append(LIBPATH = [])
 env.Append(LIBS = [])
+
+# TESTLIBS maps library under test name to path to it
+env.Append(TESTLIBS = {})
 
 # Add verbosity of warnings
 if env['CC'] == 'gcc': 
@@ -341,6 +357,15 @@ for target in GetBuildTargets():
 
 #------------
 # INSTALL various files
+
+# ------------
+# TESTS
+if 'tests' in BUILD_TARGETS:
+    test_f = file(PathJoin('test', 'test.list'))
+    env['TEST_SUITE'] = TestSuite(test_f)
+        
+    SConscript(PathJoin('test', 'SConscript'), 'env',
+               variant_dir = PathJoin('#build', 'test'))
 
 #------------
 # ZIP

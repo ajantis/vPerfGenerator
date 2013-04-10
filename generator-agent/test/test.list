@@ -1,0 +1,37 @@
+# Unit tests list
+#
+# Syntax:
+#  Comments begin with #
+#
+#  Group definition:
+#  ^group <group params> \
+#		  <group params>
+#
+#  Test definition:
+#
+# 	group/test <params>	\
+#			   <params>
+#
+# Params:
+# 	 file=source.c  - file to be compiled
+#	 dir=dir		- directory where sources are located
+# 	 lib=lib		- library to be linked with (library under test)
+#					  core libraries are linked by default
+# 	 use=use		- external file used by test (searched over dirs)
+#    maxtime=1		- time in seconds maximum to be allowed for test. 1 is default
+# 	 enabled=False	- disable test
+#	 expect=ok | expect=signal:SIG | expect=return:err	- expected result for test execution
+#														  expect=ok is default
+
+# Dummy tests are testing suite itself
+
+^dummy
+dummy/dummy1		file=dummy1.c
+dummy/dummy2		dir=dummy2 	 \
+					expect=signal:SEGV
+dummy/loop			file=loop.c 	expect=timeout 
+				
+# Tests for libtscommon stuff
+^tscommon		    lib=libjson 	lib=libtscommon
+tscommon/getopt		file=getopt.c
+tscommon/posixcomp  dir=posixcomp   use=posixcomp/file

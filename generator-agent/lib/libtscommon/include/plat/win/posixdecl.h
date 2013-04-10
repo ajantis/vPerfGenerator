@@ -8,6 +8,8 @@
 #ifndef PLAT_WIN_POSIXDECL_H_
 #define PLAT_WIN_POSIXDECL_H_
 
+#include <io.h>
+#include <fcntl.h>
 #include <stdlib.h>
 
 /* POSIX-compliant functions have underline prefixes in Windows,
