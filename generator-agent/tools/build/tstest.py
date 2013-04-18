@@ -14,6 +14,7 @@ class Test:
     EXPECT_RETURN = 2
     EXPECT_TIMEOUT = 3
     
+    SIGABRT = 6
     SIGNALS =  {'SEGV': 11}
     
     def __init__(self, name, group):
@@ -53,6 +54,8 @@ class Test:
         elif name == 'expect':
             if value == 'ok':
                 self.expect = (Test.EXPECT_OK, 0)
+            elif value == 'abort':
+                self.expect = (Test.EXPECT_SIGNAL, Test.SIGABRT)
             elif value == 'timeout':
                 self.expect = (Test.EXPECT_TIMEOUT, 0)
             elif value.startswith('signal:'):

@@ -2,7 +2,7 @@
  * dummy.c - Unit test that always
  */
 
-int main() {
+int test_main() {
 	while(1);
 
 	return 0;

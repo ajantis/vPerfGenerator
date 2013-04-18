@@ -53,6 +53,7 @@ if env.SupportedPlatform('win'):
                       'TEMP': os.getenv('TEMP'),
                       'TMP': os.getenv('TMP')})
 
+common_objs = env.Object(Glob('common/*.c'))
 
 for test in suite:
     if not test.enabled:
@@ -65,6 +66,10 @@ for test in suite:
         tst.AddDeps(('lib', lib))
     
     tst['TEST'] = test
+    tst['CPPPATH'] += ['test']
+    
+    if tst.SupportedPlatform('win'):
+        tst['LIBS'] += ['DbgHelp']
     
     srcdirs = [Glob(PathJoin(test.group, dir, '*.c')) 
                for dir in test.dirs]
@@ -72,7 +77,7 @@ for test in suite:
                 for file_name in test.files] 
     test_target = PathJoin(test.group, 'tst_' + test.name)
     
-    bin = tst.Program(test_target, srcdirs + srcfiles)
+    bin = tst.Program(test_target, srcdirs + srcfiles + common_objs)
     cfg = tst.Command(str(bin[0]) + '.cfg', [], CreateConfig)
     tst.Depends(bin, cfg[0])
     

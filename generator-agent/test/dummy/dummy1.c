@@ -2,6 +2,6 @@
  * dummy.c - Unit test that always success
  */
 
-int main() {
+int test_main() {
 	return 0;
 }

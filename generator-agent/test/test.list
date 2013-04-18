@@ -20,8 +20,9 @@
 # 	 use=use		- external file used by test (searched over dirs)
 #    maxtime=1		- time in seconds maximum to be allowed for test. 1 is default
 # 	 enabled=False	- disable test
-#	 expect=ok | expect=signal:SIG | expect=return:err	- expected result for test execution
-#														  expect=ok is default
+#	 expect=ok|timeout|abort 	-  expected result for test execution
+#	 expect=signal:SIG 			-  expect=ok is default
+#	 expect=return:err								  
 
 # Dummy tests are testing suite itself
 
@@ -29,7 +30,8 @@
 dummy/dummy1		file=dummy1.c
 dummy/dummy2		dir=dummy2 	 \
 					expect=signal:SEGV
-dummy/loop			file=loop.c 	expect=timeout 
+dummy/loop			file=loop.c 	expect=timeout
+dummy/assert		file=assert.c 	expect=abort  
 				
 # Tests for libtscommon stuff
 ^tscommon		    lib=libjson 	lib=libtscommon

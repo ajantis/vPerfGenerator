@@ -12,7 +12,7 @@ const char* testargs[] = {
     "ARG"
 };
 
-int main() {
+int test_main() {
     int c = -1;
     int i = 0;
 

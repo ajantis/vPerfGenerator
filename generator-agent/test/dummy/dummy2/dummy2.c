@@ -2,7 +2,7 @@
  * dummy2.c
  * should die with SEGV */
 
-int main() {
+int test_main() {
 	char *nullptr = (char*) 0;
 
 	*nullptr = 'a';

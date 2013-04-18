@@ -2,7 +2,7 @@
 
 #include <plat/posixdecl.h>
 
-int main() {
+int test_main() {
 	int fd;
 
 	if(access("file", R_OK | W_OK) != 0) {

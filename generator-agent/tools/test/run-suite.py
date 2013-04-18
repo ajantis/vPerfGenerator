@@ -88,9 +88,20 @@ class TestRunner(Thread):
             
             base_name = os.path.basename(fn)
             shutil.copy(fn, os.path.join(self.test_dir, base_name))
-        
+    
     def wipe_test_dir(self):
         shutil.rmtree(self.test_dir)
+        
+    def check_core(self, test_name):
+        core_path = os.path.join(self.test_dir, 'core')
+        
+        if os.path.exists(core_path):
+            core_name = 'core_' + test_name.replace(os.sep, '_')
+            shutil.copy(core_path, 
+                        os.path.join('build', 'test', core_name))
+            return True
+        
+        return False
     
     def run_test(self, test_name):
         test = self.read_test_config(test_name)
@@ -118,14 +129,20 @@ class TestRunner(Thread):
         
         end = time.time()
         
+        core = self.check_core(test_name)
+        
         self.wipe_test_dir()
         
         result = self.analyze_result(test, proc)
         
         stdout = proc.stdout.read()
-        stderr = proc.stdout.read()
+        stderr = proc.stderr.read()
         
-        output = '' if not proc.timed_out else 'Timed out!\n'
+        output = '' 
+        if proc.timed_out:
+            output += 'Timed out\n'
+        if core:
+            output += 'Dumped core\n'
         output += 'WD: %s Name: %s \n' % (self.test_dir, test_bin)
         output += 'Time: %f\n\n' % (end - start)
         if stdout:
