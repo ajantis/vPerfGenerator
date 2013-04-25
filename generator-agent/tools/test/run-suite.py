@@ -87,7 +87,11 @@ class TestRunner(Thread):
                 fn = fn[1:]
             
             base_name = os.path.basename(fn)
-            shutil.copy(fn, os.path.join(self.test_dir, base_name))
+            
+            if os.path.isdir(fn):
+                shutil.copytree(fn, os.path.join(self.test_dir, base_name))
+            else:
+                shutil.copy(fn, os.path.join(self.test_dir, base_name))
     
     def wipe_test_dir(self):
         shutil.rmtree(self.test_dir)
@@ -230,6 +234,9 @@ class TestSuite:
         with self.report_lock:
             print '=== TEST: %-20s RESULT: %-8s RETCODE: %d ===' % (test_name, resstr, retcode)
             print output
+            
+            # Print result to terminal
+            print >> sys.stderr, 'Running test %s... %s' % (test_name, resstr)
     
     def report_exc(self, test_name, exc_info):
         self.error_count += 1
@@ -239,6 +246,9 @@ class TestSuite:
             
             print '=== TEST: %-20s RESULT: %-8s ===' % (test_name, 'ERROR')
             print ''.join(info)
+            
+            # Print result to terminal
+            print >> sys.stderr, 'Running test %s... ERROR' % (test_name)
     
     def run(self):
         for test_name in sys.argv[1:]:

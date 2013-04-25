@@ -10,6 +10,7 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 #if defined(PLAT_WIN)
 const char* path_separator = "\\";
@@ -34,8 +35,8 @@ const int psep_length = 1;
  *
  * @return destination with formed path or NULL if destination was overflown
  *  */
-char* path_join_array(char* dest, size_t len, int num_parts, char** parts) {
-    char* part = parts[0];
+char* path_join_array(char* dest, size_t len, int num_parts, const char** parts) {
+    const char* part = parts[0];
     int i = 0;
     int idx = 0;
     size_t part_len = 0;
@@ -75,14 +76,14 @@ char* path_join_array(char* dest, size_t len, int num_parts, char** parts) {
  * @see path_join_array
  */
 char* path_join(char* dest, size_t len, ...) {
-    char* parts[PATHMAXPARTS];
+    const char* parts[PATHMAXPARTS];
     char* part = NULL;
     va_list va;
     int i = 0;
 
     va_start(va, len);
     do {
-        part = va_arg(va, char*);
+        part = va_arg(va, const char*);
         parts[i++] = part;
 
         /*Too much parts*/
@@ -98,11 +99,14 @@ static void path_split_add(path_split_iter_t* iter, const char* orig, const char
     size_t len = part - orig;
 
     if(len == 0)
-        return;
+        strcpy(iter->ps_dest, "");
+    else
+    	strncpy(iter->ps_dest, orig, len);
 
-    strncpy(iter->ps_dest, orig, len);
+    printf("[%d]: %c %s\n", iter->ps_num_parts, *part, iter->ps_dest);
 
     iter->ps_parts[iter->ps_num_parts++] = iter->ps_dest;
+    iter->ps_parts[iter->ps_num_parts] = NULL;
 
     iter->ps_dest += len;
     *iter->ps_dest++ = 0;
@@ -146,6 +150,8 @@ char* path_split(path_split_iter_t* iter, int max, const char* path) {
     /* Invalid max value*/
     if(max_parts == 0 || max_parts > PATHMAXPARTS)
         return NULL;
+
+    iter->ps_parts[0] = NULL;
 
     /* for psep_length != 1 should use strstr or reverse analogue */
     if(max < 0) {

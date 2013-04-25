@@ -47,8 +47,10 @@ STATIC_INLINE int __msb64(uint64_t i) {
 STATIC_INLINE int __msb32(uint32_t i) {
 	int ret = 0;
 
-	while((i & (1 << 31)) == 0)
+	while((i & (1 << 31)) == 0) {
+		i <<= 1;
 		++ret;
+	}
 
 	return ret;
 }
@@ -56,8 +58,10 @@ STATIC_INLINE int __msb32(uint32_t i) {
 STATIC_INLINE int __msb64(uint64_t i) {
 	int ret = 0;
 
-	while((i & (1 << 63)) == 0)
+	while((i & (1 << 63)) == 0) {
+		i <<= 1;
 		++ret;
+	}
 
 	return ret;
 }

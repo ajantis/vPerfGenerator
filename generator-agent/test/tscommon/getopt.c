@@ -3,6 +3,12 @@
 #include <string.h>
 #include <assert.h>
 
+/**
+ * Test getopt() for correctness
+ *
+ * On non-POSIX platform libtscommon implements it's own plat_getopt().
+ */
+
 const char* testargs[] = {
     "progname",
     "-c",

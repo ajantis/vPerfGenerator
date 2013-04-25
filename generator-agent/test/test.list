@@ -19,14 +19,15 @@
 #					  core libraries are linked by default
 # 	 use=use		- external file used by test (searched over dirs)
 #    maxtime=1		- time in seconds maximum to be allowed for test. 1 is default
-# 	 enabled=False	- disable test
+# 	 enabled=False	- disable test or group
 #	 expect=ok|timeout|abort 	-  expected result for test execution
 #	 expect=signal:SIG 			-  expect=ok is default
 #	 expect=return:err								  
 
 # Dummy tests are testing suite itself
 
-^dummy
+^dummy				enabled=False
+
 dummy/dummy1		file=dummy1.c
 dummy/dummy2		dir=dummy2 	 \
 					expect=signal:SEGV
@@ -37,3 +38,16 @@ dummy/assert		file=assert.c 	expect=abort
 ^tscommon		    lib=libjson 	lib=libtscommon
 tscommon/getopt		file=getopt.c
 tscommon/posixcomp  dir=posixcomp   use=posixcomp/file
+tscommon/ilog2		file=ilog2.c
+tscommon/hashmap	file=hashmap.c
+tscommon/tstime		file=tstime.c	maxtime=2
+tscommon/atomic		file=atomic.c
+tscommon/dirent		dir=dirent		use=dirent/test
+tscommon/paths		file=paths.c
+
+# Tests for threads 
+^threads			lib=libjson 	lib=libtscommon
+threads/thread1		file=thread1.c
+threads/atomic		file=atomic.c
+threads/mutex		file=mutex.c
+threads/event		file=event.c

@@ -2,6 +2,12 @@
 
 #include <plat/posixdecl.h>
 
+/**
+ * Test POSIX compability interfaces:
+ * - open() /close ()
+ * - access()
+ * */
+
 int test_main() {
 	int fd;
 
