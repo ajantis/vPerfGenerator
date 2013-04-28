@@ -12,6 +12,9 @@
 
 #include <genconfig.h>
 #include <stddef.h>
+#include <stdint.h>
+
+#define TO_BOOLEAN(x)	!!(x)
 
 #ifndef HAVE_BOOLEAN_T
 typedef enum { B_FALSE, B_TRUE } boolean_t;

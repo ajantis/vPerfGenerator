@@ -24,6 +24,13 @@ void test_path_split_name() {
 	assert(strcmp("file", path_basename(&iter, path2)) == 0);
 }
 
+void test_path_split_1() {
+	path_split_iter_t iter;
+
+	assert(strcmp(root, path_split(&iter, 8, root)) == 0);
+	assert(strcmp("file", path_split(&file, 8, "file")) == 0);
+}
+
 void test_path_split_2() {
 	path_split_iter_t iter;
 
@@ -64,6 +71,7 @@ void test_path_join_array() {
 }
 
 int test_main() {
+	test_path_split_1();
 	test_path_split_2();
 	test_path_split_3();
 	test_path_split_3_rev();

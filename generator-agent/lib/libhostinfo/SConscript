@@ -6,6 +6,11 @@ lib = env.Clone()
 
 lib.PreparePlatform()
 
+if lib.SupportedPlatform('solaris'):
+    lib.Append(LIBS = ['diskmgt', 'nvpair'])
+if lib.SupportedPlatform('win'):
+    lib.Append(LIBS = ['setupapi'])
+
 lib.AddDeps(('lib', 'libjson'), ('lib', 'libtscommon'))
 
 objects = lib.CompileSharedLibrary()

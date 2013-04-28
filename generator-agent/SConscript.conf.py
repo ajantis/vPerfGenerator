@@ -186,6 +186,11 @@ if env.SupportedPlatform('win'):
         raise StopError('WinSock are not implemented')
         
 
+#------------------------------
+# hostinfo checks?
+if GetOption('trace'):
+    conf.Define('HOSTINFO_TRACE', comment='--trace was enabled')
+
 # -----------------------------
 # ctfconvert / ctfmerge (Solaris)
 
@@ -207,4 +212,5 @@ env = conf.Finish()
 
 #------------------------------------
 # Generate build strings
-env.AlwaysBuild(env.Command(gen_build, [], GenerateBuildFile))
+if GetOption('update_build'):
+    env.AlwaysBuild(env.Command(gen_build, [], GenerateBuildFile))

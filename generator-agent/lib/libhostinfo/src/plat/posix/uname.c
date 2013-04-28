@@ -14,8 +14,10 @@ static boolean_t uname_read = B_FALSE;
 static struct utsname uname_data;
 
 struct utsname* hi_get_uname() {
-	if(!uname_read)
+	if(!uname_read) {
 		uname(&uname_data);
+		uname_read = B_TRUE;
+	}
 
 	return &uname_data;
 }

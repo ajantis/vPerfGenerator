@@ -148,8 +148,8 @@ STATIC_INLINE void list_del(list_node_t *entry)
 {
 	__list_del(entry->prev, entry->next);
 
-	entry->next = LIST_POISON1;
-	entry->prev = LIST_POISON2;
+	entry->next = entry;
+	entry->prev = entry;
 }
 
 /**
@@ -245,6 +245,15 @@ STATIC_INLINE int list_empty_careful(const list_node_t *head)
 {
 	list_node_t *next = head->next;
 	return (next == head) && (next == head->prev);
+}
+
+/**
+ * list_node_alone	- tests if node is not inserted into list
+ * @head: the list to test.
+ */
+STATIC_INLINE int list_node_alone(const list_node_t *node)
+{
+	return node->next == node && node->prev == node;
 }
 
 /**

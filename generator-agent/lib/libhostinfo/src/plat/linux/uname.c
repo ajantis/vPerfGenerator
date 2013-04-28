@@ -26,10 +26,11 @@ struct utsname* hi_get_uname();
 
 /*Parses lsb_release output*/
 void read_lsb_release(void) {
-	FILE* pipe = popen(LSB_RELEASE_PATH " -d -s", "r");
+	FILE* pipe = popen(LSB_RELEASE_PATH " -d -s 2>/dev/null", "r");
 	char descr_str[128] = "";
 	char *p_descr = descr_str;
 	size_t len;
+	int tail;
 
 	/* pipe() or fork() failed, failure! */
 	if(pipe == NULL) {
@@ -49,9 +50,14 @@ void read_lsb_release(void) {
 	if(*p_descr == '"')
 		++p_descr;
 
-	/*Remove last quote*/
-	if(descr_str[len - 1] == '"')
-		descr_str[len - 1] = 0;
+	tail = len - 1;
+
+	/*Remove trailing quotes and CRs*/
+	while(descr_str[tail] == '"' ||
+		  descr_str[tail] == '\n') {
+		descr_str[tail] = '\0';
+		--tail;
+	}
 
 	strncpy(lsb_os_name, p_descr, OSNAMELEN);
 

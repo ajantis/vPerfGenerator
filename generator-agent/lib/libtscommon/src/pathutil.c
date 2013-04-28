@@ -77,7 +77,7 @@ char* path_join_array(char* dest, size_t len, int num_parts, const char** parts)
  */
 char* path_join(char* dest, size_t len, ...) {
     const char* parts[PATHMAXPARTS];
-    char* part = NULL;
+    const char* part = NULL;
     va_list va;
     int i = 0;
 
@@ -95,15 +95,16 @@ char* path_join(char* dest, size_t len, ...) {
     return path_join_array(dest, len, i, parts);
 }
 
-static void path_split_add(path_split_iter_t* iter, const char* orig, const char* part) {
-    size_t len = part - orig;
+static void path_split_add(path_split_iter_t* iter, const char* part, const char* end) {
+    size_t len = end - part;
 
-    if(len == 0)
-        strcpy(iter->ps_dest, "");
-    else
-    	strncpy(iter->ps_dest, orig, len);
-
-    printf("[%d]: %c %s\n", iter->ps_num_parts, *part, iter->ps_dest);
+    if(len == 0) {
+        iter->ps_dest[0] = '\0';
+        len = 1;
+    }
+    else {
+    	strncpy(iter->ps_dest, part, len);
+    }
 
     iter->ps_parts[iter->ps_num_parts++] = iter->ps_dest;
     iter->ps_parts[iter->ps_num_parts] = NULL;
@@ -135,11 +136,8 @@ static const char* strrchr_x(const char* s, const char* from, int c) {
  * @return First path part
  * */
 char* path_split(path_split_iter_t* iter, int max, const char* path) {
-    const char *part, *orig;
     char* dest = iter->ps_storage;
-
     long max_parts = abs(max);
-
     size_t part_len = 0;
 
     iter->ps_num_parts = 0;
@@ -153,39 +151,43 @@ char* path_split(path_split_iter_t* iter, int max, const char* path) {
 
     iter->ps_parts[0] = NULL;
 
-    /* for psep_length != 1 should use strstr or reverse analogue */
+    /* for psep_length != 1 should use strstr or reverse analog */
     if(max < 0) {
         /* Reverse - search */
-        part = orig = path + strlen(path);
+    	const char *begin, *orig;
+    	begin = orig = path + strlen(path);
 
-        while((part = strrchr_x(path, part, *path_separator)) != NULL) {
+        while((begin = strrchr_x(path, begin, *path_separator)) != NULL) {
             if(++max == 0)
                 break;
 
-            path_split_add(iter, part + psep_length, orig);
+            path_split_add(iter, begin + psep_length, orig);
 
-            orig = part;
+            orig = begin;
         }
 
         if(orig != path) {
-            /* Ignore trailing separators */
-            part = path;
-            while(*part == *path_separator) ++part;
-
-            path_split_add(iter, part, orig);
+            /* Relative path - add last part to it:
+             * NOTE: On Windows all paths are relative because of C: */
+            path_split_add(iter, path, orig);
+        }
+        else {
+        	/* Add first "" */
+        	path_split_add(iter, path, path);
         }
     }
     else {
-        path = orig = path;
+    	const char *end, *orig;
+    	end = orig = path;
 
-        while((part = strchr(part, *path_separator)) != NULL) {
+        while((end = strchr(end, *path_separator)) != NULL) {
             if(max-- == 0)
                 break;
 
-            path_split_add(iter, orig, part);
+            path_split_add(iter, orig, end);
 
-            orig = part + psep_length;
-            part += psep_length;
+            orig = end + psep_length;
+            end += psep_length;
         }
 
         path_split_add(iter, orig, path + strlen(path));

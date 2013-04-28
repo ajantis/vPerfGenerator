@@ -1,0 +1,18 @@
+from pathutil import *
+
+tgtdir = 'bin'
+target = 'tshostinfo'
+
+Import('env')
+
+cmd = env.Clone()
+        
+
+cmd.AddDeps(('lib', 'libtscommon'), 
+            ('lib', 'libjson'),
+            ('lib', 'libhostinfo'))
+
+objects = cmd.CompileProgram()
+tshostinfo = cmd.Program(target, objects)
+
+cmd.InstallTarget(cmd['INSTALL_BIN'], tshostinfo)

@@ -144,6 +144,10 @@ AddOption('--list',  dest='list', action="store_true", default=False,
 AddOption('--mach',  dest='mach', action="store", default='',
           help='Machine architecture')
 
+# buildid file
+AddEnableOption('update-build',  dest='update_build', default=False,
+          help='Update build file')
+
 AddEnableOption('mempool-alloc',  dest='mempool_alloc', default=False,
           help='mempool allocator [EXPERIMENTAL]')
 AddEnableOption('mempool-valgrind',  dest='mempool_valgrind', default=False,
@@ -316,6 +320,10 @@ AddBuildItem('swat', 'tool',
              targets = ['cmd/swat-import'],
              deps = ['core-lib'],
              default = False)
+AddBuildItem('hostinfo', 'tool',
+             targets = ['cmd/tshostinfo'],
+             deps = ['core-lib'])
+
 
 AddBuildItem('load', 'lib',
              targets = ['lib/libtsload'],
