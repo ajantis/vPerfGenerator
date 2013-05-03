@@ -12,7 +12,7 @@
 
 #include <hiprint.h>
 
-#include <diskinfo.h>
+#include <hiobject.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -22,12 +22,12 @@ int print_flags = INFO_DEFAULT;
 
 struct subsystem subsys[] = {
 	SUBSYSTEM("mempool", mempool_init, mempool_fini),
-	SUBSYSTEM("hidisk", hi_dsk_init, hi_dsk_fini)
+	SUBSYSTEM("hiobject", hi_obj_init, hi_obj_fini)
 };
 
 void usage() {
 	fprintf(stderr, "command line: \n"
-					"\ttshostinfo [-x] [-l] [{host|disk|fs|net|all}] [...]\n"
+					"\ttshostinfo [-x] [-l] [{host|cpu|disk|fs|net|all}] [...]\n"
 					"\t\t-x - print additional data\n"
 					"\t\t-l - print legend\n"
 					"\ttshostinfo -v - tsload version\n"
@@ -87,6 +87,7 @@ int print_info(const char* topic) {
 
 	PRINT_INFO_IMPL(host);
 	PRINT_INFO_IMPL(disk);
+	PRINT_INFO_IMPL(cpu);
 
 	return 1;
 }

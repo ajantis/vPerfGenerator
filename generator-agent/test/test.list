@@ -51,3 +51,7 @@ threads/thread1		file=thread1.c
 threads/atomic		file=atomic.c
 threads/mutex		file=mutex.c
 threads/event		file=event.c
+
+# Tests for hostinfo
+^hostinfo 			lib=libjson 	lib=libtscommon		lib=libhostinfo
+hostinfo/linux_sysfs_bitmap		file=linux_sysfs_bitmap.c 

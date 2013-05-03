@@ -19,6 +19,7 @@
 #define INFO_OK		0
 #define INFO_ERROR	1
 
+int print_cpu_info(int flags);
 int print_host_info(int flags);
 int print_disk_info(int flags);
 

@@ -431,15 +431,15 @@ PLATAPI int hi_dsk_probe(void) {
 	ddp = dm_get_descriptors(DM_DRIVE, NULL, &error);
 
 	if(error != 0)
-		return HI_DSK_PROBE_ERROR;
+		return HI_PROBE_ERROR;
 
 	if(ddp == NULL) {
 		/* No disks found */
-		return HI_DSK_PROBE_OK;
+		return HI_PROBE_OK;
 	}
 
 	hi_sol_dm_walk(NULL, NULL, ddp, hi_sol_proc_disk);
 
 	dm_free_descriptors(ddp);
-	return HI_DSK_PROBE_OK;
+	return HI_PROBE_OK;
 }

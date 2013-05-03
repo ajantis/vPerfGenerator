@@ -402,14 +402,14 @@ int hi_dsk_probe_disks(void) {
 	dev_info = SetupDiGetClassDevs((LPGUID) &GUID_DEVCLASS_DISKDRIVE, NULL, NULL, DIGCF_PRESENT);
 
 	if(dev_info == INVALID_HANDLE_VALUE) {
-		return HI_DSK_PROBE_ERROR;
+		return HI_PROBE_ERROR;
 	}
 
 	int_dev_info = SetupDiGetClassDevs((LPGUID) &DiskClassGuid, NULL, NULL, DIGCF_PRESENT | DIGCF_INTERFACEDEVICE);
 
 	if(int_dev_info == INVALID_HANDLE_VALUE) {
 		SetupDiDestroyDeviceInfoList(dev_info);
-		return HI_DSK_PROBE_ERROR;
+		return HI_PROBE_ERROR;
 	}
 
 	dsk.dev_info = dev_info;
@@ -436,16 +436,16 @@ int hi_dsk_probe_disks(void) {
 	SetupDiDestroyDeviceInfoList(dev_info);
 	SetupDiDestroyDeviceInfoList(int_dev_info);
 
-	return HI_DSK_PROBE_OK;
+	return HI_PROBE_OK;
 }
 
 PLATAPI int hi_dsk_probe(void) {
 	int error = hi_dsk_probe_disks();
 
-	if(error != HI_DSK_PROBE_OK)
+	if(error != HI_PROBE_OK)
 		return error;
 
 	/* Probe volumes */
 
-	return HI_DSK_PROBE_OK;
+	return HI_PROBE_OK;
 }

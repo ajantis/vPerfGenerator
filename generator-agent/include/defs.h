@@ -105,7 +105,7 @@ typedef enum { B_FALSE, B_TRUE } boolean_t;
 #	define max(a, b) ((a) > (b)? (a) : (b))
 #endif
 
-#if !defined(HAVE_DECL_MIN) || !defined(HAVE_DECL_MAX)
+#if defined(HAVE_DECL_MIN) || defined(HAVE_DECL_MAX)
 #	include <stdlib.h>
 #endif
 

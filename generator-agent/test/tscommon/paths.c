@@ -28,7 +28,7 @@ void test_path_split_1() {
 	path_split_iter_t iter;
 
 	assert(strcmp(root, path_split(&iter, 8, root)) == 0);
-	assert(strcmp("file", path_split(&file, 8, "file")) == 0);
+	assert(strcmp("file", path_split(&iter, 8, "file")) == 0);
 }
 
 void test_path_split_2() {

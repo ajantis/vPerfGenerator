@@ -32,19 +32,21 @@ char* disk_get_type(hi_dsk_info_t* di) {
 			if(str[0] != '\0')						\
 				printf("\t%-7s: %s\n", what, str);
 
-void print_disk_slaves(hi_dsk_info_t* di) {
-	struct hi_dsk_slave* ds;
+void print_disk_slaves(hi_dsk_info_t* parent) {
+	hi_object_child_t* child;
+	hi_dsk_info_t* di;
 	char slaves[256] = "";
 
 	char *ps = slaves;
 	int off = 0;
 
-	if(!list_empty(&di->d_slave_list)) {
-		disk_for_each_slave(di, ds) {
-			if((off + strlen(ds->ds_di->d_name) > 254))
+	if(!list_empty(&parent->d_hdr.children)) {
+		hi_for_each_child(child, &parent->d_hdr) {
+			di = HI_DSK_FROM_OBJ(child->object);
+			if((off + strlen(di->d_name) > 254))
 				break;
 
-			off += sprintf(slaves + off, " %s", ds->ds_di->d_name);
+			off += sprintf(slaves + off, " %s", di->d_name);
 		}
 
 		PRINT_DISK_XSTR("slaves", slaves);
@@ -54,6 +56,7 @@ void print_disk_slaves(hi_dsk_info_t* di) {
 int print_disk_info(int flags) {
 	list_head_t* disk_list;
 	hi_dsk_info_t* di;
+	hi_object_t* object;
 
 	disk_list = hi_dsk_list(B_FALSE);
 
@@ -67,7 +70,9 @@ int print_disk_info(int flags) {
 				"SIZE", 'R', 'W', "PATH");
 	}
 
-	list_for_each_entry(hi_dsk_info_t, di, disk_list, d_node) {
+	hi_for_each_object(object, disk_list) {
+		di = HI_DSK_FROM_OBJ(object);
+
 		printf("%-12s %-6s %-16llu %c%c %s\n", di->d_name,
 					disk_get_type(di), di->d_size,
 					(di->d_mode & R_OK)? 'R' : '-',
