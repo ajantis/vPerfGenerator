@@ -14,7 +14,7 @@ import socket
 
 from twisted.internet.protocol import Protocol, Factory
 from twisted.internet.endpoints import TCP4ClientEndpoint
-from twisted.internet import reactor
+from twisted.internet import reactor, task
 
 class TSAgentMethod:
     def __init__(self, name, args = []):
@@ -50,6 +50,8 @@ class TSAgent:
         self.agentId = agentId
         self.factory = factory
         
+        self.methods = {}
+        
         for mname in dir(self):
             method = getattr(self, mname)
             
@@ -60,7 +62,12 @@ class TSAgent:
                 method.setAgentId(agentId)
                 method.setFactory(factory)
                 
-                
+                self.methods[method.name] = method
+    
+    def invoke(self, agentId, command, msgBody):
+        method = self.methods[command]
+        
+        method(**msgBody)
 
 class JSONTS(Protocol):
     STATE_NEW          = 0
@@ -161,6 +168,23 @@ class JSONTS(Protocol):
             raise
         
 class TSServerFactory(Factory):
+    '''TSServerFactory - Factory for twisted server that routes requests between JSONTS clients
+    
+    TSServer implements only two calls:
+    1. hello() - allocates agentId and returns it to agent
+    2. listAgents() - lists all agents
+    
+    Other commands/responses would be forwarded to desired client, which could be:
+    * Listener 
+        Not all clients may call for listAgents and determine to which agents they should 
+        deliver their message. Instead of that, desired agent, called listener, registers 
+        itself by calling addListener(), than all commands would be forwarded to that listener.
+    * Route
+        After command is sent, server creates a temporarily route to know, which was 
+        original message id and agent id. When response arrives, server substitutes message id
+        and agent id with original ones, from route, to do not confuse sender side by
+        server generated ids.
+    '''
     log = logging.getLogger('TSServerFactory')
     log.setLevel(logging.DEBUG)
     
@@ -173,6 +197,9 @@ class TSServerFactory(Factory):
         self.routeMsgs = {}
         
         self.agentid = iter(xrange(1, sys.maxint))
+        
+        self.deadCleaner = task.LoopingCall(self.cleanDeadAgents)
+        self.deadCleaner.start(60, False)
     
     def getAgent(self, agentId):
         return self.clients[agentId]
@@ -193,6 +220,19 @@ class TSServerFactory(Factory):
         self.log.info('Agent hostName: %s registered', client.hostName)
         
         return agentId
+    
+    def cleanDeadAgents(self):
+        deadAgentIds = []
+        
+        # FIXME: should process routes
+        
+        for agentId, client in self.clients.items():
+            if client.state == JSONTS.STATE_DISCONNECTED:
+                deadAgentIds.append(agentId)
+                
+        for agentId in deadAgentIds:
+            del self.clients[agentId]
+            del self.agents[agentId]
     
     def buildProtocol(self, addr):
         self.log.info('Client addr: %s connected', addr)
@@ -224,14 +264,15 @@ class TSServerFactory(Factory):
             client.sendResponse(0, msgId, agents)
         elif agentId != 0:
             srcAgentId = client.agentId
+            
             self.routes[agentId] = srcAgentId
             self.routeMsgs[agentId] = msgId
             
             self.log.debug('Forwarding command %s from %d to %d', 
                            command, srcAgentId, agentId)
             
-            client = self.clients[agentId]
-            client.sendCommand(agentId, command, msgBody)
+            agent = self.agents[agentId]
+            agent.invoke(agentId, command, msgBody)
     
     def getRoute(self, agentId):
         dstAgentId = self.routes[agentId]
@@ -261,6 +302,7 @@ class TSServerFactory(Factory):
         client.sendError(agentId, dstMsgId, error, code)
     
 class TSClientFactory(Factory):
+    '''TSClientFactory - factory for twisted clients'''
     log = logging.getLogger('TSClientFactory')
     log.setLevel(logging.DEBUG)
     
@@ -272,8 +314,10 @@ class TSClientFactory(Factory):
     def __init__(self):
         self.calls = {}
     
-    def call(self, callId, callback, errback):
-        self.calls[callId] = (callback, errback)
+    def call(self, msgId, callback, errback):
+        ''' Register callbacks for message id msgId.
+        When response or error arrives,  '''
+        self.calls[msgId] = (callback, errback)
     
     def sendCommand(self, agentId, command, msgBody):
         return self.client.sendCommand(agentId, command, msgBody)
