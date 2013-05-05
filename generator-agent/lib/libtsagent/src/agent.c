@@ -10,7 +10,6 @@
 
 #include <agent.h>
 #include <client.h>
-#include <uname.h>
 
 #include <libjson.h>
 
@@ -21,6 +20,11 @@
 
 static agent_dispatch_t* agent_dispatch_table = NULL;
 
+int agent_id = -1;
+
+char agent_hostname[AGENTHOSTNAMELEN];
+char agent_type[AGENTTYPELEN];
+
 void agent_register_methods(agent_dispatch_t* table) {
 	agent_dispatch_table = table;
 }
@@ -29,7 +33,8 @@ JSONNODE* agent_hello_msg() {
 	JSONNODE* node = json_new(JSON_NODE);
 	JSONNODE* info_node = json_new(JSON_NODE);
 
-	json_push_back(info_node, json_new_a("hostName", hi_get_nodename()));
+	json_push_back(info_node, json_new_a("hostName", agent_hostname));
+	json_push_back(info_node, json_new_a("agentType", agent_type));
 
 	json_set_name(info_node, "info");
 	json_push_back(node, info_node);
@@ -118,12 +123,29 @@ void agent_process_command(char* command, JSONNODE* n_msg) {
 }
 
 int agent_hello() {
-	int ret;
+	int ret = -1;
 	JSONNODE* response;
+	clnt_response_type_t rtype;
 
-	ret = clnt_invoke("hello", agent_hello_msg(), &response);
+	JSONNODE_ITERATOR i_end, i_agentid;
 
-	/*Process agent ID*/
+	rtype = clnt_invoke("hello", agent_hello_msg(), &response);
 
+	if(rtype == RT_RESPONSE) {
+		i_end = json_end(response);
+		i_agentid = json_find(response, "agentId");
+
+		if(i_agentid == i_end || json_type(*i_agentid) != JSON_NUMBER) {
+			logmsg(LOG_WARN, "Failed to process hello response: unknown 'agentId'");
+			ret = -1;
+			goto fail;
+		}
+
+		agent_id = json_as_int(*i_agentid);
+
+		ret = 0;
+	}
+
+fail:
 	return ret;
 }

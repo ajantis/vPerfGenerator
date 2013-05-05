@@ -31,6 +31,8 @@ plat_clnt_addr	 clnt_addr;
 LIBEXPORT int clnt_port = 9090;
 LIBEXPORT char clnt_host[CLNTHOSTLEN] = "localhost";
 
+extern int agent_id;
+
 boolean_t clnt_trace_decode = B_FALSE;
 
 /* Message unique identifier */
@@ -189,9 +191,10 @@ int clnt_process_command(unsigned msg_id, JSONNODE* n_cmd, JSONNODE* n_msg) {
  *
  * @return 0 if processing successful and -1 otherwise*/
 int clnt_process_msg(JSONNODE* msg) {
-	JSONNODE_ITERATOR i_id, i_response, i_command, i_msg, i_error, i_code, i_end;
+	JSONNODE_ITERATOR i_id, i_agentid, i_response, i_command, i_msg, i_error, i_code, i_end;
 	unsigned msg_id;
 	int ret = 0;
+	int msg_agent_id;
 
 	if(msg == NULL) {
 		logmsg(LOG_WARN, "Failed to process incoming message: not JSON");
@@ -201,9 +204,25 @@ int clnt_process_msg(JSONNODE* msg) {
 
 	i_end = json_end(msg);
 	i_id = json_find(msg, "id");
+	i_agentid = json_find(msg, "agentId");
 
 	if(i_id == i_end || json_type(*i_id) != JSON_NUMBER) {
 		logmsg(LOG_WARN, "Failed to process incoming message: unknown 'id'");
+		ret = -1;
+		goto fail;
+	}
+
+	if(i_agentid == i_end || json_type(*i_agentid) != JSON_NUMBER) {
+		logmsg(LOG_WARN, "Failed to process incoming message: unknown 'agentId'");
+		ret = -1;
+		goto fail;
+	}
+
+	msg_agent_id = json_as_int(*i_agentid);
+
+	if(msg_agent_id != agent_id) {
+		logmsg(LOG_WARN, "Failed to process incoming message: invalid 'agentId': ours is %d, got %d",
+				agent_id, msg_agent_id);
 		ret = -1;
 		goto fail;
 	}
@@ -417,6 +436,8 @@ int clnt_send(JSONNODE* node) {
 		return -1;
 	}
 
+	json_push_back(node, json_new_i("agentId", agent_id));
+
 	json_msg = json_write(node);
 	len = strlen(json_msg) + 1;
 
@@ -441,14 +462,22 @@ int clnt_send(JSONNODE* node) {
  * NOTE: deletes msg_node in any case
  * */
 clnt_response_type_t clnt_invoke(const char* command, JSONNODE* msg_node, JSONNODE** p_response) {
-	clnt_msg_handler_t* hdl = clnt_create_msg();
+	clnt_msg_handler_t* hdl = NULL;
 	clnt_response_type_t response_type = RT_NOTHING;
-	JSONNODE* node = json_clnt_command_format(command, msg_node, hdl->mh_msg_id);
+	JSONNODE* node = NULL;
 
+	if(!clnt_connected) {
+		json_delete(msg_node);
+		return RT_DISCONNECT;
+	}
+
+	hdl = clnt_create_msg();
 	if(hdl == NULL) {
 		json_delete(msg_node);
 		return RT_NOTHING;
 	}
+
+	node = json_clnt_command_format(command, msg_node, hdl->mh_msg_id);
 
 	clnt_send(node);
 
@@ -490,6 +519,8 @@ thread_result_t clnt_connect_thread(thread_arg_t arg) {
 
 	while(!clnt_finished) {
 		if(!clnt_connected) {
+			agent_id = -1;
+
 			if(clnt_connect() != CLNT_OK) {
 				tm_sleep_milli(CLNT_RETRY_TIMEOUT);
 				continue;

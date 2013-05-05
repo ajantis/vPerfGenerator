@@ -14,7 +14,7 @@ if lib.SupportedPlatform('solaris'):
 
 
 lib.PreparePlatform()
-lib.AddDeps(('lib', 'libjson'), ('lib', 'libtscommon'), ('lib', 'libhostinfo'))
+lib.AddDeps(('lib', 'libjson'), ('lib', 'libtscommon'))
 
 objects = lib.CompileSharedLibrary()
 library = lib.LinkSharedLibrary(target, objects)

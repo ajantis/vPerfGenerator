@@ -338,6 +338,11 @@ AddBuildItem('load', 'tool',
 AddBuildItem('load', 'modules',
              deps = ['core-lib'])
 
+AddBuildItem('jsonts', 'bench',
+             targets = ['tools/json-ts/bench'],
+             deps = ['load-lib'],
+             default = False)
+
 # Iterate over modules directories and add modules to build items
 for mod_type in ('load', ):
     for mod in Dir('mod').Dir(mod_type).glob('*'):

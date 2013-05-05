@@ -27,6 +27,8 @@ LIBEXPORT char log_filename[LOGFNMAXLEN];
 LIBEXPORT int log_debug = 0;
 LIBEXPORT int log_trace	= 0;
 
+boolean_t log_initialized = B_FALSE;
+
 FILE* log_file;
 
 /* Allows to dump backtraces with messages */
@@ -95,6 +97,8 @@ int log_init() {
 	json_register_debug_callback(json_error_callback);
 #	endif
 
+	log_initialized = B_TRUE;
+
 	return 0;
 }
 
@@ -129,6 +133,9 @@ int logmsg_src(int severity, const char* source, const char* format, ...)
 	char time[64];
 	va_list args;
 	int ret = 0;
+
+	if(!log_initialized)
+		return -1;
 
 	if((severity == LOG_DEBUG && log_debug == 0) ||
 	   (severity == LOG_TRACE && log_trace == 0) ||

@@ -1,0 +1,5 @@
+.project
+.pyproject
+.pydevproject
+*.pyc
+*.pyo

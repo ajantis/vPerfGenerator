@@ -44,6 +44,13 @@ LIBEXPORT void agent_response_msg(JSONNODE* response);
 LIBEXPORT void agent_error_msg(ts_errcode_t code, const char* format, ...);
 LIBEXPORT void agent_register_methods(agent_dispatch_t* table);
 
+#define AGENTHOSTNAMELEN 	64
+#define AGENTTYPELEN	 	16
+
+LIBIMPORT char agent_hostname[];
+LIBIMPORT char agent_type[];
+
 int agent_hello();
+
 
 #endif /* AGENT_H_ */
