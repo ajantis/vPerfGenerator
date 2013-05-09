@@ -6,7 +6,7 @@ Created on 06.05.2013
 
 import sys
 
-from tscli import CLIContext, NextContext, ReturnContext
+from tsload.cli import CLIContext, NextContext, ReturnContext
 
 class AgentContext(CLIContext):
     def setAgentId(self, agentId):
@@ -40,11 +40,11 @@ class AgentListContext(CLIContext):
                   2: 'ESTABLISHED',
                   3: 'DISCONNECTED'}
         
-        print '%-4s %-16s %-12s %s' % ('ID', 'HOSTNAME', 'CLASS', 'STATE')
+        print '%-4s %-16s %-12s %s' % ('ID', 'UUID', 'CLASS', 'STATE')
         
         for agentIdStr, agent in agentsList.items():
             print '%-4s %-16s %-12s %s' % (agentIdStr, 
-                                           agent['hostName'],
+                                           agent['uuid'],
                                            agent['class'],
                                            states.get(agent['state'], 'UNKNOWN'))
             
@@ -58,7 +58,7 @@ class AgentRootContext(CLIContext):
     @NextContext(AgentListContext)
     def list(self, args):
         '''Lists all agents registered on server'''
-        self.cli.call(self.cli.listAgents())
+        self.cli.doCall(self.cli.rootAgent.listClients())
         
         return []
     

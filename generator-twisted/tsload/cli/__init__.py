@@ -1,3 +1,5 @@
+from twisted.internet import reactor
+
 class ContextError(Exception):
     pass
 
@@ -25,7 +27,7 @@ class ReturnContext:
 
 class CLIContext:
     async = False
-    operations = []
+    operations = ['help', 'done', 'exit']
     
     def __init__(self, parent, cli):
         self.parent = parent
@@ -44,7 +46,7 @@ class CLIContext:
     def call(self, args):
         op = args.pop(0)
         
-        if op not in self.operations + ['help', 'done']:
+        if op not in self.operations + CLIContext.operations:
             raise ContextError('%s: Invalid operation %s' % 
                                (self.__class__.__name__, op))
         
@@ -61,7 +63,7 @@ class CLIContext:
     
     def help(self, args):
         '''Prints help'''
-        for op in self.operations + ['help', 'done']:
+        for op in self.operations + CLIContext.operations:
             method = getattr(self, op)
             try:
                 args = method.args
@@ -80,3 +82,7 @@ class CLIContext:
     def done(self, args):
         '''Returns to previous context'''
         return self.parent, []
+    
+    def exit(self, args):
+        reactor.stop()
+        return self, []

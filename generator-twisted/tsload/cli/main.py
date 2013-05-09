@@ -1,23 +1,18 @@
 '''
-Created on 05.05.2013
+Created on 09.05.2013
 
 @author: myaut
 '''
 
 import sys
 import shlex
-
-import logging
-logging.basicConfig()
-
-from tsload.jsonts import TSClient
-from tsload.admin import TSAdminAgent
-from twisted.internet import reactor
-
 import socket
 
-from tscli import CLIContext, NextContext
-from tscli.agent import AgentRootContext
+from tsload.jsonts.agent import TSAgent
+from tsload.cli import CLIContext, NextContext
+from tsload.cli.agent import AgentRootContext
+
+from twisted.internet import reactor
 
 class RootContext(CLIContext):
     name = ''
@@ -27,15 +22,24 @@ class RootContext(CLIContext):
     def agent(self, args):
         '''Agent administration'''
         return args
+    
+    def doResponse(self, response):
+        return self, []
 
 
-class AdminCLI(TSAdminAgent):
-    def __init__(self, factory, agentId):
+class TSAdminCLIAgent(TSAgent):
+    def __init__(self):
         self.context = RootContext(None, self)
-        TSAdminAgent.__init__(self, factory, agentId)
+    
+    def setAuthType(self, authUser, authMasterKey):
+        self.authUser = authUser
+        self.authMasterKey = authMasterKey
     
     def gotAgent(self):
-        self.ask()
+        if self.authMasterKey != None:
+            self.doCall(self.rootAgent.authMasterKey(masterKey=self.authMasterKey))
+        else:
+            self.ask()
     
     def _read_args(self):
         prompt = 'TS %s> ' % self.context.path()
@@ -80,10 +84,6 @@ class AdminCLI(TSAdminAgent):
             if not args:
                 continue
             
-            if args[0] == 'exit':
-                reactor.stop()
-                return
-            
             while args:
                 try:
                     self.context, args = self.context.call(args)
@@ -91,8 +91,8 @@ class AdminCLI(TSAdminAgent):
                     print >> sys.stderr, str(e)
                     args = []
     
-    def call(self, callId):
-        self.factory.call(callId, self.gotResponse, self.gotError)
+    def doCall(self, callId):
+        self.call(callId, self.gotResponse, self.gotError)
     
     def gotResponse(self, response):
         self.context, args = self.context.doResponse(response)
@@ -105,8 +105,3 @@ class AdminCLI(TSAdminAgent):
     def help(self, args):
         pass
     
-client = TSClient()
-client.setAgentType('admin', AdminCLI)
-
-client.connect("localhost", 9090)
-reactor.run()
