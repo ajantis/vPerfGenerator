@@ -57,6 +57,7 @@ class JSONTS(Protocol):
     
     AE_INVALID_AGENT        = 200
     AE_ACCESS_DENIED        = 201
+    AE_CONNECTION_ERROR     = 202
     
     AE_INTERNAL_ERROR       = 300
     

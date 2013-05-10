@@ -48,9 +48,10 @@ class TSAgent(Factory):
         agent.agents = {}
         agent.calls = {}
         
-        endpoint = TCP4ClientEndpoint(reactor, host, port)
-        d = endpoint.connect(agent)
+        agent.endpoint = TCP4ClientEndpoint(reactor, host, port)
+        d = agent.endpoint.connect(agent)
         d.addCallback(agent.gotClient)
+        d.addErrback(agent.gotConnectionError)
         
         return agent
     
@@ -140,8 +141,12 @@ class TSAgent(Factory):
         
         self.gotAgent()
     
+    def gotConnectionError(self, failure):
+        self.gotError(JSONTS.AE_CONNECTION_ERROR, str(failure))
+    
     def gotError(self, code, error):
         print >> sys.stderr, 'ERROR %d: %s' % (code, error)
-        reactor.stop()
-            
+        
+    def disconnect(self):
+        self.endpoint.disconnect()    
         

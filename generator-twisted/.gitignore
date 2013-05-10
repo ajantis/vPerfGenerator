@@ -1,5 +1,7 @@
 .project
 .pyproject
 .pydevproject
+.settings
 *.pyc
 *.pyo
+master.key

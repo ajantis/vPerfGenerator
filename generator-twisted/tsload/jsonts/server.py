@@ -133,11 +133,19 @@ class TSServer(Factory):
         self.msgCounter = iter(xrange(1, sys.maxint))
         self.agentIdGenerator = iter(xrange(1, sys.maxint))
         
+        self.deadCleaner = task.LoopingCall(self.cleanDeadAgents)
+        self.deadCleaner.start(60, False)
+        
+        self.generateMasterKey()
+        
+    def generateMasterKey(self):
         self.masterKey = uuid.uuid1()
         self.doTrace('Master key is %s', self.masterKey)
         
-        self.deadCleaner = task.LoopingCall(self.cleanDeadAgents)
-        self.deadCleaner.start(60, False)
+        # FIXME: correct directory
+        masterFile = file('master.key', 'w')
+        masterFile.write(str(self.masterKey))
+        masterFile.close()
     
     def doTrace(self, fmt, *args):
         print fmt % args 
