@@ -34,6 +34,11 @@ class TSAgentClient(JSONTS):
         return self.agentId
 
 class TSAgent(Factory):
+    '''Generic agent implementation. Used both by local and remote agents, however
+    construction phases are differ:
+    - Local agents created by directly calling it's constructor 
+    - Remote agents created by TSRemoteAgentImpl.createAgent('type', HOST, PORT)'''
+    
     uuid = None
     agentType = 'generic'
     
@@ -80,7 +85,8 @@ class TSAgent(Factory):
             
             if dstAgentId != self.client.getId():
                 raise JSONTS.Error(JSONTS.AE_INVALID_AGENT,
-                                   'Invalid destination agent: ours is %d, received is %d' % (self.agentId, dstAgentId))
+                                   'Invalid destination agent: ours is %d, received is %d' % (self.client.getId(), 
+                                                                                              dstAgentId))
             
             if type(cmdArgs) != dict:
                 raise JSONTS.Error(JSONTS.AE_MESSAGE_FORMAT, 'Message should be dictionary, not a %s' % type(cmdArgs))
@@ -113,6 +119,11 @@ class TSAgent(Factory):
             self.processError(srcMsgId, code, error)
     
     def call(self, call, callback, errback):
+        '''Main routine for invokation of remote agents. Each call made via
+        remote-interface (imported from tsload.jsonts.interface) returns only 
+        message id. This function binds it to callback/errback
+        
+        FIXME: Use deferreds from twisted'''
         self.calls[call.msgId] = call
         call.setCallbacks(callback, errback)
     
@@ -142,11 +153,15 @@ class TSAgent(Factory):
         self.gotAgent()
     
     def gotConnectionError(self, failure):
+        '''Generic implementation for connection error event.
+        Falls back to gotError. May be overriden'''
         self.gotError(JSONTS.AE_CONNECTION_ERROR, str(failure))
     
     def gotError(self, code, error):
+        '''Generic implementation for JSONTS error - simply dumps error
+        to stderr. May be overriden'''
         print >> sys.stderr, 'ERROR %d: %s' % (code, error)
-        
+    
     def disconnect(self):
         self.endpoint.disconnect()    
         

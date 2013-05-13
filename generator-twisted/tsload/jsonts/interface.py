@@ -54,3 +54,6 @@ class RootAgent(TSAgentInterface):
     hello = TSAgentInterface.Method('hello')
     authMasterKey = TSAgentInterface.Method('authMasterKey')
     listClients = TSAgentInterface.Method('listClients')
+    
+class UserAgent(TSAgentInterface):
+    authUser = TSAgentInterface.Method('authUser')

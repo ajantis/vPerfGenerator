@@ -8,18 +8,25 @@ import sys
 import traceback
 
 from tsload.jsonts import AccessRule, Flow, JSONTS
-from tsload.jsonts.agent import TSAgent, TSAgentClient, CallContext
+from tsload.jsonts.agent import TSAgent, CallContext
 
 from twisted.internet.protocol import Factory
 from twisted.internet import reactor, task
 
 import uuid
 
-rootAgentUUID = '{14f498da-a689-4341-8869-e4a292b143b6}'
-rootAgentType = 'root'
+# First agent id used by remote agents
+remoteAgentId = 8
 
 class TSServerClient(JSONTS):
     uuid = None
+    
+    AUTH_NONE = 0
+    AUTH_MASTER = 1
+    AUTH_USER = 2
+    
+    agentUuid = None
+    agentType = 'unknown'
     
     def __init__(self, factory, agentId):
         self.agentId = agentId
@@ -27,7 +34,7 @@ class TSServerClient(JSONTS):
         self.flows = {}
         self.acl = []
         
-        self.master = False
+        self.auth = TSServerClient.AUTH_NONE
         
         JSONTS.__init__(self, factory)
         
@@ -40,17 +47,28 @@ class TSServerClient(JSONTS):
     def setId(self, agentId):
         self.agentId = agentId
     
+    def authorize(self, authType):
+        self.authType = authType
+    
     def setAgentInfo(self, agentType, agentUuid):
         self.agentType = agentType
         self.agentUuid = agentUuid
         
     def serializeAgentInfo(self):
+        '''Helper for listClients()'''
         return {'uuid': self.agentUuid, 
                 'class': self.agentType,
                 'state': self.state}
     
     def checkACL(self, flow):
-        if self.master:
+        '''Validates flow according to client ACLs. If client
+        was authentificated with server master key, validation will always
+        be successful.
+        
+        @return True if validation successful
+        
+        FIXME: Implement indexes for ACLs'''
+        if self.auth == TSServerClient.AUTH_MASTER:
             return True
         
         for ar in self.acl:
@@ -65,6 +83,14 @@ class TSServerClient(JSONTS):
         self.flows[flow.dstAgentId, flow.dstMsgId] = flow
     
     def findFlow(self, agentId, msgId):
+        '''Finds flow with corresponding agentId/msgId, and
+        deletes it from flows table. 
+        
+        @param agentId: destination agent id
+        @param msgId: destination message id
+        
+        NOTE: During if command forwards A -> B, response
+        forwards from B to A, so you should use source agent id's for responses'''
         try:
             flow = self.flows[agentId, msgId]
             del self.flows[agentId, msgId]
@@ -72,66 +98,44 @@ class TSServerClient(JSONTS):
         except KeyError:
             return None
 
-class TSRootProxy(JSONTS):
-    def __init__(self, server, client):
+class TSLocalClientProxy(JSONTS):
+    '''Class helper that proxies responses made by local clients to server's
+    main processing engine to reset agentId/msgId according to flow. 
+    Other operations are proxied directly to client with no changes'''
+    def __init__(self, server, client, localClient):
         self.server = server
         self.client = client
+        self.localClient = localClient
     
     def sendMessage(self, msg):
-        self.server.processMessage(self.server.rootAgent.client, msg)
+        self.server.processMessage(self.localClient, msg)
         
     def __getattr__(self, name):
         return getattr(self.client, name)
 
-class TSRootAgent(TSAgent):
-    uuid = rootAgentUUID
-    agentType = rootAgentType
-    
-    def __init__(self, server):
-        self.server = server
-        self.client = TSServerClient(server, 0)
-        
-        self.client.setAgentInfo(self.agentType, self.uuid)
-    
-    def hello(self, context, agentType, agentUuid):
-        agentId = context.client.getId()
-        client = self.server.clients[agentId]
-        
-        context.client.setAgentInfo(agentType, agentUuid)
-        
-        return {'agentId': context.client.getId()}
-    
-    def authMasterKey(self, context, masterKey):
-        client = context.client
-        
-        self.server.doTrace('Authentificating client %s with key %s', client, masterKey)
-        
-        if str(self.server.masterKey) == masterKey:
-            client.master = True
-            return {}
-        
-        raise JSONTS.Error(JSONTS.AE_INVALID_DATA, 'Master key invalid')
-    
-    def listClients(self, context):
-        clients = {}
-        
-        for agentId in self.server.clients:
-            client = self.server.clients[agentId]
-            clients[agentId] = client.serializeAgentInfo()
-            
-        return clients
-
 class TSServer(Factory):
+    '''TSServer is a class that handles JSON-TS servers and local agents.
+    
+    JSON-TS is peer-to-peer protocol, so any agent can communicate with any other agent,
+    but it would be wasteful in terms of TCP connections (and hard to implement behind
+    NAT's or firewalls), so agents are using Server as intermediate transport.
+    
+    Command messages are delivered directly to agent, according to agentId field, 
+    if corresponding access rule exist or through listener flows mechanism. Server create 
+    special descriptor, called flow (see class TSFlow), that maps source/target agent ids
+    and message ids.
+    Error/Responses are routed back according to flows saved in client descriptor.
+    
+    Server cannot accept commands, so 'local' agents implemented to control
+    server behavior: RootAgent and UserAgent. '''
     def __init__(self):        
-        self.rootAgent = TSRootAgent(self)
-        self.clients = {0: self.rootAgent.client}
+        self.clients = {}
+        self.localAgents = {}
         
         self.listenerFlows = []
-        for command in ['hello', 'authMasterKey', 'listClients']:
-            self.listenerFlows.append(Flow(dstAgentId = 0, command = command))
         
         self.msgCounter = iter(xrange(1, sys.maxint))
-        self.agentIdGenerator = iter(xrange(1, sys.maxint))
+        self.agentIdGenerator = iter(xrange(remoteAgentId, sys.maxint))
         
         self.deadCleaner = task.LoopingCall(self.cleanDeadAgents)
         self.deadCleaner.start(60, False)
@@ -155,6 +159,16 @@ class TSServer(Factory):
         server = klass()
         
         reactor.listenTCP(port, server)
+        
+        return server
+    
+    def createLocalAgent(self, agentKlass, agentId, *args, **kw):
+        agent = agentKlass(self, *args, **kw)
+        
+        agent.client.authorize(TSServerClient.AUTH_MASTER)
+        
+        self.localAgents[agentId] = agent
+        self.clients[agentId] = agent.client
     
     def buildProtocol(self, addr):
         agentId = next(self.agentIdGenerator)
@@ -165,6 +179,8 @@ class TSServer(Factory):
         return client
     
     def cleanDeadAgents(self):
+        '''Cleans disconnected agent. Called in a loop task, so
+        no need to call it directly'''
         deadAgentIds = []
         
         # FIXME: should process routes
@@ -178,6 +194,7 @@ class TSServer(Factory):
             del self.clients[agentId]
     
     def processMessage(self, srcClient, message):
+        '''Main method of server that routes messages between agents'''
         srcAgentId = srcClient.getId()
         srcMsgId = message['id']
         
@@ -205,7 +222,8 @@ class TSServer(Factory):
                         dstAgentId = dstAgentId, 
                         command = command)
             
-            if dstAgentId == srcAgentId or dstAgentId == 0:
+            # The only way to communicate for unauthorized 
+            if srcClient.auth == TSServerClient.AUTH_NONE:
                 for listener in self.listenerFlows:
                     self.doTrace('Checking flow %s against listener rule %s', flow, listener)
                     
@@ -245,8 +263,9 @@ class TSServer(Factory):
         
         self.doTrace('Deliver message -> %d', dstAgentId)
         
-        if dstAgentId == 0:
-            self.rootAgent.processMessage(TSRootProxy(self, srcClient), message)
+        if dstAgentId < remoteAgentId:
+            srcClient = TSLocalClientProxy(self, srcClient, self.clients[dstAgentId])
+            self.localAgents[dstAgentId].processMessage(srcClient, message)
         else:
             dstClient = self.clients[dstAgentId]
             dstClient.sendMessage(message)

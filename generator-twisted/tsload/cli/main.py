@@ -11,6 +11,7 @@ import socket
 from tsload.jsonts.agent import TSAgent
 from tsload.cli import CLIContext, NextContext
 from tsload.cli.agent import AgentRootContext
+from tsload.jsonts.interface import UserAgent
 
 from twisted.internet import reactor
 
@@ -26,7 +27,6 @@ class RootContext(CLIContext):
     def doResponse(self, response):
         return self, []
 
-
 class TSAdminCLIAgent(TSAgent):
     def __init__(self):
         self.context = RootContext(None, self)
@@ -38,6 +38,14 @@ class TSAdminCLIAgent(TSAgent):
     def gotAgent(self):
         if self.authMasterKey != None:
             self.doCall(self.rootAgent.authMasterKey(masterKey=self.authMasterKey))
+        elif self.authUser != None:
+            import getpass
+            self.userAgent = self.createRemoteAgent(1, UserAgent)
+            password = getpass.getpass()
+            
+            self.call(self.userAgent.authUser(userName=self.authUser, 
+                                              userPassword=password),
+                      self.gotUserResponse, self.gotError)
         else:
             self.ask()
     
@@ -96,6 +104,9 @@ class TSAdminCLIAgent(TSAgent):
     
     def gotResponse(self, response):
         self.context, args = self.context.doResponse(response)
+        self.ask()
+    
+    def gotUserResponse(self, response):
         self.ask()
     
     def gotError(self, error, code):
