@@ -31,8 +31,9 @@ class TSAdminCLIAgent(TSAgent):
     def __init__(self):
         self.context = RootContext(None, self)
     
-    def setAuthType(self, authUser, authMasterKey):
+    def setAuthType(self, authUser, authMasterKey, authPassword=None):
         self.authUser = authUser
+        self.authPassword = authPassword
         self.authMasterKey = authMasterKey
     
     def gotAgent(self):
@@ -41,7 +42,10 @@ class TSAdminCLIAgent(TSAgent):
         elif self.authUser != None:
             import getpass
             self.userAgent = self.createRemoteAgent(1, UserAgent)
-            password = getpass.getpass()
+            
+            password = self.authPassword
+            if password is None:
+                password = getpass.getpass()
             
             self.call(self.userAgent.authUser(userName=self.authUser, 
                                               userPassword=password),

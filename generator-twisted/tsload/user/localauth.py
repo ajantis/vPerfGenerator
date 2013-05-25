@@ -20,7 +20,7 @@ class LocalAuth:
         @return True if user was successfully authentificated otherwise 
         UserAuthError is raised'''
         try:
-            salt, encPassword1 = str(user.password).split('$')
+            encMethod, salt, encPassword1 = str(user.authPassword).split('$', 2)
         except ValueError:
             raise UserAuthError('Invalid password entry in database.')
         
@@ -44,5 +44,5 @@ class LocalAuth:
         salt = random.choice(string.letters) + random.choice(string.digits)
         encPassword = crypt.crypt(newPassword, salt)
         
-        user.password = encPassword
+        user.authPassword = '%s$%s$%s' % ('crypt', salt, encPassword)
         

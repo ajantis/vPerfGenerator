@@ -8,11 +8,14 @@ from tsload.jsonts import Flow
 from tsload.jsonts.agent import TSAgent
 from tsload.jsonts.server import TSServerClient
 
-from tsload.user import User, Role
+from tsload.user import User, Role, UserAuthError
 from tsload.user.localauth import LocalAuth
 
 from storm.locals import create_database
 from storm.store import Store
+from storm.exceptions import NotOneError
+
+from twisted.internet.defer import inlineCallbacks
 
 userAgentUUID = '{2701b3b1-cd8f-457e-9bdd-2323153f16e5}'
 userAgentType = 'user'
@@ -44,7 +47,12 @@ class TSUserAgent(TSAgent):
                                               command = 'authUser'))
     
     def authUser(self, context, userName, userPassword):
-        user = self.dbStore.find(User, User.name == userName)
+        userSet = self.dbStore.find(User, User.name == str(userName))
+        
+        try:
+            user = userSet.one()
+        except NotOneError:
+            raise UserAuthError('No such user: %s' % userName)
         
         authMethod = self.authServices[user.authService]
         

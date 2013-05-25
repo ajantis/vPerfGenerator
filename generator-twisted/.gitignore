@@ -5,3 +5,4 @@
 *.pyc
 *.pyo
 master.key
+user.db
