@@ -61,21 +61,28 @@ class LoginPage(MainPage):
         return file('webapp/css/login.css').read()
     
     def loginResponse(self, agent, session):
-        if agent.connected == False:
-            session.loginFailure = 'Connection Error: ' + agent.connectionError
+        if agent.state != TSWebAgent.STATE_AUTHENTIFICATED:
+            if agent.state == TSWebAgent.STATE_CONN_ERROR:            
+                session.loginFailure = 'Connection Error: ' + agent.connectionError
+            elif agent.state == TSWebAgent.STATE_AUTH_ERROR:            
+                session.loginFailure = 'Authentification Error: ' + agent.authError
+            else:
+                session.loginFailure = 'Invalid agent state'
             
             del session.agent
-            del session.userName
             
             return ''
         else:
+            # Authentification OK - return to main page
+            session.userName = session.agent.gecosUserName
+            
             return url.here.up()
     
     def login(self, ctx, userName, password):
         session = inevow.ISession(ctx)
         
         session.agent = TSWebAgent.createAgent('web', 'localhost', 9090)
-        session.userName = userName
+        session.agent.setAuthData(userName, password)
         
         d = Deferred()
         d.addCallback(self.loginResponse, session)
@@ -83,5 +90,14 @@ class LoginPage(MainPage):
         session.agent.setEventListener(d)
         
         return d
+    
+class LogoutPage(rend.Page):
+    def renderHTTP(self, context):
+        session = inevow.ISession(context)
+        
+        delattr(session, 'agent')
+        delattr(session, 'userName')
+        
+        return url.here.up()
 
         

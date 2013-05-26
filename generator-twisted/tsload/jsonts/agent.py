@@ -11,6 +11,7 @@ from tsload.jsonts.interface import RootAgent
 
 from twisted.internet.protocol import Factory
 from twisted.internet.endpoints import TCP4ClientEndpoint
+from twisted.internet.defer import Deferred
 from twisted.internet import reactor
 
 import uuid
@@ -106,6 +107,22 @@ class TSAgent(Factory):
             context = CallContext(srcClient, srcMsgId)
             
             response = method(context = context, **cmdArgs)
+            
+            if isinstance(response, Deferred):
+                # Add closures callback/errbacks to deferred and return
+                def deferredCallback(response):
+                    self.doTrace('Got response (deferred) %s', response)
+                    srcClient.sendResponse(srcClient.getId(), srcMsgId, response)
+                
+                def deferredErrback(failure):
+                    self.doTrace('Got error (deferred) %s', str(failure))
+                    srcClient.sendError(srcClient.getId(), srcMsgId, failure.getErrorMessage(), 
+                                        JSONTS.AE_INTERNAL_ERROR)
+                
+                response.addCallback(deferredCallback)
+                response.addErrback(deferredErrback)
+                
+                return
             
             self.doTrace('Got response %s', response)
             

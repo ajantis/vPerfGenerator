@@ -113,8 +113,8 @@ class TSAdminCLIAgent(TSAgent):
     def gotUserResponse(self, response):
         self.ask()
     
-    def gotError(self, error, code):
-        print >> sys.stderr, 'ERROR %d: %s' % (error, code)
+    def gotError(self, code, error):
+        print >> sys.stderr, 'ERROR %d: %s' % (code, error)
         self.ask()
     
     def help(self, args):

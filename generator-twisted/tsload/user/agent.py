@@ -15,7 +15,7 @@ from storm.locals import create_database
 from storm.store import Store
 from storm.exceptions import NotOneError
 
-from twisted.internet.defer import inlineCallbacks
+from twisted.internet.defer import inlineCallbacks, returnValue, waitForDeferred
 
 userAgentUUID = '{2701b3b1-cd8f-457e-9bdd-2323153f16e5}'
 userAgentType = 'user'
@@ -47,22 +47,25 @@ class TSUserAgent(TSAgent):
                                               command = 'authUser'))
     
     def authUser(self, context, userName, userPassword):
-        userSet = self.dbStore.find(User, User.name == str(userName))
-        
-        try:
-            user = userSet.one()
-        except NotOneError:
-            raise UserAuthError('No such user: %s' % userName)
-        
-        authMethod = self.authServices[user.authService]
-        
-        if authMethod.authentificate(user, userPassword):
-            agentId = context.client.getId()
-            self.agentUsers[agentId] = user.id
+        @inlineCallbacks
+        def implementation(context, userName, userPassword):
+            userSet = yield self.dbStore.find(User, User.name == str(userName))
+            user = yield userSet.one()
             
-            # need to set up roles
-        
-        return {}
+            if user is None:
+                raise UserAuthError('No such user: %s' % userName)
             
+            authMethod = self.authServices[user.authService]
+            
+            if authMethod.authentificate(user, userPassword):
+                agentId = context.client.getId()
+                self.agentUsers[agentId] = user.id
+                
+                # need to set up roles
+            
+            returnValue({'name': user.gecosName})
+        
+        return implementation(context, userName, userPassword)
+    
     def onDisconnect(self):
         self.dbStore.close()
